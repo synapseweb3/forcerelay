@@ -12,7 +12,7 @@ dependencies = [
  "arc-swap",
  "backtrace",
  "canonical-path",
- "clap",
+ "clap 3.2.23",
  "color-eyre",
  "fs-err",
  "once_cell",
@@ -460,7 +460,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "check-guide"
 version = "0.1.0"
 dependencies = [
- "clap",
+ "clap 4.0.18",
  "ibc-relayer-cli",
  "lazy_static",
  "mdbook-template",
@@ -491,14 +491,14 @@ checksum = "fff857943da45f546682664a79488be82e69e43c1a7a2307679ab9afb3a66d2e"
 
 [[package]]
 name = "clap"
-version = "3.2.22"
+version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86447ad904c7fb335a790c9d7fe3d0d971dc523b8ccd1561a520de9a85302750"
+checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
- "clap_lex",
+ "clap_lex 0.2.4",
  "indexmap",
  "once_cell",
  "strsim",
@@ -507,12 +507,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap"
+version = "4.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "335867764ed2de42325fafe6d18b8af74ba97ee0c590fa016f157535b42ab04b"
+dependencies = [
+ "atty",
+ "bitflags",
+ "clap_lex 0.3.0",
+ "once_cell",
+ "strsim",
+ "termcolor",
+]
+
+[[package]]
 name = "clap_complete"
 version = "3.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f7a2e0a962c45ce25afce14220bc24f9dade0a1787f185cecf96bfba7847cd8"
 dependencies = [
- "clap",
+ "clap 3.2.23",
 ]
 
 [[package]]
@@ -533,6 +547,15 @@ name = "clap_lex"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
+dependencies = [
+ "os_str_bytes",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d4198f73e42b4936b35b5bb248d81d2b595ecb170da0bac7655c54eedfa8da8"
 dependencies = [
  "os_str_bytes",
 ]
@@ -1711,7 +1734,7 @@ version = "1.0.0"
 dependencies = [
  "abscissa_core",
  "atty",
- "clap",
+ "clap 4.0.18",
  "clap_complete",
  "color-eyre",
  "console",
@@ -2101,7 +2124,7 @@ dependencies = [
  "ammonia",
  "anyhow",
  "chrono",
- "clap",
+ "clap 3.2.23",
  "clap_complete",
  "elasticlunr-rs",
  "env_logger",
@@ -2132,7 +2155,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "920f69694a682c1100d64ca342278fc289d7d89b905a60c39ca39e0ea04ce0f1"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 3.2.23",
  "env_logger",
  "fancy-regex",
  "lazy_static",
@@ -2249,7 +2272,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "698fbc4b1fd2af323ed1711664a873b332faa4dc740e0f810f40210573ba36fd"
 dependencies = [
- "clap",
+ "clap 3.2.23",
  "clap_complete",
  "directories",
  "hex",
@@ -4068,9 +4091,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.15.1"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "949517c0cf1bf4ee812e2e07e08ab448e3ae0d23472aee8a06c985f0c8815b16"
+checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 
 [[package]]
 name = "thiserror"
