@@ -1,5 +1,139 @@
 # CHANGELOG
 
+## v1.1.0
+
+*October 28th, 2022*
+
+### Note to developers
+
+The [`ibc`][ibc] and [`ibc-proto`][ibc-proto] crates
+[have been split into their own repositories][split-tweet] under
+the `cosmos` organization.
+
+Moreover, Hermes [will not be using][split-issue] the original `ibc` crate anymore,
+and will from now on use instead the `ibc-relayer-types` crate, which is a
+trimmed down version of the `ibc` crate that contains only the data structures used by Hermes.
+
+This change does not impact end-users of Hermes, but may affect downstream
+consumers of the `ibc-relayer` library in some cases.
+
+Please reach out to us if you encounter any issue following from
+this reorganization of the repository.
+
+[ibc]: https://github.com/cosmos/ibc-rs
+[ibc-proto]: https://github.com/cosmos/ibc-proto-rs
+[cosmos]: https://github.com/cosmos
+[split-tweet]: https://twitter.com/informalinc/status/1578120684508692481
+[split-issue]: https://github.com/informalsystems/hermes/issues/2639
+
+### General
+
+The `gm` binary has been split out of the repo and has been moved into its own [repository](https://github.com/informalsystems/gm).
+This change doesn't affect current local instances of the `gm` binary,
+though new versions will need to be sourced from the new repository by running
+`git clone informalsystems/gm` and running the install script from there. 
+
+For more information, see [this section](https://hermes.informal.systems/tutorials/local-chains/gaiad-manager.html#how-to-run) of the Hermes guide. 
+
+#### BREAKING CHANGES
+
+- Removed `gm` folder and its contents
+  ([#2754](https://github.com/informalsystems/hermes/issues/2754))
+- Remove the `ibc-proto` and `ibc-proto-compiler` crates from the repository
+  ([#2667](https://github.com/informalsystems/hermes/pull/2667))
+
+#### BUG FIXES
+
+- Fix incorrect Github workflow trigger paths
+  ([#2667](https://github.com/informalsystems/hermes/pull/2667))
+- Fix comment in `config.toml` to correctly state that the default value of `clear_on_start` is `true`
+  ([#2750](https://github.com/informalsystems/hermes/issues/2750))
+
+
+### Hermes - `ibc-relayer-cli` (v1.1.0)
+
+#### FEATURES
+
+- Add `hermes auto config` CLI command to automatically generate a config file with data from the chain registry
+  ([#2187](https://github.com/informalsystems/hermes/issues/2187))
+- Added new optional flag `--packet-data-query-height` to CLI `hermes tx packet-recv`
+  in order to specify the height at which the packet data is queried
+  ([#2453](https://github.com/informalsystems/hermes/issues/2453))
+- New command `fee transfer` which transfers tokens with fees
+  ([#2714](https://github.com/informalsystems/hermes/issues/2714))
+
+#### IMPROVEMENTS
+
+- Clean up the logs emitted by the relayer and add more
+  structured information to the messages recorded in the logs
+  ([#1538](https://github.com/informalsystems/hermes/issues/1538))
+- Log the packets cleared by the `clear packets` command
+  ([#2653](https://github.com/informalsystems/hermes/pull/2653))
+- Add a new optional flag, `--denom` to the `hermes keys balance` command in order
+  to specify for which denomination the balance is queried.
+  Specify the `--all` flag to get the balance for all denominations
+  ([#2726](https://github.com/informalsystems/hermes/issues/2726))
+
+
+### Relayer Library - `ibc-relayer` (v0.20.0)
+
+#### BREAKING CHANGES
+
+- Bump tendermint-rs dependencies to v0.25.0
+  ([#2677](https://github.com/informalsystems/ibc-rs/issues/2677))
+
+#### BUG FIXES
+
+- The channel and connection workers do not act needlessly on `NewBlock` events
+  anymore ([#2484](https://github.com/informalsystems/hermes/issues/2484))
+- Fix several bugs which were preventing Hermes to clear packets on ordered channels
+  in some specific conditions, as exhibited on the Interchain Security testnet
+  ([#2670](https://github.com/informalsystems/hermes/issues/2670))
+- Fix how headers are decoded from events
+  ([#2739](https://github.com/informalsystems/hermes/issues/2739))
+
+#### FEATURES
+
+- Support custom extension options to be able to specify `max_priority_price` for Ethermint dynamic tx fee
+  ([#2566](https://github.com/informalsystems/hermes/issues/2566))
+
+#### IMPROVEMENTS
+
+- Bump compatibility with IBC-Go v5 and Cosmos SDK v0.46
+  ([#2532](https://github.com/informalsystems/hermes/issues/2532))
+- Account for full transaction encoding when batching messages
+  ([#2575](https://github.com/informalsystems/hermes/pull/2575))
+- Add a health check to warn user if `gas_multiplier` is smaller than 1.1,
+  and improve client refresh frequency to depend on the `trusting_period`
+  ([#2487](https://github.com/informalsystems/hermes/issues/2487))
+- Set `max_tx_size` default value to 180KB instead of 2MB
+  ([#2595](https://github.com/informalsystems/hermes/issues/2595))
+
+
+### Chain Registry - `ibc-chain-registry` (v0.20.0)
+
+- New crate `ibc-chain-registry` to fetch data from the [chain-registry][cosmos-chain-registry] and query RPC/gRPC endpoints
+  ([#2187](https://github.com/informalsystems/hermes/issues/2187))
+
+[cosmos-chain-registry]: https://github.com/cosmos/chain-registry
+
+### `ibc-test-framework` (v0.20.0)
+
+#### FEATURES
+
+- Added Evmos compatible integration tests
+  ([#2442](https://github.com/informalsystems/hermes/issues/2442))
+
+### Guide
+
+#### IMPROVEMENTS
+
+- Integration with `mdbook` templates
+  ([#2605](https://github.com/informalsystems/hermes/issues/2605))
+- New script `auto_gen_templates.sh` to automatically generate templates files and warns users when one of them is updated. It is the responsibility of the users to update the guide when a template file is updated
+- New CI job to check that every template is up-to-date
+
+
 ## v1.0.0
 *August 22nd, 2022*
 
@@ -73,11 +207,11 @@ v1.0.0-rc.2, v1.0.0-rc.1 and v1.0.0-rc.0.
 
 - Release version 1.0.0 of Hermes (`ibc-relayer-cli`)
 
-### IBC Proto - [`ibc-proto`](crates/proto) (v0.20.0)
+### IBC Proto - [`ibc-proto`](https://github.com/cosmos/ibc-proto-rs) (v0.20.0)
 
 - Release version 0.20.1 of `ibc-proto`
 
-### IBC Modules - [`ibc`](crates/modules) (v0.19.0)
+### IBC Modules - [`ibc`](https://github.com/cosmos/ibc-rs) (v0.19.0)
 
 - Release version 0.19.0 of `ibc`
 
@@ -173,11 +307,11 @@ This is the third release candidate for Hermes v1.0.0 🎉
 
 - Release version 1.0.0-rc.2 of Hermes (`ibc-relayer-cli`)
 
-### IBC Proto - [`ibc-proto`](crates/proto) (v0.20.0)
+### IBC Proto - [`ibc-proto`](https://github.com/cosmos/ibc-proto-rs) (v0.20.0)
 
 - Release version 0.20.0 of `ibc-proto`
 
-### IBC Modules - [`ibc`](crates/modules) (v0.18.0)
+### IBC Modules - [`ibc`](https://github.com/cosmos/ibc-rs) (v0.18.0)
 
 - Release version 0.18.0 of `ibc`
 
@@ -302,7 +436,7 @@ This is the second release candidate for Hermes v1.0.0 🎉
   ([#2431](https://github.com/informalsystems/hermes/issues/2431))
 
 
-### IBC Proto - [`ibc-proto`](crates/proto) (v0.19.1)
+### IBC Proto - [`ibc-proto`](https://github.com/cosmos/ibc-proto-rs) (v0.19.1)
 
 #### IMPROVEMENTS
 
@@ -310,7 +444,7 @@ This is the second release candidate for Hermes v1.0.0 🎉
   ([#1](https://github.com/cosmos/ibc-proto-rs/issues/1))
 
 
-### IBC Modules - [`ibc`](crates/modules) (v0.17.0)
+### IBC Modules - [`ibc`](https://github.com/cosmos/ibc-rs) (v0.17.0)
 
 #### BREAKING CHANGES
 
@@ -427,7 +561,7 @@ eg. feature, bug fix, etc.
 - Added `--yes` flag to the `create channel` flow to enable skipping the
   `--new-client-connection` step ([#2317](https://github.com/informalsystems/hermes/issues/2317))
 
-### IBC Proto - [`ibc-proto`](crates/proto) (v0.19.0)
+### IBC Proto - [`ibc-proto`](https://github.com/cosmos/ibc-proto-rs) (v0.19.0)
 
 #### FEATURES
 
@@ -435,7 +569,7 @@ eg. feature, bug fix, etc.
   ([#2277](https://github.com/informalsystems/hermes/issues/2277))
 
 
-### IBC Modules - [`ibc`](crates/modules) (v0.16.0)
+### IBC Modules - [`ibc`](https://github.com/cosmos/ibc-rs) (v0.16.0)
 
 #### BREAKING CHANGES
 
@@ -514,7 +648,7 @@ for better observability of the relayer's operations.
 
 ### BUG FIXES
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Fix packet commitment calculation to match ibc-go
     ([#47](https://github.com/cosmos/ibc-rs/issues/47))
   - Fix incorrect acknowledgement verification
@@ -539,7 +673,7 @@ for better observability of the relayer's operations.
 
 ### IMPROVEMENTS
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Remove object capabilities from the modules
     ([#45](https://github.com/cosmos/ibc-rs/issues/45))
 - [Relayer Library](crates/relayer)
@@ -596,7 +730,7 @@ Please [refer to the guide][create-channel] for more information.
 
 ### BUG FIXES
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Make all handlers emit an IbcEvent with current host chain height as height parameter value.
     ([#52](https://github.com/cosmos/ibc-rs/issues/52))
   - Use the version in the message when handling a MsgConnOpenInit
@@ -630,7 +764,7 @@ Please [refer to the guide][create-channel] for more information.
     debug level ([#1936](https://github.com/informalsystems/hermes/issues/1936))
   - Update tendermint-rs dependencies to v0.23.6
     ([#2045](https://github.com/informalsystems/hermes/issues/2045))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Complete ICS26 implementation ([#60](https://github.com/cosmos/ibc-rs/issues/60))
   - Improve `ChannelId` validation. ([#50](https://github.com/cosmos/ibc-rs/issues/50))
 - [Relayer CLI](crates/relayer-cli)
@@ -714,7 +848,7 @@ This information can also be found in the [Hermes guide][guide-ica].
 
 ### FEATURES
 
-- [IBC Proto](crates/proto)
+- [IBC Proto](https://github.com/cosmos/ibc-proto-rs)
   - Add CosmWasm support to the generated Protobuf code ([#4](https://github.com/cosmos/ibc-proto-rs/issues/4))
     * Add a new `client` feature to gate the tonic client code, implies the `std` feature.
     * Add a new `json-schema` feature to derive `schemars::JsonSchema` on some proto types, implies the `std` feature.
@@ -732,7 +866,7 @@ This information can also be found in the [Hermes guide][guide-ica].
 
 ### IMPROVEMENTS
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Refactored channels events in ICS 04 module
     ([#86](https://github.com/cosmos/ibc-rs/issues/86))
 - [Integration Test Framework](crates/relayer-cli)
@@ -763,7 +897,7 @@ has been added for clearing packets in both direction on a given channel.
 
 ### BUG FIXES
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Fixed the formatting of NotEnoughTimeElapsed and NotEnoughBlocksElapsed
     in Tendermint errors ([#24](https://github.com/cosmos/ibc-rs/issues/24))
   - IBC handlers now retrieve the host timestamp from the latest host consensus
@@ -793,7 +927,7 @@ has been added for clearing packets in both direction on a given channel.
 
 ### IMPROVEMENTS
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Added more unit tests to verify Tendermint ClientState
     ([#24](https://github.com/cosmos/ibc-rs/issues/24))
   - Define CapabilityReader and CapabilityKeeper traits
@@ -876,12 +1010,12 @@ Before running Hermes v0.11.0, make sure you remove the `mode.packets.filter` op
 - [Relayer Library](crates/relayer)
   - Added a `denom` member to `upgrade_chain::UpgradePlanOptions`
     ([#1662](https://github.com/informalsystems/hermes/issues/1662))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Hide `ibc::Timestamp::now()` behind `clock` feature flag ([#1612](https://github.com/informalsystems/hermes/issues/1612))
 
 ### BUG FIXES
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Verify the client consensus proof against the client's consensus state root and not the host's state root
     [#61](https://github.com/cosmos/ibc-rs/issues/61)
   - Initialize consensus metadata on client creation
@@ -898,7 +1032,7 @@ Before running Hermes v0.11.0, make sure you remove the `mode.packets.filter` op
     ([#1641](https://github.com/informalsystems/hermes/issues/1641))
   - Remove 1 second sleep in `generate_tm_block` during testing with mock context.
     ([#1687](https://github.com/informalsystems/hermes/issues/1687))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Extract all `ics24_host::Path` variants into their separate types
     ([#1760](https://github.com/informalsystems/hermes/pull/1760))
   - Disallow empty `CommitmentPrefix` and `CommitmentProofBytes`
@@ -944,7 +1078,7 @@ The relayer now also supports dynamic versions in channel open handshake (which 
     ([#1660](https://github.com/informalsystems/hermes/pull/1660))
   - Pin tendermint-rs dependencies to =0.23.2
     ([#1665](https://github.com/informalsystems/hermes/pull/1665))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Add the `frozen_height()` method to the `ClientState` trait (includes breaking changes to the Tendermint `ClientState` API).
     ([#65](https://github.com/cosmos/ibc-rs/issues/65))
   - Remove `Timestamp` API that depended on the `chrono` crate:
@@ -967,7 +1101,7 @@ The relayer now also supports dynamic versions in channel open handshake (which 
 
 ### BUG FIXES
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Delete packet commitment instead of acknowledgement in acknowledgePacket
     [#66](https://github.com/cosmos/ibc-rs/issues/66)
   - Set the `counterparty_channel_id` correctly to fix ICS04 [`chanOpenAck` handler verification](https://github.com/cosmos/ibc-rs/blob/main/crates/ibc/src/core/ics04_channel/handler/chan_open_ack.rs)
@@ -989,7 +1123,7 @@ The relayer now also supports dynamic versions in channel open handshake (which 
   - Added the possibility of JSON output to `gm` by setting the environment variable `OUTPUT=json`.
   - Added support for fee granters through config file
     ([#1633](https://github.com/informalsystems/hermes/issues/1633))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Implement proof verification for Tendermint client (ICS07).
     ([#1583](https://github.com/informalsystems/hermes/pull/1583))
 - [Relayer Library](crates/relayer)
@@ -1005,7 +1139,7 @@ The relayer now also supports dynamic versions in channel open handshake (which 
 - General
   - Update `CONTRIBUTING.md` for latest version of unclog
     ([#1634](https://github.com/informalsystems/hermes/pull/1634))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - More conventional ad-hoc conversion methods on `Timestamp`
     ([#1665](https://github.com/informalsystems/hermes/pull/1665)):
   - `Timestamp::nanoseconds` replaces `Timestamp::as_nanoseconds`
@@ -1072,7 +1206,7 @@ then on top of the changes above, `mode.connections.enabled` and `mode.channels.
 
 ### BUG FIXES
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Set the connection counterparty in the ICS 003 [`connOpenAck` handler][conn-open-ack-handler]
     ([#70](https://github.com/cosmos/ibc-rs/issues/70))
 
@@ -1096,7 +1230,7 @@ then on top of the changes above, `mode.connections.enabled` and `mode.channels.
     ([#69](https://github.com/cosmos/ibc-rs/issues/69))
   - Add `architecture.md` doc that gives a high-level overview of the structure of the codebase
   - Add some module-level documentation ([#1556](https://github.com/informalsystems/hermes/pull/1556))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Derive `PartialEq` and `Eq` on `IbcEvent` and inner types
     ([#1546](https://github.com/cosmos/ibc-rs/issues/68))
 - [Relayer Library](crates/relayer)
@@ -1143,7 +1277,7 @@ For Cosmos-SDK chains a good approximation is `timeout_propose` + `timeout_commi
 - General
   - Update to official releases of `prost` 0.9 and `tonic` 0.6
     ([#1502](https://github.com/informalsystems/hermes/issues/1502))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Support for converting `ibc::events::IbcEvent` into `tendermint::abci::Event`
     ([#81](https://github.com/cosmos/ibc-rs/issues/81))
   - Restructure the layout of the `ibc` crate to match `ibc-go`'s [layout](https://github.com/cosmos/ibc-go#contents)
@@ -1175,7 +1309,7 @@ ABCI's `BeginBlock` and `EndBlock` methods ([#1231](https://github.com/informals
 
 ### BREAKING CHANGES
 
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - The `check_header_and_update_state` method of the `ClientDef`
     trait (ICS02) has been expanded to facilitate ICS07
     ([#71](https://github.com/cosmos/ibc-rs/issues/71))
@@ -1185,7 +1319,7 @@ ABCI's `BeginBlock` and `EndBlock` methods ([#1231](https://github.com/informals
 - General
   - Add support for the `tx.memo` field
     ([#1433](https://github.com/informalsystems/hermes/issues/1433))
-- [IBC Modules](crates/modules)
+- [IBC Modules](https://github.com/cosmos/ibc-rs)
   - Add ICS07 verification functionality by using `tendermint-light-client`
     ([#71](https://github.com/cosmos/ibc-rs/issues/71))
 - [Relayer Library](crates/relayer)
@@ -1286,7 +1420,7 @@ This release also fixes a bug where the chain runtime within the relayer would c
   - Add MBT tests for ICS 07 Client Upgrade ([#1311])
   - Add support for uint256 transfer amounts ([#1319])
 
-- [ibc](crates/modules)
+- [ibc](https://github.com/cosmos/ibc-rs)
   - Change all `*Reader` traits to return `Result` instead of `Option` ([#73])
   - Clean up modules' errors ([#72])
 
@@ -1305,7 +1439,7 @@ Additionnally, Hermes now includes a REST server which exposes the relayer's int
 
 ### BUG FIXES
 
-- [ibc](crates/modules)
+- [ibc](https://github.com/cosmos/ibc-rs)
   - Set the index of `ibc::ics05_port::capabilities::Capability` ([#74])
 
 - [gm](scripts/gm)
@@ -1347,7 +1481,7 @@ Additionnally, Hermes now includes a REST server which exposes the relayer's int
   - Improve support for Interchain Accounts (ICS 027) ([#1191])
   - Improve performance and reliability of the relayer by asynchronously waiting for tx confirmations ([#1124], [#1265])
 
-- [ibc](crates/modules)
+- [ibc](https://github.com/cosmos/ibc-rs)
   - Implement `ics02_client::client_consensus::ConsensusState` for `AnyConsensusState` ([#1297])
 
 [#1124]: https://github.com/informalsystems/hermes/issues/1124

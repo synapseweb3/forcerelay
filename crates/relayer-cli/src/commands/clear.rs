@@ -115,11 +115,12 @@ impl Runnable for ClearPacketsCmd {
             src_port_id: self.port_id.clone(),
             src_channel_id: self.channel_id.clone(),
         };
-        let fwd_link = match Link::new_from_opts(chains.src.clone(), chains.dst, opts, false) {
+        let fwd_link = match Link::new_from_opts(chains.src.clone(), chains.dst, opts, false, false)
+        {
             Ok(link) => link,
             Err(e) => Output::error(format!("{}", e)).exit(),
         };
-        let rev_link = match fwd_link.reverse(false) {
+        let rev_link = match fwd_link.reverse(false, false) {
             Ok(link) => link,
             Err(e) => Output::error(format!("{}", e)).exit(),
         };
@@ -170,7 +171,7 @@ mod tests {
                 key_name: None,
                 counterparty_key_name: None,
             },
-            ClearPacketsCmd::parse_from(&[
+            ClearPacketsCmd::parse_from([
                 "test",
                 "--chain",
                 "chain_id",
@@ -192,7 +193,7 @@ mod tests {
                 key_name: None,
                 counterparty_key_name: None
             },
-            ClearPacketsCmd::parse_from(&[
+            ClearPacketsCmd::parse_from([
                 "test",
                 "--chain",
                 "chain_id",
@@ -214,7 +215,7 @@ mod tests {
                 key_name: Some("key_name".to_owned()),
                 counterparty_key_name: None,
             },
-            ClearPacketsCmd::parse_from(&[
+            ClearPacketsCmd::parse_from([
                 "test",
                 "--chain",
                 "chain_id",
@@ -238,7 +239,7 @@ mod tests {
                 key_name: None,
                 counterparty_key_name: Some("counterparty_key_name".to_owned()),
             },
-            ClearPacketsCmd::parse_from(&[
+            ClearPacketsCmd::parse_from([
                 "test",
                 "--chain",
                 "chain_id",
@@ -254,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_clear_packets_no_chan() {
-        assert!(ClearPacketsCmd::try_parse_from(&[
+        assert!(ClearPacketsCmd::try_parse_from([
             "test", "--chain", "chain_id", "--port", "port_id"
         ])
         .is_err())
@@ -262,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_clear_packets_no_port() {
-        assert!(ClearPacketsCmd::try_parse_from(&[
+        assert!(ClearPacketsCmd::try_parse_from([
             "test",
             "--chain",
             "chain_id",
@@ -274,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_clear_packets_no_chain() {
-        assert!(ClearPacketsCmd::try_parse_from(&[
+        assert!(ClearPacketsCmd::try_parse_from([
             "test",
             "--port",
             "port_id",

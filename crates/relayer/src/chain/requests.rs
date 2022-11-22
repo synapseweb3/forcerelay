@@ -1,4 +1,4 @@
-use core::fmt::Display;
+use core::fmt::{self, Display};
 
 use crate::error::Error;
 
@@ -27,8 +27,8 @@ use ibc_relayer_types::events::WithBlockDataType;
 use ibc_relayer_types::Height;
 
 use serde::{Deserialize, Serialize};
-use tendermint::abci::transaction::Hash as TxHash;
 use tendermint::block::Height as TMBlockHeight;
+use tendermint_rpc::abci::transaction::Hash as TxHash;
 use tonic::metadata::AsciiMetadataValue;
 
 /// Type to specify a height in a query. Specifically, this caters to the use
@@ -391,7 +391,6 @@ pub struct QueryHostConsensusStateRequest {
 /// Used for queries and not yet standardized in channel's query.proto
 #[derive(Clone, Debug)]
 pub enum QueryTxRequest {
-    Packet(QueryPacketEventDataRequest),
     Client(QueryClientEventRequest),
     Transaction(QueryTxHash),
 }
@@ -399,8 +398,12 @@ pub enum QueryTxRequest {
 #[derive(Clone, Debug)]
 pub struct QueryTxHash(pub TxHash);
 
-/// Used to query a packet event, identified by `event_id`, for specific channel and sequences.
-/// The query is preformed for the chain context at `height`.
+/// Used to query packet events:
+/// - for events of type `event_id`,
+/// - for a specific channel
+/// - with sequences in `sequences`
+/// - that occurred at a height either smaller or equal to `height` or exactly at `height`,
+///   as specified by `event_height_qualifier`
 #[derive(Clone, Debug)]
 pub struct QueryPacketEventDataRequest {
     pub event_id: WithBlockDataType,
@@ -409,7 +412,49 @@ pub struct QueryPacketEventDataRequest {
     pub destination_channel_id: ChannelId,
     pub destination_port_id: PortId,
     pub sequences: Vec<Sequence>,
-    pub height: QueryHeight,
+    pub height: Qualified<QueryHeight>,
+}
+
+/// Refines an inner type by assigning it to refer to either a:
+///     - range of values (when using variant `SmallerEqual`), or
+///     - to a specific value (with variant `Equal`).
+///
+/// For example, the inner type is typically a [`QueryHeight`].
+/// In this case, we can capture and handle the two separate cases
+/// that can appear when we want to query for packet event data,
+/// depending on the request: The request might refer to a specific
+/// height (i.e., we want packets from a block _at height_ T), or to
+/// a range of heights (i.e., all packets _up to height_ T).
+#[derive(Clone, Copy, Debug)]
+pub enum Qualified<T> {
+    SmallerEqual(T),
+    Equal(T),
+}
+
+impl<T> Qualified<T> {
+    /// Access the inner type.
+    pub fn get(self) -> T {
+        match self {
+            Qualified::SmallerEqual(t) => t,
+            Qualified::Equal(t) => t,
+        }
+    }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Qualified<U> {
+        match self {
+            Qualified::SmallerEqual(t) => Qualified::SmallerEqual(f(t)),
+            Qualified::Equal(t) => Qualified::Equal(f(t)),
+        }
+    }
+}
+
+impl<T: Display> Display for Qualified<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Qualified::SmallerEqual(a) => write!(f, "<={a}"),
+            Qualified::Equal(a) => write!(f, "=={a}"),
+        }
+    }
 }
 
 /// Query request for a single client event, identified by `event_id`, for `client_id`.
@@ -419,9 +464,4 @@ pub struct QueryClientEventRequest {
     pub event_id: WithBlockDataType,
     pub client_id: ClientId,
     pub consensus_height: Height,
-}
-
-#[derive(Clone, Debug)]
-pub enum QueryBlockRequest {
-    Packet(QueryPacketEventDataRequest),
 }

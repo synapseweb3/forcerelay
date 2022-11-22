@@ -1,6 +1,6 @@
 # Summary
 
-# Hermes v1.0.0
+# Hermes v1.1.0
 
 ---
 - [Introduction](./index.md)
@@ -33,6 +33,8 @@
         - [Log level](./advanced/troubleshooting/log-level.md)
         - [Patch Gaia](./advanced/troubleshooting/patch-gaia.md)
         - [Inspecting the relayer's state](./advanced/troubleshooting/inspect.md)
+        - [Cross Stack Misconfiguration](./advanced/troubleshooting/cross-comp-config.md)
+
 - [Documentation](./documentation/index.md)
     - [Configuration](./documentation/configuration/index.md)
         - [Configure Hermes](./documentation/configuration/configure-hermes.md)
@@ -56,6 +58,8 @@
       - [Listen mode](./documentation/commands/listen/index.md)
       - [Client upgrade](./documentation/commands/upgrade/index.md)
         - [Testing client upgrade](./documentation/commands/upgrade/test.md)
+      - [Packet Forwarding](./documentation/forwarding/index.md)
+        - [Testing packet forwarding](./documentation/forwarding/test.md)
       - [Misbehaviour](./documentation/commands/misbehaviour/index.md)
       - [Queries](./documentation/commands/queries/index.md)
         - [Client](./documentation/commands/queries/client.md)

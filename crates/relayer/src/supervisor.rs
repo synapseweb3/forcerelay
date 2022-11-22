@@ -22,7 +22,7 @@ use crate::{
         monitor::{self, Error as EventError, ErrorDetail as EventErrorDetail, EventBatch},
         IbcEventWithHeight,
     },
-    object::{Object, Packet},
+    object::Object,
     registry::{Registry, SharedRegistry},
     rest,
     supervisor::scan::ScanMode,
@@ -117,6 +117,19 @@ impl SupervisorHandle {
         for task in self.tasks {
             task.join();
         }
+    }
+
+    /// Ask the supervisor to dump its internal state
+    pub fn dump_state(&self) -> Result<SupervisorState, Error> {
+        let (tx, rx) = crossbeam_channel::bounded(1);
+
+        self.sender
+            .send(SupervisorCmd::DumpState(tx))
+            .map_err(|_| Error::handle_send())?;
+
+        let state = rx.recv().map_err(|_| Error::handle_recv())?;
+
+        Ok(state)
     }
 }
 
@@ -400,7 +413,7 @@ pub fn collect_events(
                     || {
                         // Collect update client events only if the worker exists
                         if let Ok(object) = Object::for_update_client(update, src_chain) {
-                            workers.contains(&object).then(|| object)
+                            workers.contains(&object).then_some(object)
                         } else {
                             None
                         }
@@ -738,9 +751,13 @@ fn process_batch<Chain: ChainHandle>(
 /// So successfully sending a packet from chain A to chain B will result in first a SendPacket
 /// event with `chain_id = A` and `counterparty_chain_id = B` and then a WriteAcknowlegment
 /// event with `chain_id = B` and `counterparty_chain_id = A`.
-///
-fn send_telemetry<Src, Dst>(src: &Src, dst: &Dst, events: &[IbcEventWithHeight], path: &Packet)
-where
+#[cfg(feature = "telemetry")]
+fn send_telemetry<Src, Dst>(
+    src: &Src,
+    dst: &Dst,
+    events: &[IbcEventWithHeight],
+    path: &crate::object::Packet,
+) where
     Src: ChainHandle,
     Dst: ChainHandle,
 {

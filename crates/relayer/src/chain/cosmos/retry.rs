@@ -4,7 +4,7 @@ use std::thread;
 use tracing::{debug, error, instrument, warn};
 
 use ibc_proto::google::protobuf::Any;
-use tendermint::abci::Code;
+use tendermint_rpc::abci::Code;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 
 use crate::chain::cosmos::query::account::refresh_account;
@@ -49,7 +49,7 @@ pub async fn send_tx_with_account_sequence_retry(
     key_entry: &KeyEntry,
     account: &mut Account,
     tx_memo: &Memo,
-    messages: Vec<Any>,
+    messages: &[Any],
 ) -> Result<Response, Error> {
     time!("send_tx_with_account_sequence_retry");
 
@@ -70,10 +70,10 @@ async fn do_send_tx_with_account_sequence_retry(
     key_entry: &KeyEntry,
     account: &mut Account,
     tx_memo: &Memo,
-    messages: Vec<Any>,
+    messages: &[Any],
 ) -> Result<Response, Error> {
-    match estimate_fee_and_send_tx(config, key_entry, account, tx_memo, &messages).await {
-        // Gas estimation failed with acct. s.n. mismatch at estimate gas step.
+    match estimate_fee_and_send_tx(config, key_entry, account, tx_memo, messages).await {
+        // Gas estimation failed with account sequence mismatch during gas estimation.
         // It indicates that the account sequence cached by hermes is stale (got < expected).
         // This can happen when the same account is used by another agent.
         Err(ref e) if mismatch_account_sequence_number_error_requires_refresh(e) => {
@@ -90,7 +90,7 @@ async fn do_send_tx_with_account_sequence_retry(
         }
 
         // Gas estimation succeeded but broadcast_tx_sync failed with a retry-able error.
-        Ok(ref response) if response.code == Code::Err(INCORRECT_ACCOUNT_SEQUENCE_ERR) => {
+        Ok(ref response) if response.code == Code::from(INCORRECT_ACCOUNT_SEQUENCE_ERR) => {
             warn!(
                 ?response,
                 "failed to broadcast tx because of a mismatched account sequence number, \
@@ -133,7 +133,7 @@ async fn do_send_tx_with_account_sequence_retry(
                     // Log the error.
                     error!(
                         ?response,
-                        diagnostic = ?sdk_error_from_tx_sync_error_code(code),
+                        diagnostic = ?sdk_error_from_tx_sync_error_code(code.into()),
                         "failed to broadcast tx with unrecoverable error"
                     );
 
@@ -156,19 +156,21 @@ async fn refresh_account_and_retry_send_tx_with_account_sequence(
     key_entry: &KeyEntry,
     account: &mut Account,
     tx_memo: &Memo,
-    messages: Vec<Any>,
+    messages: &[Any],
 ) -> Result<Response, Error> {
-    // Re-fetch the account s.n.
+    // Re-fetch the account sequence number
     refresh_account(&config.grpc_address, &key_entry.account, account).await?;
-    // Retry after delay.
+
+    // Retry after delay
     thread::sleep(Duration::from_millis(ACCOUNT_SEQUENCE_RETRY_DELAY));
-    estimate_fee_and_send_tx(config, key_entry, account, tx_memo, &messages).await
+
+    estimate_fee_and_send_tx(config, key_entry, account, tx_memo, messages).await
 }
 
 /// Determine whether the given error yielded by `tx_simulate`
-/// indicates that the current sequence number cached in Hermes
-/// is smaller than the full node's version of the s.n. and therefore
-/// account needs to be refreshed.
+/// indicates that the current account sequence number cached in Hermes
+/// is smaller than the full node's version of the sequence number and therefore
+/// the account needs to be refreshed.
 fn mismatch_account_sequence_number_error_requires_refresh(e: &Error) -> bool {
     use crate::error::ErrorDetail::*;
 
