@@ -8,6 +8,7 @@ use super::error::Error;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ClientType {
     Tendermint = 1,
+    Eth = 2,
 
     #[cfg(any(test, feature = "mocks"))]
     Mock = 9999,
@@ -15,6 +16,7 @@ pub enum ClientType {
 
 impl ClientType {
     const TENDERMINT_STR: &'static str = "07-tendermint";
+    const ETH_STR: &'static str = "07-eth";
 
     #[cfg_attr(not(test), allow(dead_code))]
     const MOCK_STR: &'static str = "9999-mock";
@@ -23,6 +25,7 @@ impl ClientType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Tendermint => Self::TENDERMINT_STR,
+            Self::Eth => Self::ETH_STR,
 
             #[cfg(any(test, feature = "mocks"))]
             Self::Mock => Self::MOCK_STR,
