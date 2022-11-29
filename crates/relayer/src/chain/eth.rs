@@ -1,7 +1,7 @@
 use ibc_relayer_types::clients::ics07_eth::{
     client_state::ClientState as EthClientState,
     consensus_state::ConsensusState as EthConsensusState, header::Header as EthHeader,
-    light_block::LightBlock as EthLightBlock,
+    light_block::ExecutionPayloadHeader as EthLightBlock,
 };
 use ibc_relayer_types::{
     core::{
@@ -22,6 +22,7 @@ use std::sync::Arc;
 use tendermint_rpc::{endpoint::broadcast::tx_sync::Response, HttpClient};
 use tokio::runtime::Runtime as TokioRuntime;
 
+use crate::light_client::LightClient;
 use crate::{
     account::Balance,
     chain::endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
@@ -31,6 +32,7 @@ use crate::{
     denom::DenomTrace,
     error::Error,
     event::IbcEventWithHeight,
+    light_client::eth::LightClient as EthLightClient,
     misbehaviour::MisbehaviourEvidence,
 };
 
@@ -54,6 +56,8 @@ pub mod types;
 pub struct EthChain {
     pub rt: Arc<TokioRuntime>,
     pub rpc_client: HttpClient,
+    pub config: ChainConfig,
+    pub light_client: EthLightClient,
 }
 
 impl ChainEndpoint for EthChain {
@@ -66,7 +70,7 @@ impl ChainEndpoint for EthChain {
     type ClientState = EthClientState;
 
     fn config(&self) -> &ChainConfig {
-        todo!()
+        &self.config
     }
 
     fn bootstrap(_config: ChainConfig, _rt: Arc<TokioRuntime>) -> Result<Self, Error> {
@@ -74,7 +78,7 @@ impl ChainEndpoint for EthChain {
     }
 
     fn shutdown(self) -> Result<(), Error> {
-        todo!()
+        Ok(())
     }
 
     fn health_check(&self) -> Result<HealthCheck, Error> {
@@ -113,19 +117,21 @@ impl ChainEndpoint for EthChain {
 
     fn verify_header(
         &mut self,
-        _trusted: Height,
-        _target: Height,
-        _client_state: &AnyClientState,
+        trusted: Height,
+        target: Height,
+        client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
-        todo!()
+        self.light_client
+            .verify(trusted, target, client_state)
+            .map(|v| v.target)
     }
 
     fn check_misbehaviour(
         &mut self,
-        _update: &UpdateClient,
-        _client_state: &AnyClientState,
+        update: &UpdateClient,
+        client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
-        todo!()
+        self.light_client.check_misbehaviour(update, client_state)
     }
 
     fn query_balance(
