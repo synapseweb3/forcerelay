@@ -10,7 +10,7 @@ use ethers_providers::FilterWatcher;
 
 use k256::ecdsa::SigningKey;
 use tokio::runtime::Runtime as TokioRuntime;
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::event::monitor::{MonitorCmd, Next};
 
@@ -97,16 +97,25 @@ impl EthEventMonitor {
                 .await
             {
                 let mut meta_stream = stream.with_meta();
-                while let Some(Ok((event, meta))) = meta_stream.next().await {
-                    if meta.block_number > self.start_block_number.into() {
-                        // TODO: convert eth event to IBC Event
-                        // TODO: send msg to channel
-                        println!("[event] = {:?}", event);
-                        println!("[event_meta] = {:?}\n", meta);
+
+                while let Some(ret) = meta_stream.next().await {
+                    match ret {
+                        Ok((event, meta)) => {
+                            // TODO: convert eth event to IBC Event
+                            // TODO: send msg to channel
+                            println!("[event] = {:?}", event);
+                            println!("[event_meta] = {:?}\n", meta);
+                        },
+                        Err(err) => {
+                            error!("error when monitoring eth events, reason: {}", err);
+                            // TODO: reconnect
+                            return Next::Continue;
+                        },
                     }
                 }
             }
+            Next::Continue
         });
-        return Next::Continue;
+        Next::Continue
     }
 }
