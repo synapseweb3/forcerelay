@@ -5,14 +5,15 @@ use ethers::prelude::{abigen, Provider, SignerMiddleware, StreamExt, Ws};
 use ethers::signers::Wallet;
 use ethers::types::{Address, Log};
 use ethers_contract::stream::EventStream;
-use ethers_contract::ContractError;
+use ethers_contract::{ContractError, LogMeta};
 use ethers_providers::FilterWatcher;
 
+use ibc_relayer_types::applications::transfer::events::Event;
 use k256::ecdsa::SigningKey;
 use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error};
 
-use crate::event::monitor::{MonitorCmd, Next};
+use crate::event::monitor::{Result, MonitorCmd, Next, EventBatch, Error};
 
 type _SubscriptionStream<'a> = EventStream<
     'a,
@@ -36,6 +37,7 @@ pub struct EthEventMonitor {
     wallet: Wallet<SigningKey>,
     start_block_number: u64,
     rx_cmd: channel::Receiver<MonitorCmd>,
+    tx_batch: channel::Sender<Result<EventBatch>>,
 }
 
 impl EthEventMonitor {
@@ -101,10 +103,7 @@ impl EthEventMonitor {
                 while let Some(ret) = meta_stream.next().await {
                     match ret {
                         Ok((event, meta)) => {
-                            // TODO: convert eth event to IBC Event
-                            // TODO: send msg to channel
-                            println!("[event] = {:?}", event);
-                            println!("[event_meta] = {:?}\n", meta);
+                            self.process_event(event, meta);
                         },
                         Err(err) => {
                             error!("error when monitoring eth events, reason: {}", err);
@@ -118,4 +117,30 @@ impl EthEventMonitor {
         });
         Next::Continue
     }
+
+    fn process_event(&self, event: IBCEvents, meta: LogMeta) -> Result<()> {
+        println!("[event] = {:?}", event);
+        println!("[event_meta] = {:?}\n", meta);
+        // match event {
+        //     IBCEvents::CreateClientFilter(_) => todo!(),
+        //     IBCEvents::RoleAdminChangedFilter(_) => todo!(),
+        //     IBCEvents::RoleGrantedFilter(_) => todo!(),
+        //     IBCEvents::RoleRevokedFilter(_) => todo!(),
+        //     IBCEvents::UpdateClientFilter(_) => todo!(),
+        // }
+        // TODO: convert eth event to IBC Event
+        // TODO: send msg to channel
+        let batch = self.to_event_batch(event, meta);
+
+        self.tx_batch
+            .send(Ok(batch))
+            .map_err(|_| Error::channel_send_failed())?;
+        Ok(())
+    }
+
+    fn to_event_batch(&self, event: IBCEvents, meta: LogMeta) -> EventBatch {
+        todo!();
+    }
+
+
 }
