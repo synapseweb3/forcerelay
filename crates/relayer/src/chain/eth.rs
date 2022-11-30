@@ -52,6 +52,7 @@ use super::{
 };
 
 pub mod types;
+pub mod event;
 
 pub struct EthChain {
     pub rt: Arc<TokioRuntime>,
