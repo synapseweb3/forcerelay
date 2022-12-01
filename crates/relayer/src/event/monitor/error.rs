@@ -48,6 +48,10 @@ define_error! {
         Rpc
             [ TraceError<RpcError> ]
             |_| { "RPC error" },
+
+        Others
+            { reason: String }
+            |e| { format!("uncategorized error: {0}", e.reason) },
     }
 }
 
