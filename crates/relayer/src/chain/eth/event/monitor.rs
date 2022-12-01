@@ -9,13 +9,15 @@ use ethers_contract::{ContractError, LogMeta};
 use ethers_providers::FilterWatcher;
 
 use ibc_relayer_types::applications::transfer::events::Event;
+use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use k256::ecdsa::SigningKey;
+use tendermint_rpc::Url;
 use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error};
 
-use crate::event::monitor::{Result, MonitorCmd, Next, EventBatch, Error};
+use crate::event::monitor::{Result, MonitorCmd, Next, EventBatch, Error, EventReceiver, TxMonitorCmd};
 
-type _SubscriptionStream<'a> = EventStream<
+type SubscriptionStream<'a> = EventStream<
     'a,
     FilterWatcher<'a, Ws, Log>,
     IBCEvents,
@@ -26,11 +28,11 @@ type Client = Provider<Ws>;
 
 abigen!(IBC, "./src/chain/eth/IBC.json");
 
-#[derive(Clone, Debug)]
-pub struct EthEventMonitor {
+// #[derive(Clone, Debug)]
+pub struct EthEventMonitor<'a> {
     client: Client,
     // event_queries: Vec<IBC<SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>>>,
-    // _subscription: Box<SubscriptionStream<'a>>,
+    subscription: SubscriptionStream<'a>,
     rt: Arc<TokioRuntime>,
     _chain_id: u64,
     address: Address,
@@ -40,33 +42,33 @@ pub struct EthEventMonitor {
     tx_batch: channel::Sender<Result<EventBatch>>,
 }
 
-impl EthEventMonitor {
-    // pub fn new(
-    //     chain_id: ChainId,
-    //     node_addr: Url,
-    //     rt: Arc<TokioRuntime>,
-    // ) -> Result<(Self, EventReceiver, TxMonitorCmd)> {
-    //     todo!()
-    // }
+impl<'a> EthEventMonitor<'a> {
+    pub fn new(
+        chain_id: ChainId,
+        node_addr: Url,
+        rt: Arc<TokioRuntime>,
+    ) -> Result<(Self, EventReceiver, TxMonitorCmd)> {
+
+        todo!()
+    }
 
     // pub fn queries(&self) -> &[Contract<Provider<Ws>>] {
     //     &self.event_queries
     // }
 
-    // pub fn subscribe(&mut self) -> Result<()> {
-    //     let signer = SignerMiddleware::new(self.client.clone(), self.wallet.clone());
-    //     let ibc = Arc::new(IBC::new(self.address, Arc::new(signer)));
-    //     let ibc_events = ibc.events().from_block(self.start_block_number);
+    pub fn subscribe(&mut self) -> Result<()> {
+        let signer = SignerMiddleware::new(self.client.clone(), self.wallet.clone());
+        let ibc = Arc::new(IBC::new(self.address, Arc::new(signer)));
+        let ibc_events = ibc.events().from_block(self.start_block_number);
 
-    //     // let mut subscriptions = vec![];
-    //     let subscription = self
-    //         .rt
-    //         .block_on(ibc_events.stream())
-    //     .map_err(|_| Error::collect_events_failed("fail".to_string()))?;
-    //     self.subscription = Box::new(subscription);
-
-    //     Ok(())
-    // }
+        // let mut subscriptions = vec![];
+        let subscription = self
+            .rt
+            .block_on(ibc_events.stream())
+        .map_err(|_| Error::collect_events_failed("fail".to_string()))?;
+        self.subscription = subscription;
+        Ok(())
+    }
 
     #[allow(clippy::while_let_loop)]
     pub fn run(mut self) {
