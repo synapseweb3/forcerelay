@@ -1,16 +1,12 @@
 use std::sync::Arc;
 
 use crossbeam_channel as channel;
-use ethers::prelude::{abigen, Provider, SignerMiddleware, StreamExt, Ws};
-use ethers::signers::Wallet;
+use ethers::prelude::{abigen, Provider, StreamExt, Ws};
 use ethers::types::{Address, Log};
-use ethers_contract::stream::EventStream;
 use ethers_contract::{ContractError, LogMeta};
-use ethers_providers::FilterWatcher;
+use ethers_providers::{FilterWatcher, Middleware};
 
-use ibc_relayer_types::applications::transfer::events::Event;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
-use k256::ecdsa::SigningKey;
 use tendermint_rpc::Url;
 use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error};
@@ -26,11 +22,9 @@ abigen!(IBC, "./src/chain/eth/IBC.json");
 // #[derive(Clone, Debug)]
 pub struct EthEventMonitor {
     client: Arc<Client>,
-    // event_queries: Vec<IBC<SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>>>,
     rt: Arc<TokioRuntime>,
-    _chain_id: u64,
+    chain_id: ChainId,
     address: Address,
-    wallet: Wallet<SigningKey>,
     start_block_number: u64,
     rx_cmd: channel::Receiver<MonitorCmd>,
     tx_batch: channel::Sender<Result<EventBatch>>,
@@ -40,16 +34,41 @@ impl EthEventMonitor {
     pub fn new(
         chain_id: ChainId,
         node_addr: Url,
+        address: String,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, EventReceiver, TxMonitorCmd)> {
-        todo!()
+        let (tx_batch, rx_batch) = channel::unbounded();
+        let (tx_cmd, rx_cmd) = channel::unbounded();
+
+        let ws_addr = node_addr.clone();
+        let client = rt
+            .block_on(Provider::<Ws>::connect(node_addr))
+            .map_err(|_| Error::client_creation_failed(chain_id.clone(), ws_addr))?;
+
+        let address = address
+            .parse::<Address>()
+            .map_err(|e| Error::others(e.to_string()))?;
+
+        let start_block_number = rt
+            .block_on(client.get_block_number())
+            .map_err(|e| Error::others(e.to_string()))?;
+
+        let monitor = Self {
+            client: Arc::new(client),
+            rt,
+            chain_id,
+            address,
+            start_block_number: start_block_number.as_u64(),
+            rx_cmd,
+            tx_batch,
+        };
+        Ok((monitor, rx_batch, tx_cmd))
     }
 
     // pub fn queries(&self) -> &[Contract<Provider<Ws>>] {
     //     &self.event_queries
     // }
 
-    #[allow(clippy::while_let_loop)]
     pub fn run(mut self) {
         debug!("starting event monitor");
         let rt = self.rt.clone();
