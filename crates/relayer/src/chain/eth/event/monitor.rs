@@ -2,18 +2,17 @@ use std::sync::Arc;
 
 use crossbeam_channel as channel;
 use ethers::prelude::{abigen, Provider, StreamExt, Ws};
-use ethers::types::{Address, Log};
-use ethers_contract::{ContractError, LogMeta};
-use ethers_providers::{FilterWatcher, Middleware};
-
-use ibc_relayer_types::core::ics24_host::identifier::ChainId;
-use tendermint_rpc::Url;
-use tokio::runtime::Runtime as TokioRuntime;
-use tracing::{debug, error};
+use ethers::types::Address;
+use ethers_contract::LogMeta;
+use ethers_providers::Middleware;
 
 use crate::event::monitor::{
     Error, EventBatch, EventReceiver, MonitorCmd, Next, Result, TxMonitorCmd,
 };
+use ibc_relayer_types::core::ics24_host::identifier::ChainId;
+use tendermint_rpc::Url;
+use tokio::runtime::Runtime as TokioRuntime;
+use tracing::{debug, error, instrument};
 
 type Client = Provider<Ws>;
 
@@ -31,6 +30,13 @@ pub struct EthEventMonitor {
 }
 
 impl EthEventMonitor {
+    /// Create an event monitor, and connect to a node
+    #[instrument(
+        name = "eth_event_monitor.create",
+        level = "error",
+        skip_all,
+        fields(chain = %chain_id, addr = %node_addr)
+    )]
     pub fn new(
         chain_id: ChainId,
         node_addr: Url,
@@ -65,10 +71,13 @@ impl EthEventMonitor {
         Ok((monitor, rx_batch, tx_cmd))
     }
 
-    // pub fn queries(&self) -> &[Contract<Provider<Ws>>] {
-    //     &self.event_queries
-    // }
-
+    #[allow(clippy::while_let_loop)]
+    #[instrument(
+        name = "eth_event_monitor",
+        level = "error",
+        skip_all,
+        fields(chain = %self.chain_id)
+    )]
     pub fn run(mut self) {
         debug!("starting event monitor");
         let rt = self.rt.clone();
