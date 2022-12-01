@@ -15,24 +15,18 @@ use tendermint_rpc::Url;
 use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error};
 
-use crate::event::monitor::{Result, MonitorCmd, Next, EventBatch, Error, EventReceiver, TxMonitorCmd};
-
-type SubscriptionStream<'a> = EventStream<
-    'a,
-    FilterWatcher<'a, Ws, Log>,
-    IBCEvents,
-    ContractError<SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>>,
->;
+use crate::event::monitor::{
+    Error, EventBatch, EventReceiver, MonitorCmd, Next, Result, TxMonitorCmd,
+};
 
 type Client = Provider<Ws>;
 
 abigen!(IBC, "./src/chain/eth/IBC.json");
 
 // #[derive(Clone, Debug)]
-pub struct EthEventMonitor<'a> {
-    client: Client,
+pub struct EthEventMonitor {
+    client: Arc<Client>,
     // event_queries: Vec<IBC<SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>>>,
-    subscription: SubscriptionStream<'a>,
     rt: Arc<TokioRuntime>,
     _chain_id: u64,
     address: Address,
@@ -42,13 +36,12 @@ pub struct EthEventMonitor<'a> {
     tx_batch: channel::Sender<Result<EventBatch>>,
 }
 
-impl<'a> EthEventMonitor<'a> {
+impl EthEventMonitor {
     pub fn new(
         chain_id: ChainId,
         node_addr: Url,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, EventReceiver, TxMonitorCmd)> {
-
         todo!()
     }
 
@@ -56,67 +49,52 @@ impl<'a> EthEventMonitor<'a> {
     //     &self.event_queries
     // }
 
-    pub fn subscribe(&mut self) -> Result<()> {
-        let signer = SignerMiddleware::new(self.client.clone(), self.wallet.clone());
-        let ibc = Arc::new(IBC::new(self.address, Arc::new(signer)));
-        let ibc_events = ibc.events().from_block(self.start_block_number);
-
-        // let mut subscriptions = vec![];
-        let subscription = self
-            .rt
-            .block_on(ibc_events.stream())
-        .map_err(|_| Error::collect_events_failed("fail".to_string()))?;
-        self.subscription = subscription;
-        Ok(())
-    }
-
     #[allow(clippy::while_let_loop)]
     pub fn run(mut self) {
         debug!("starting event monitor");
-        loop {
-            match self.run_loop() {
-                Next::Continue => continue,
-                Next::Abort => break,
+        let rt = self.rt.clone();
+        rt.block_on(async {
+            loop {
+                match self.run_loop().await {
+                    Next::Continue => continue,
+                    Next::Abort => break,
+                }
             }
-        }
+        });
         debug!("event monitor is shutting down");
         // TODO: close client
     }
 
-    #[allow(clippy::while_let_loop)]
-    pub fn run_loop(&mut self) -> Next {
-        let signer = SignerMiddleware::new(self.client.clone(), self.wallet.clone());
-        let ibc = Arc::new(IBC::new(self.address, Arc::new(signer)));
+    async fn run_loop(&mut self) -> Next {
+        let ibc = Arc::new(IBC::new(self.address, Arc::clone(&self.client)));
         let ibc_events = Arc::clone(&ibc);
 
-        if let Ok(MonitorCmd::Shutdown) = self.rx_cmd.try_recv() {
-            return Next::Abort;
-        }
-        let rt = self.rt.clone();
-        rt.block_on(async move {
-            if let Ok(stream) = ibc_events
-                .events()
-                .from_block(self.start_block_number)
-                .stream()
-                .await
-            {
-                let mut meta_stream = stream.with_meta();
+        if let Ok(stream) = ibc_events
+            .events()
+            .from_block(self.start_block_number)
+            .stream()
+            .await
+        {
+            let mut meta_stream = stream.with_meta();
 
-                while let Some(ret) = meta_stream.next().await {
-                    match ret {
-                        Ok((event, meta)) => {
-                            self.process_event(event, meta);
-                        },
-                        Err(err) => {
-                            error!("error when monitoring eth events, reason: {}", err);
-                            // TODO: reconnect
-                            return Next::Continue;
-                        },
+            while let Some(ret) = meta_stream.next().await {
+                match ret {
+                    Ok((event, meta)) => {
+                        self.process_event(event, meta).unwrap_or_else(|e| {
+                            error!("error while process event: {}", e);
+                        });
+                    }
+                    Err(err) => {
+                        error!("error when monitoring eth events, reason: {}", err);
+                        // TODO: reconnect
+                        return Next::Continue;
                     }
                 }
+                if let Ok(MonitorCmd::Shutdown) = self.rx_cmd.try_recv() {
+                    return Next::Abort;
+                }
             }
-            Next::Continue
-        });
+        }
         Next::Continue
     }
 
@@ -132,17 +110,12 @@ impl<'a> EthEventMonitor<'a> {
         // }
         // TODO: convert eth event to IBC Event
         // TODO: send msg to channel
-        let batch = self.to_event_batch(event, meta);
+        let batch: EventBatch = todo!();
 
         self.tx_batch
             .send(Ok(batch))
             .map_err(|_| Error::channel_send_failed())?;
+        self.start_block_number = meta.block_number.as_u64();
         Ok(())
     }
-
-    fn to_event_batch(&self, event: IBCEvents, meta: LogMeta) -> EventBatch {
-        todo!();
-    }
-
-
 }
