@@ -54,7 +54,6 @@ pub fn spawn_chain_runtime<Handle: ChainHandle>(
 
     let handle = match chain_config.r#type {
         ChainType::CosmosSdk => ChainRuntime::<CosmosSdkChain>::spawn::<Handle>(chain_config, rt),
-        _ => todo!(),
     }
     .map_err(SpawnError::relayer)?;
 
