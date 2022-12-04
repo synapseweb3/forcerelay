@@ -30,10 +30,7 @@ use crate::{
     consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight},
     denom::DenomTrace,
     error::Error,
-    event::{
-        monitor::{EventReceiver, TxMonitorCmd},
-        IbcEventWithHeight,
-    },
+    event::IbcEventWithHeight,
     misbehaviour::MisbehaviourEvidence,
 };
 
@@ -73,13 +70,6 @@ impl ChainEndpoint for EthChain {
     }
 
     fn bootstrap(_config: ChainConfig, _rt: Arc<TokioRuntime>) -> Result<Self, Error> {
-        todo!()
-    }
-
-    fn init_event_monitor(
-        &self,
-        _rt: Arc<TokioRuntime>,
-    ) -> Result<(EventReceiver, TxMonitorCmd), Error> {
         todo!()
     }
 
@@ -368,6 +358,10 @@ impl ChainEndpoint for EthChain {
         _port_id: &PortId,
         _counterparty_payee: &Signer,
     ) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn subscribe(&mut self) -> Result<super::handle::Subscription, Error> {
         todo!()
     }
 }
