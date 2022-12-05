@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::event::IbcEventWithHeight;
+use crate::event::bus::EventBus;
 use crate::light_client::AnyHeader;
 use crossbeam_channel as channel;
 use ethers::prelude::{abigen, Provider, StreamExt, Ws};
@@ -14,7 +15,7 @@ use ibc_relayer_types::Height;
 
 use crate::chain::tracking::TrackingId;
 use crate::event::monitor::{
-    Error, EventBatch, EventReceiver, MonitorCmd, Next, Result, TxMonitorCmd,
+    Error, EventBatch, MonitorCmd, Next, Result, TxMonitorCmd,
 };
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tendermint_rpc::Url;
@@ -33,7 +34,7 @@ pub struct EthEventMonitor {
     address: Address,
     start_block_number: u64,
     rx_cmd: channel::Receiver<MonitorCmd>,
-    tx_batch: channel::Sender<Result<EventBatch>>,
+    event_bus: EventBus<Arc<Result<EventBatch>>>,
 }
 
 impl EthEventMonitor {
@@ -49,8 +50,7 @@ impl EthEventMonitor {
         node_addr: Url,
         address: String,
         rt: Arc<TokioRuntime>,
-    ) -> Result<(Self, EventReceiver, TxMonitorCmd)> {
-        let (tx_batch, rx_batch) = channel::unbounded();
+    ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
 
         let ws_addr = node_addr.clone();
@@ -66,6 +66,7 @@ impl EthEventMonitor {
             .block_on(client.get_block_number())
             .map_err(|e| Error::others(e.to_string()))?;
 
+        let event_bus = EventBus::new();
         let monitor = Self {
             client: Arc::new(client),
             rt,
@@ -73,9 +74,9 @@ impl EthEventMonitor {
             address,
             start_block_number: start_block_number.as_u64(),
             rx_cmd,
-            tx_batch,
+            event_bus,
         };
-        Ok((monitor, rx_batch, tx_cmd))
+        Ok((monitor, TxMonitorCmd::new(tx_cmd)))
     }
 
     #[allow(clippy::while_let_loop)]
@@ -112,21 +113,31 @@ impl EthEventMonitor {
         {
             let mut meta_stream = stream.with_meta();
 
-            while let Some(ret) = meta_stream.next().await {
-                match ret {
-                    Ok((event, meta)) => {
-                        self.process_event(event, meta).unwrap_or_else(|e| {
-                            error!("error while process event: {}", e);
-                        });
-                    }
-                    Err(err) => {
-                        error!("error when monitoring eth events, reason: {}", err);
-                        // TODO: reconnect
-                        return Next::Continue;
+            loop {
+                if let Ok(cmd) = self.rx_cmd.try_recv() {
+                    match cmd {
+                        MonitorCmd::Shutdown => return Next::Abort,
+                        MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
                     }
                 }
-                if let Ok(MonitorCmd::Shutdown) = self.rx_cmd.try_recv() {
-                    return Next::Abort;
+                if let Some(ret) = meta_stream.next().await {
+                    match ret {
+                        Ok((event, meta)) => {
+                            self.process_event(event, meta).unwrap_or_else(|e| {
+                                error!("error while process event: {}", e);
+                            });
+                        }
+                        Err(err) => {
+                            error!("error when monitoring eth events, reason: {}", err);
+                            // TODO: reconnect
+                            return Next::Continue;
+                        }
+                    }
+                    if let Ok(MonitorCmd::Shutdown) = self.rx_cmd.try_recv() {
+                        return Next::Abort;
+                    }
+                } else {
+                    return Next::Continue;
                 }
             }
         }
@@ -136,24 +147,13 @@ impl EthEventMonitor {
     fn process_event(&mut self, event: IBCEvents, meta: LogMeta) -> Result<()> {
         println!("[event] = {:?}", event);
         println!("[event_meta] = {:?}\n", meta);
-        // match event {
-        //     IBCEvents::CreateClientFilter(_) => todo!(),
-        //     IBCEvents::RoleAdminChangedFilter(_) => todo!(),
-        //     IBCEvents::RoleGrantedFilter(_) => todo!(),
-        //     IBCEvents::RoleRevokedFilter(_) => todo!(),
-        //     IBCEvents::UpdateClientFilter(_) => todo!(),
-        // }
-        // TODO: convert eth event to IBC Event
-        // TODO: send msg to channel
         let batch: EventBatch = EventBatch {
             chain_id: self.chain_id.clone(),
             tracking_id: TrackingId::new_uuid(),
             height: Height::new(0, meta.block_number.as_u64()).unwrap(),
             events: vec![self.to_ibc_event(event, meta.block_number.as_u64())],
         };
-        self.tx_batch
-            .send(Ok(batch))
-            .map_err(|_| Error::channel_send_failed())?;
+        self.process_batch(batch);
         self.start_block_number = meta.block_number.as_u64();
         Ok(())
     }
@@ -163,14 +163,18 @@ impl EthEventMonitor {
         let ibc_event = match event {
             IBCEvents::CreateClientFilter(_) => IbcEvent::CreateClient(events::CreateClient(attr)),
             // _ => IbcEvent::CreateClient(events::CreateClient(attr)),
-            _ => IbcEvent::UpdateClient(events::UpdateClient{
+            _ => IbcEvent::UpdateClient(events::UpdateClient {
                 common: attr,
-                header: Some(Box::new(AnyHeader::Eth(EthHeader{}))),
+                header: Some(Box::new(AnyHeader::Eth(EthHeader {}))),
             }),
         };
         IbcEventWithHeight {
             event: ibc_event,
             height: Height::new(0, height).unwrap(),
         }
+    }
+
+    fn process_batch(&mut self, batch: EventBatch) {
+        self.event_bus.broadcast(Arc::new(Ok(batch)));
     }
 }
