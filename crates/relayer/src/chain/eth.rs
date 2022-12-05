@@ -90,7 +90,7 @@ impl ChainEndpoint for EthChain {
         let (event_monitor, event_receiver, monitor_tx) = EthEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
-            todo!(),
+            String::from(""), // TODO: send string from chain config
             rt,
         )
         .map_err(Error::event_monitor)?;

@@ -1,11 +1,18 @@
 use std::sync::Arc;
 
+use crate::event::IbcEventWithHeight;
+use crate::light_client::AnyHeader;
 use crossbeam_channel as channel;
 use ethers::prelude::{abigen, Provider, StreamExt, Ws};
 use ethers::types::Address;
 use ethers_contract::LogMeta;
 use ethers_providers::Middleware;
+use ibc_relayer_types::clients::ics07_eth::header::Header as EthHeader;
+use ibc_relayer_types::core::ics02_client::events::{self, Attributes};
+use ibc_relayer_types::events::IbcEvent;
+use ibc_relayer_types::Height;
 
+use crate::chain::tracking::TrackingId;
 use crate::event::monitor::{
     Error, EventBatch, EventReceiver, MonitorCmd, Next, Result, TxMonitorCmd,
 };
@@ -126,7 +133,7 @@ impl EthEventMonitor {
         Next::Continue
     }
 
-    fn process_event(&self, event: IBCEvents, meta: LogMeta) -> Result<()> {
+    fn process_event(&mut self, event: IBCEvents, meta: LogMeta) -> Result<()> {
         println!("[event] = {:?}", event);
         println!("[event_meta] = {:?}\n", meta);
         // match event {
@@ -138,12 +145,32 @@ impl EthEventMonitor {
         // }
         // TODO: convert eth event to IBC Event
         // TODO: send msg to channel
-        let batch: EventBatch = todo!();
-
+        let batch: EventBatch = EventBatch {
+            chain_id: self.chain_id.clone(),
+            tracking_id: TrackingId::new_uuid(),
+            height: Height::new(0, meta.block_number.as_u64()).unwrap(),
+            events: vec![self.to_ibc_event(event, meta.block_number.as_u64())],
+        };
         self.tx_batch
             .send(Ok(batch))
             .map_err(|_| Error::channel_send_failed())?;
         self.start_block_number = meta.block_number.as_u64();
         Ok(())
+    }
+
+    fn to_ibc_event(&self, event: IBCEvents, height: u64) -> IbcEventWithHeight {
+        let attr = Attributes::default();
+        let ibc_event = match event {
+            IBCEvents::CreateClientFilter(_) => IbcEvent::CreateClient(events::CreateClient(attr)),
+            // _ => IbcEvent::CreateClient(events::CreateClient(attr)),
+            _ => IbcEvent::UpdateClient(events::UpdateClient{
+                common: attr,
+                header: Some(Box::new(AnyHeader::Eth(EthHeader{}))),
+            }),
+        };
+        IbcEventWithHeight {
+            event: ibc_event,
+            height: Height::new(0, height).unwrap(),
+        }
     }
 }
