@@ -86,6 +86,10 @@ impl TxMonitorCmd {
 
         Ok(subscription)
     }
+
+    pub fn new(sender: channel::Sender<MonitorCmd>) -> Self {
+        Self(sender)
+    }
 }
 
 #[derive(Debug)]
