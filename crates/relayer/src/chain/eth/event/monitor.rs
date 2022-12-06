@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::event::IbcEventWithHeight;
 use crate::event::bus::EventBus;
+use crate::event::IbcEventWithHeight;
 use crate::light_client::AnyHeader;
 use crossbeam_channel as channel;
 use ethers::prelude::{abigen, Provider, StreamExt, Ws};
@@ -14,9 +14,7 @@ use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::Height;
 
 use crate::chain::tracking::TrackingId;
-use crate::event::monitor::{
-    Error, EventBatch, MonitorCmd, Next, Result, TxMonitorCmd,
-};
+use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonitorCmd};
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tendermint_rpc::Url;
 use tokio::runtime::Runtime as TokioRuntime;
@@ -165,7 +163,7 @@ impl EthEventMonitor {
             // _ => IbcEvent::CreateClient(events::CreateClient(attr)),
             _ => IbcEvent::UpdateClient(events::UpdateClient {
                 common: attr,
-                header: Some(Box::new(AnyHeader::Eth(EthHeader {}))),
+                header: Some(Box::new(AnyHeader::Eth(EthHeader::default()))),
             }),
         };
         IbcEventWithHeight {

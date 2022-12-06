@@ -58,7 +58,6 @@ pub mod event;
 pub mod types;
 
 pub struct EthChain {
-    config: ChainConfig,
     pub rt: Arc<TokioRuntime>,
     pub rpc_client: HttpClient,
     pub config: ChainConfig,
