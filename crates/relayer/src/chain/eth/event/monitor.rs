@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use super::ibc::*;
 use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
 use crate::light_client::AnyHeader;
-use super::ibc::*;
 use crossbeam_channel as channel;
 use ethers::prelude::{Provider, StreamExt, Ws};
 use ethers::types::Address;
@@ -118,6 +118,9 @@ impl EthEventMonitor {
                     }
                 }
                 if let Some(ret) = meta_stream.next().await {
+                    if let Ok(MonitorCmd::Shutdown) = self.rx_cmd.try_recv() {
+                        return Next::Abort;
+                    }
                     match ret {
                         Ok((event, meta)) => {
                             self.process_event(event, meta).unwrap_or_else(|e| {
@@ -129,9 +132,6 @@ impl EthEventMonitor {
                             // TODO: reconnect
                             return Next::Continue;
                         }
-                    }
-                    if let Ok(MonitorCmd::Shutdown) = self.rx_cmd.try_recv() {
-                        return Next::Abort;
                     }
                 } else {
                     return Next::Continue;
