@@ -3,8 +3,9 @@ use std::sync::Arc;
 use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
 use crate::light_client::AnyHeader;
+use super::ibc::*;
 use crossbeam_channel as channel;
-use ethers::prelude::{abigen, Provider, StreamExt, Ws};
+use ethers::prelude::{Provider, StreamExt, Ws};
 use ethers::types::Address;
 use ethers_contract::LogMeta;
 use ethers_providers::Middleware;
@@ -21,8 +22,6 @@ use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error, instrument};
 
 type Client = Provider<Ws>;
-
-abigen!(IBC, "./src/chain/eth/IBC.json");
 
 // #[derive(Clone, Debug)]
 pub struct EthEventMonitor {
