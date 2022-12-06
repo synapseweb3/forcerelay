@@ -19,10 +19,12 @@ use ibc_relayer_types::{
 };
 use semver::Version;
 use std::sync::Arc;
+use std::thread;
 use tendermint_rpc::{endpoint::broadcast::tx_sync::Response, HttpClient};
 use tokio::runtime::Runtime as TokioRuntime;
 
 use crate::light_client::LightClient;
+use crate::chain::eth::event::monitor::EthEventMonitor;
 use crate::{
     account::Balance,
     chain::endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
@@ -55,6 +57,7 @@ pub mod types;
 pub mod event;
 
 pub struct EthChain {
+    config: ChainConfig,
     pub rt: Arc<TokioRuntime>,
     pub rpc_client: HttpClient,
     pub config: ChainConfig,
@@ -76,6 +79,25 @@ impl ChainEndpoint for EthChain {
 
     fn bootstrap(_config: ChainConfig, _rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         todo!()
+    }
+
+    fn init_event_monitor(
+        &self,
+        rt: Arc<TokioRuntime>,
+    ) -> Result<(EventReceiver, TxMonitorCmd), Error> {
+        crate::time!("init_event_monitor");
+
+        let (event_monitor, event_receiver, monitor_tx) = EthEventMonitor::new(
+            self.config.id.clone(),
+            self.config.websocket_addr.clone(),
+            todo!(),
+            rt,
+        )
+        .map_err(Error::event_monitor)?;
+
+        thread::spawn(move || event_monitor.run());
+
+        Ok((event_receiver, monitor_tx))
     }
 
     fn shutdown(self) -> Result<(), Error> {
