@@ -19,10 +19,13 @@ use ibc_relayer_types::{
 };
 use semver::Version;
 use std::sync::Arc;
+use std::thread;
 use tendermint_rpc::{endpoint::broadcast::tx_sync::Response, HttpClient};
 use tokio::runtime::Runtime as TokioRuntime;
 
 use crate::light_client::LightClient;
+use crate::chain::eth::event::monitor::EthEventMonitor;
+use crate::event::monitor::TxMonitorCmd;
 use crate::{
     account::Balance,
     chain::endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
@@ -51,6 +54,7 @@ use super::{
     },
 };
 
+pub mod event;
 pub mod types;
 
 pub struct EthChain {
@@ -58,6 +62,7 @@ pub struct EthChain {
     pub rpc_client: HttpClient,
     pub config: ChainConfig,
     pub light_client: EthLightClient,
+    tx_monitor_cmd: Option<TxMonitorCmd>,
 }
 
 impl ChainEndpoint for EthChain {
@@ -368,6 +373,34 @@ impl ChainEndpoint for EthChain {
     }
 
     fn subscribe(&mut self) -> Result<super::handle::Subscription, Error> {
-        todo!()
+        let tx_monitor_cmd = match &self.tx_monitor_cmd {
+            Some(tx_monitor_cmd) => tx_monitor_cmd,
+            None => {
+                let tx_monitor_cmd = self.init_event_monitor()?;
+                self.tx_monitor_cmd = Some(tx_monitor_cmd);
+                self.tx_monitor_cmd.as_ref().unwrap()
+            }
+        };
+
+        let subscription = tx_monitor_cmd.subscribe().map_err(Error::event_monitor)?;
+        Ok(subscription)
+    }
+}
+
+impl EthChain {
+    fn init_event_monitor(&self) -> Result<TxMonitorCmd, Error> {
+        crate::time!("eth_init_event_monitor");
+
+        let (event_monitor, monitor_tx) = EthEventMonitor::new(
+            self.config.id.clone(),
+            self.config.websocket_addr.clone(),
+            String::from(""), // TODO: send string from chain config
+            self.rt.clone(),
+        )
+        .map_err(Error::event_monitor)?;
+
+        thread::spawn(move || event_monitor.run());
+
+        Ok(monitor_tx)
     }
 }

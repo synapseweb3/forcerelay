@@ -70,6 +70,9 @@ reqwest-retry = "0.1"
 eyre = "0.6"
 tree_hash_derive = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }
 tree_hash = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }
+ethers = { version = "1.0.0", features = ["rustls", "ws"] }
+ethers-contract = { version = "1.0.0" }
+ethers-providers = { version = "1.0.0" }
 
 [dependencies.num-bigint]
 version = "0.4"
