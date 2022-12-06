@@ -25,6 +25,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 use crate::light_client::LightClient;
 use crate::chain::eth::event::monitor::EthEventMonitor;
+use crate::event::monitor::TxMonitorCmd;
 use crate::{
     account::Balance,
     chain::endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
@@ -53,8 +54,8 @@ use super::{
     },
 };
 
-pub mod types;
 pub mod event;
+pub mod types;
 
 pub struct EthChain {
     config: ChainConfig,
@@ -62,6 +63,7 @@ pub struct EthChain {
     pub rpc_client: HttpClient,
     pub config: ChainConfig,
     pub light_client: EthLightClient,
+    tx_monitor_cmd: Option<TxMonitorCmd>,
 }
 
 impl ChainEndpoint for EthChain {
@@ -79,25 +81,6 @@ impl ChainEndpoint for EthChain {
 
     fn bootstrap(_config: ChainConfig, _rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         todo!()
-    }
-
-    fn init_event_monitor(
-        &self,
-        rt: Arc<TokioRuntime>,
-    ) -> Result<(EventReceiver, TxMonitorCmd), Error> {
-        crate::time!("init_event_monitor");
-
-        let (event_monitor, event_receiver, monitor_tx) = EthEventMonitor::new(
-            self.config.id.clone(),
-            self.config.websocket_addr.clone(),
-            String::from(""), // TODO: send string from chain config
-            rt,
-        )
-        .map_err(Error::event_monitor)?;
-
-        thread::spawn(move || event_monitor.run());
-
-        Ok((event_receiver, monitor_tx))
     }
 
     fn shutdown(self) -> Result<(), Error> {
@@ -391,6 +374,34 @@ impl ChainEndpoint for EthChain {
     }
 
     fn subscribe(&mut self) -> Result<super::handle::Subscription, Error> {
-        todo!()
+        let tx_monitor_cmd = match &self.tx_monitor_cmd {
+            Some(tx_monitor_cmd) => tx_monitor_cmd,
+            None => {
+                let tx_monitor_cmd = self.init_event_monitor()?;
+                self.tx_monitor_cmd = Some(tx_monitor_cmd);
+                self.tx_monitor_cmd.as_ref().unwrap()
+            }
+        };
+
+        let subscription = tx_monitor_cmd.subscribe().map_err(Error::event_monitor)?;
+        Ok(subscription)
+    }
+}
+
+impl EthChain {
+    fn init_event_monitor(&self) -> Result<TxMonitorCmd, Error> {
+        crate::time!("eth_init_event_monitor");
+
+        let (event_monitor, monitor_tx) = EthEventMonitor::new(
+            self.config.id.clone(),
+            self.config.websocket_addr.clone(),
+            String::from(""), // TODO: send string from chain config
+            self.rt.clone(),
+        )
+        .map_err(Error::event_monitor)?;
+
+        thread::spawn(move || event_monitor.run());
+
+        Ok(monitor_tx)
     }
 }
