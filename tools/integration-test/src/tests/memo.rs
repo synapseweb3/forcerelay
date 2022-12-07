@@ -1,4 +1,4 @@
-use ibc_relayer::config::{types::Memo, Config};
+use ibc_relayer::config::{cosmos::types::Memo, Config};
 use serde_json as json;
 
 use ibc_test_framework::ibc::denom::derive_ibc_denom;
@@ -18,7 +18,8 @@ pub struct MemoTest {
 
 impl TestOverrides for MemoTest {
     fn modify_relayer_config(&self, config: &mut Config) {
-        for mut chain in config.chains.iter_mut() {
+        for chain in config.chains.iter_mut() {
+            let chain = chain.cosmos_mut();
             chain.memo_prefix = self.memo.clone();
         }
     }

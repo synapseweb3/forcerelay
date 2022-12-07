@@ -10,7 +10,7 @@ use crate::chain::cosmos::simulate::send_tx_simulate;
 use crate::chain::cosmos::types::account::Account;
 use crate::chain::cosmos::types::config::TxConfig;
 use crate::chain::cosmos::types::gas::GasConfig;
-use crate::config::types::Memo;
+use crate::config::cosmos::types::Memo;
 use crate::error::Error;
 use crate::keyring::KeyEntry;
 use crate::util::pretty::PrettyFee;

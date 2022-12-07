@@ -115,7 +115,8 @@ impl TestOverrides for ExpirationTestOverrides {
             },
         };
 
-        for mut chain_config in config.chains.iter_mut() {
+        for chain_config in config.chains.iter_mut() {
+            let chain_config = chain_config.cosmos_mut();
             chain_config.trusting_period = Some(CLIENT_EXPIRY);
         }
     }

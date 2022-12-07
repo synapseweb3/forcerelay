@@ -335,8 +335,8 @@ pub(crate) mod channel {
 
 #[cfg(test)]
 mod tests {
+    use super::PacketFilter;
     use super::*;
-    use crate::config::PacketFilter;
 
     #[test]
     fn deserialize_packet_filter_policy() {

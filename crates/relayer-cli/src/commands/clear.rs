@@ -76,7 +76,7 @@ impl Override<Config> for ClearPacketsCmd {
         })?;
 
         if let Some(ref key_name) = self.key_name {
-            chain_config.key_name = key_name.to_string();
+            chain_config.cosmos_mut().key_name = key_name.to_string();
         }
 
         Ok(config)
@@ -102,7 +102,7 @@ impl Runnable for ClearPacketsCmd {
         if let Some(ref counterparty_key_name) = self.counterparty_key_name {
             match chains.dst.config() {
                 Ok(mut dst_chain_cfg) => {
-                    dst_chain_cfg.key_name = counterparty_key_name.to_string();
+                    dst_chain_cfg.cosmos_mut().key_name = counterparty_key_name.to_string();
                 }
                 Err(e) => Output::error(format!("{}", e)).exit(),
             }

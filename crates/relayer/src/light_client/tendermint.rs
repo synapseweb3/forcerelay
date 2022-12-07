@@ -26,8 +26,8 @@ use ibc_relayer_types::{
 use tracing::trace;
 
 use crate::{
-    chain::cosmos::CosmosSdkChain, client_state::AnyClientState, config::ChainConfig, error::Error,
-    misbehaviour::MisbehaviourEvidence,
+    chain::cosmos::CosmosSdkChain, client_state::AnyClientState, config::cosmos::CosmosChainConfig,
+    error::Error, misbehaviour::MisbehaviourEvidence,
 };
 
 use super::Verified;
@@ -164,7 +164,7 @@ impl super::LightClient<CosmosSdkChain> for LightClient {
 }
 
 impl LightClient {
-    pub fn from_config(config: &ChainConfig, peer_id: PeerId) -> Result<Self, Error> {
+    pub fn from_config(config: &CosmosChainConfig, peer_id: PeerId) -> Result<Self, Error> {
         let rpc_client = rpc::HttpClient::new(config.rpc_addr.clone())
             .map_err(|e| Error::rpc(config.rpc_addr.clone(), e))?;
 

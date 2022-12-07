@@ -98,7 +98,7 @@ impl Runnable for ListenCmd {
 
 /// Listen to events
 
-#[instrument(skip_all, level = "error", fields(chain = %config.id))]
+#[instrument(skip_all, level = "error", fields(chain = %config.id()))]
 pub fn listen(config: &ChainConfig, filters: &[EventFilter]) -> eyre::Result<()> {
     let rt = Arc::new(TokioRuntime::new()?);
     let (event_monitor, rx) = subscribe(config, rt)?;
@@ -146,8 +146,8 @@ fn subscribe(
     rt: Arc<TokioRuntime>,
 ) -> eyre::Result<(EventMonitor, Subscription)> {
     let (mut event_monitor, tx_cmd) = EventMonitor::new(
-        chain_config.id.clone(),
-        chain_config.websocket_addr.clone(),
+        chain_config.id().clone(),
+        chain_config.cosmos().websocket_addr.clone(),
         rt,
     )
     .map_err(|e| eyre!("could not initialize event monitor: {}", e))?;

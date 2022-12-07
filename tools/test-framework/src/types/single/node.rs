@@ -123,7 +123,7 @@ impl FullNode {
         &self,
         chain_type: &TestedChainType,
     ) -> Result<config::ChainConfig, Error> {
-        Ok(config::ChainConfig {
+        let cosmos_config = config::cosmos::CosmosChainConfig {
             id: self.chain_driver.chain_id.clone(),
             r#type: ChainType::CosmosSdk,
             rpc_addr: Url::from_str(&self.chain_driver.rpc_address())?,
@@ -157,7 +157,8 @@ impl FullNode {
             proof_specs: Default::default(),
             extension_options: Default::default(),
             sequential_batch_tx: false,
-        })
+        };
+        Ok(config::ChainConfig::Cosmos(cosmos_config))
     }
 
     /**

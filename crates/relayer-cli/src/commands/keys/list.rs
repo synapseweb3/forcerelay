@@ -68,7 +68,7 @@ pub struct KeysListOptions {
 }
 
 pub fn list_keys(config: ChainConfig) -> eyre::Result<Vec<(String, KeyEntry)>> {
-    let keyring = KeyRing::new(Store::Test, &config.account_prefix, &config.id)?;
+    let keyring = KeyRing::new(Store::Test, &config.cosmos().account_prefix, &config.id())?;
     let keys = keyring.keys()?;
     Ok(keys)
 }

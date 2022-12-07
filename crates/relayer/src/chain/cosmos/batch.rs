@@ -15,7 +15,7 @@ use crate::chain::cosmos::types::account::Account;
 use crate::chain::cosmos::types::config::TxConfig;
 use crate::chain::cosmos::types::tx::{TxStatus, TxSyncResult};
 use crate::chain::cosmos::wait::wait_for_block_commits;
-use crate::config::types::{MaxMsgNum, MaxTxSize, Memo};
+use crate::config::cosmos::types::{MaxMsgNum, MaxTxSize, Memo};
 use crate::error::Error;
 use crate::event::IbcEventWithHeight;
 use crate::keyring::KeyEntry;
@@ -356,7 +356,7 @@ mod tests {
     };
     use crate::chain::cosmos::types::config::TxConfig;
     use crate::config;
-    use crate::config::types::{MaxMsgNum, MaxTxSize, Memo};
+    use crate::config::cosmos::types::{MaxMsgNum, MaxTxSize, Memo};
     use crate::keyring::{self, KeyEntry, KeyRing};
     use ibc_proto::google::protobuf::Any;
     use ibc_relayer_types::core::ics24_host::identifier::ChainId;
@@ -372,6 +372,7 @@ mod tests {
         let config = config::load(path).expect("could not parse config");
         let chain_id = ChainId::from_string("chain_A");
         let chain_config = config.find_chain(&chain_id).unwrap();
+        let chain_config = &chain_config.clone().downcast_cosmos();
 
         let tx_config = TxConfig::try_from(chain_config).expect("could not obtain tx config");
 

@@ -13,7 +13,7 @@ use tendermint::account::Id as AccountId;
 use crate::chain::cosmos::types::account::{Account, AccountNumber, AccountSequence};
 use crate::chain::cosmos::types::config::TxConfig;
 use crate::chain::cosmos::types::tx::SignedTx;
-use crate::config::types::Memo;
+use crate::config::cosmos::types::Memo;
 use crate::config::AddressType;
 use crate::error::Error;
 use crate::keyring::KeyEntry;

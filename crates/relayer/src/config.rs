@@ -1,10 +1,9 @@
 //! Relayer configuration
 
+pub mod cosmos;
 pub mod error;
+pub mod eth;
 pub mod filter;
-pub mod gas_multiplier;
-pub mod proof_specs;
-pub mod types;
 
 use alloc::collections::BTreeMap;
 use core::{
@@ -15,22 +14,19 @@ use std::{fs, fs::File, io::Write, path::Path};
 
 use ibc_proto::google::protobuf::Any;
 use serde_derive::{Deserialize, Serialize};
-use tendermint_light_client_verifier::types::TrustThreshold;
 
-use ibc_relayer_types::core::ics23_commitment::specs::ProofSpecs;
 use ibc_relayer_types::core::ics24_host::identifier::{ChainId, ChannelId, PortId};
 use ibc_relayer_types::timestamp::ZERO_DURATION;
 
 use crate::chain::ChainType;
-use crate::config::gas_multiplier::GasMultiplier;
-use crate::config::types::{MaxMsgNum, MaxTxSize, Memo};
 use crate::error::Error as RelayerError;
 use crate::extension_options::ExtensionOptionDynamicFeeTx;
-use crate::keyring::Store;
 
-pub use error::Error;
+use cosmos::CosmosChainConfig;
+use error::Error;
+use eth::ChainConfig as EthChainConfig;
 
-pub use filter::PacketFilter;
+use self::filter::PacketFilter;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GasPrice {
@@ -127,6 +123,81 @@ pub mod default {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum ChainConfig {
+    Cosmos(CosmosChainConfig),
+    Eth(EthChainConfig),
+}
+
+impl ChainConfig {
+    pub fn id(&self) -> &ChainId {
+        match self {
+            ChainConfig::Cosmos(c) => &c.id,
+            ChainConfig::Eth(_) => todo!(),
+        }
+    }
+
+    pub fn packet_filter(&self) -> &PacketFilter {
+        match self {
+            ChainConfig::Cosmos(c) => &c.packet_filter,
+            ChainConfig::Eth(_) => todo!(),
+        }
+    }
+
+    pub fn key_name(&self) -> &str {
+        match self {
+            ChainConfig::Cosmos(c) => &c.key_name,
+            ChainConfig::Eth(_) => todo!(),
+        }
+    }
+
+    pub fn downcast_cosmos(self) -> CosmosChainConfig {
+        if let ChainConfig::Cosmos(c) = self {
+            c
+        } else {
+            panic!("Not a cosmos chain")
+        }
+    }
+
+    pub fn cosmos_mut(&mut self) -> &mut CosmosChainConfig {
+        if let ChainConfig::Cosmos(c) = self {
+            c
+        } else {
+            panic!("Not a cosmos chain")
+        }
+    }
+
+    pub fn cosmos(&self) -> &CosmosChainConfig {
+        if let ChainConfig::Cosmos(c) = self {
+            c
+        } else {
+            panic!("Not a cosmos chain")
+        }
+    }
+
+    pub fn eth(self) -> EthChainConfig {
+        if let ChainConfig::Eth(e) = self {
+            e
+        } else {
+            panic!("Not a eth chain")
+        }
+    }
+
+    pub fn r#type(&self) -> ChainType {
+        match self {
+            ChainConfig::Cosmos(_) => ChainType::CosmosSdk,
+            ChainConfig::Eth(_) => ChainType::Eth,
+        }
+    }
+
+    pub fn max_block_time(&self) -> Duration {
+        match self {
+            ChainConfig::Cosmos(c) => c.max_block_time,
+            ChainConfig::Eth(_) => todo!(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -144,15 +215,15 @@ pub struct Config {
 
 impl Config {
     pub fn has_chain(&self, id: &ChainId) -> bool {
-        self.chains.iter().any(|c| c.id == *id)
+        self.chains.iter().any(|c| c.id() == id)
     }
 
     pub fn find_chain(&self, id: &ChainId) -> Option<&ChainConfig> {
-        self.chains.iter().find(|c| c.id == *id)
+        self.chains.iter().find(|c| c.id() == id)
     }
 
     pub fn find_chain_mut(&mut self, id: &ChainId) -> Option<&mut ChainConfig> {
-        self.chains.iter_mut().find(|c| c.id == *id)
+        self.chains.iter_mut().find(|c| c.id() == id)
     }
 
     /// Returns true if filtering is disabled or if packets are allowed on
@@ -165,13 +236,13 @@ impl Config {
         channel_id: &ChannelId,
     ) -> bool {
         match self.find_chain(chain_id) {
-            Some(chain_config) => chain_config.packet_filter.is_allowed(port_id, channel_id),
+            Some(chain_config) => chain_config.packet_filter().is_allowed(port_id, channel_id),
             None => false,
         }
     }
 
     pub fn chains_map(&self) -> BTreeMap<&ChainId, &ChainConfig> {
-        self.chains.iter().map(|c| (&c.id, c)).collect()
+        self.chains.iter().map(|c| (c.id(), c)).collect()
     }
 }
 
@@ -365,89 +436,6 @@ impl Display for AddressType {
             AddressType::Ethermint { .. } => write!(f, "ethermint"),
         }
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ChainConfig {
-    pub id: ChainId,
-    #[serde(default = "default::chain_type")]
-    pub r#type: ChainType,
-    pub rpc_addr: tendermint_rpc::Url,
-    pub websocket_addr: tendermint_rpc::Url,
-    pub grpc_addr: tendermint_rpc::Url,
-    #[serde(default = "default::rpc_timeout", with = "humantime_serde")]
-    pub rpc_timeout: Duration,
-    pub account_prefix: String,
-    pub key_name: String,
-    #[serde(default)]
-    pub key_store_type: Store,
-    pub store_prefix: String,
-    pub default_gas: Option<u64>,
-    pub max_gas: Option<u64>,
-
-    // This field is deprecated, use `gas_multiplier` instead
-    pub gas_adjustment: Option<f64>,
-    pub gas_multiplier: Option<GasMultiplier>,
-
-    pub fee_granter: Option<String>,
-    #[serde(default)]
-    pub max_msg_num: MaxMsgNum,
-    #[serde(default)]
-    pub max_tx_size: MaxTxSize,
-
-    /// A correction parameter that helps deal with clocks that are only approximately synchronized
-    /// between the source and destination chains for a client.
-    /// This parameter is used when deciding to accept or reject a new header
-    /// (originating from the source chain) for any client with the destination chain
-    /// that uses this configuration, unless it is overridden by the client-specific
-    /// clock drift option.
-    #[serde(default = "default::clock_drift", with = "humantime_serde")]
-    pub clock_drift: Duration,
-
-    #[serde(default = "default::max_block_time", with = "humantime_serde")]
-    pub max_block_time: Duration,
-
-    /// The trusting period specifies how long a validator set is trusted for
-    /// (must be shorter than the chain's unbonding period).
-    #[serde(default, with = "humantime_serde")]
-    pub trusting_period: Option<Duration>,
-
-    #[serde(default)]
-    pub memo_prefix: Memo,
-
-    // Note: These last few need to be last otherwise we run into `ValueAfterTable` error when serializing to TOML.
-    //       That's because these are all tables and have to come last when serializing.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "self::proof_specs"
-    )]
-    pub proof_specs: Option<ProofSpecs>,
-
-    // This is an undocumented and hidden config to make the relayer wait for
-    // DeliverTX before sending the next transaction when sending messages in
-    // multiple batches. We will instruct relayer operators to turn this on
-    // in case relaying failed in a chain with priority mempool enabled.
-    // Warning: turning this on may cause degradation in performance.
-    #[serde(default)]
-    pub sequential_batch_tx: bool,
-
-    // these two need to be last otherwise we run into `ValueAfterTable` error when serializing to TOML
-    /// The trust threshold defines what fraction of the total voting power of a known
-    /// and trusted validator set is sufficient for a commit to be accepted going forward.
-    #[serde(default)]
-    pub trust_threshold: TrustThreshold,
-
-    pub gas_price: GasPrice,
-
-    #[serde(default)]
-    pub packet_filter: PacketFilter,
-
-    #[serde(default)]
-    pub address_type: AddressType,
-    #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
-    pub extension_options: Vec<ExtensionOption>,
 }
 
 /// Attempt to load and parse the TOML config file as a `Config`.

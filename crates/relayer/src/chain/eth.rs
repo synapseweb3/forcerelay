@@ -23,13 +23,14 @@ use std::thread;
 use tendermint_rpc::{endpoint::broadcast::tx_sync::Response, HttpClient};
 use tokio::runtime::Runtime as TokioRuntime;
 
-use crate::light_client::LightClient;
 use crate::chain::eth::event::monitor::EthEventMonitor;
 use crate::event::monitor::TxMonitorCmd;
+use crate::light_client::LightClient;
 use crate::{
     account::Balance,
     chain::endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
     client_state::{AnyClientState, IdentifiedAnyClientState},
+    config::eth::ChainConfig as EthChainConfig,
     config::ChainConfig,
     consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight},
     denom::DenomTrace,
@@ -60,7 +61,7 @@ pub mod types;
 pub struct EthChain {
     pub rt: Arc<TokioRuntime>,
     pub rpc_client: HttpClient,
-    pub config: ChainConfig,
+    pub config: EthChainConfig,
     pub light_client: EthLightClient,
     tx_monitor_cmd: Option<TxMonitorCmd>,
 }
@@ -74,8 +75,8 @@ impl ChainEndpoint for EthChain {
 
     type ClientState = EthClientState;
 
-    fn config(&self) -> &ChainConfig {
-        &self.config
+    fn config(&self) -> ChainConfig {
+        ChainConfig::Eth(self.config.clone())
     }
 
     fn bootstrap(_config: ChainConfig, _rt: Arc<TokioRuntime>) -> Result<Self, Error> {

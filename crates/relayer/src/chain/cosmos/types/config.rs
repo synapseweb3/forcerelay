@@ -6,8 +6,9 @@ use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tendermint_rpc::{HttpClient, Url};
 
 use crate::chain::cosmos::types::gas::GasConfig;
-use crate::config::types::{MaxMsgNum, MaxTxSize};
-use crate::config::{AddressType, ChainConfig};
+use crate::config::cosmos::types::{MaxMsgNum, MaxTxSize};
+use crate::config::cosmos::CosmosChainConfig;
+use crate::config::AddressType;
 use crate::error::Error;
 
 #[derive(Debug, Clone)]
@@ -24,10 +25,10 @@ pub struct TxConfig {
     pub extension_options: Vec<Any>,
 }
 
-impl<'a> TryFrom<&'a ChainConfig> for TxConfig {
+impl<'a> TryFrom<&'a CosmosChainConfig> for TxConfig {
     type Error = Error;
 
-    fn try_from(config: &'a ChainConfig) -> Result<Self, Error> {
+    fn try_from(config: &'a CosmosChainConfig) -> Result<Self, Error> {
         let rpc_client = HttpClient::new(config.rpc_addr.clone())
             .map_err(|e| Error::rpc(config.rpc_addr.clone(), e))?;
 

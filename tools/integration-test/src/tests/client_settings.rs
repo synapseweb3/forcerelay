@@ -27,15 +27,17 @@ struct ClientOptionsTest;
 
 impl TestOverrides for ClientDefaultsTest {
     fn modify_relayer_config(&self, config: &mut Config) {
-        config.chains[0].clock_drift = Duration::from_secs(3);
-        config.chains[0].max_block_time = Duration::from_secs(5);
-        config.chains[0].trusting_period = Some(Duration::from_secs(120_000));
-        config.chains[0].trust_threshold = TrustThreshold::new(13, 23).unwrap().try_into().unwrap();
+        let chain0_config = config.chains[0].cosmos_mut();
+        chain0_config.clock_drift = Duration::from_secs(3);
+        chain0_config.max_block_time = Duration::from_secs(5);
+        chain0_config.trusting_period = Some(Duration::from_secs(120_000));
+        chain0_config.trust_threshold = TrustThreshold::new(13, 23).unwrap().try_into().unwrap();
 
-        config.chains[1].clock_drift = Duration::from_secs(6);
-        config.chains[1].max_block_time = Duration::from_secs(15);
-        config.chains[1].trusting_period = Some(Duration::from_secs(340_000));
-        config.chains[1].trust_threshold = TrustThreshold::TWO_THIRDS.try_into().unwrap();
+        let chain1_config = config.chains[1].cosmos_mut();
+        chain1_config.clock_drift = Duration::from_secs(6);
+        chain1_config.max_block_time = Duration::from_secs(15);
+        chain1_config.trusting_period = Some(Duration::from_secs(340_000));
+        chain1_config.trust_threshold = TrustThreshold::TWO_THIRDS.try_into().unwrap();
     }
 }
 

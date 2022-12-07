@@ -72,12 +72,12 @@ pub trait ChainEndpoint: Sized {
     type ClientState: ClientState + Into<AnyClientState>;
 
     /// Returns the chain's identifier
-    fn id(&self) -> &ChainId {
-        &self.config().id
+    fn id(&self) -> ChainId {
+        self.config().id().clone()
     }
 
     /// Returns the chain configuration
-    fn config(&self) -> &ChainConfig;
+    fn config(&self) -> ChainConfig;
 
     // Life cycle
 
@@ -110,8 +110,8 @@ pub trait ChainEndpoint: Sized {
         // Get the key from key seed file
         let key = self
             .keybase()
-            .get_key(&self.config().key_name)
-            .map_err(|e| Error::key_not_found(self.config().key_name.clone(), e))?;
+            .get_key(&self.config().key_name())
+            .map_err(|e| Error::key_not_found(self.config().key_name().to_string(), e))?;
 
         Ok(key)
     }
