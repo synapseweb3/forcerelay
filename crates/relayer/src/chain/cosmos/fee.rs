@@ -8,7 +8,7 @@ use crate::chain::cosmos::retry::send_tx_with_account_sequence_retry;
 use crate::chain::cosmos::types::account::Account;
 use crate::chain::cosmos::types::config::TxConfig;
 use crate::chain::cosmos::wait::wait_tx_succeed;
-use crate::config::types::Memo;
+use crate::config::cosmos::types::Memo;
 use crate::error::Error;
 use crate::keyring::KeyEntry;
 

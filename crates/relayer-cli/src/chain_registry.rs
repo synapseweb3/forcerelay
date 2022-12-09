@@ -15,9 +15,12 @@ use http::Uri;
 
 use ibc_relayer::{
     config::{
+        cosmos::gas_multiplier::GasMultiplier,
+        cosmos::{
+            types::{MaxMsgNum, MaxTxSize, Memo},
+            CosmosChainConfig,
+        },
         filter::{ChannelFilters, FilterPattern, PacketFilter},
-        gas_multiplier::GasMultiplier,
-        types::{MaxMsgNum, MaxTxSize, Memo},
         {default, AddressType, ChainConfig, GasPrice},
     },
     keyring::Store,
@@ -101,7 +104,7 @@ where
     let rpc_data = RpcQuerier::query_healthy(chain_name.to_string(), rpc_endpoints).await?;
     let grpc_address = GrpcQuerier::query_healthy(chain_name.to_string(), grpc_endpoints).await?;
 
-    Ok(ChainConfig {
+    let cosmos_config = CosmosChainConfig {
         id: chain_data.chain_id,
         r#type: default::chain_type(),
         rpc_addr: rpc_data.rpc_address,
@@ -133,7 +136,8 @@ where
         address_type: AddressType::default(),
         sequential_batch_tx: false,
         extension_options: Vec::new(),
-    })
+    };
+    Ok(ChainConfig::Cosmos(cosmos_config))
 }
 
 async fn get_handles<T: Fetchable + Send + 'static>(
@@ -248,7 +252,7 @@ mod tests {
     async fn should_have_no_filter(test_chains: &[String]) -> Result<(), RegistryError> {
         let configs = get_configs(test_chains, None).await?;
         for config in configs {
-            match config.packet_filter {
+            match config.packet_filter() {
                 PacketFilter::AllowAll => {}
                 _ => panic!("PacketFilter not allowed"),
             }
@@ -269,9 +273,9 @@ mod tests {
         let configs = get_configs(test_chains, None).await?;
 
         for config in configs {
-            match config.packet_filter {
+            match config.packet_filter() {
                 PacketFilter::Allow(channel_filter) => {
-                    if config.id.as_str().contains("cosmoshub") {
+                    if config.id().as_str().contains("cosmoshub") {
                         assert!(channel_filter.is_exact());
 
                         let cosmoshub_juno = (
@@ -287,7 +291,7 @@ mod tests {
                         assert!(channel_filter.matches(cosmoshub_juno));
                         assert!(channel_filter.matches(cosmoshub_osmosis));
                         assert!(channel_filter.len() == 2);
-                    } else if config.id.as_str().contains("juno") {
+                    } else if config.id().as_str().contains("juno") {
                         assert!(channel_filter.is_exact());
 
                         let juno_cosmoshub = (
@@ -309,7 +313,7 @@ mod tests {
                         assert!(channel_filter.matches(juno_osmosis_1));
                         assert!(channel_filter.matches(juno_osmosis_2));
                         assert!(channel_filter.len() == 3);
-                    } else if config.id.as_str().contains("osmosis") {
+                    } else if config.id().as_str().contains("osmosis") {
                         assert!(channel_filter.is_exact());
 
                         let osmosis_cosmoshub = (

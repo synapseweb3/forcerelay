@@ -98,7 +98,7 @@ impl KeysAddCmd {
         let name = self
             .key_name
             .clone()
-            .unwrap_or_else(|| chain_config.key_name.clone());
+            .unwrap_or_else(|| chain_config.key_name().to_string());
 
         let hd_path = HDPath::from_str(&self.hd_path)
             .map_err(|_| eyre!("invalid derivation path: {}", self.hd_path))?;
@@ -140,7 +140,9 @@ impl Runnable for KeysAddCmd {
                 match key {
                     Ok(key) => Output::success_msg(format!(
                         "Added key '{}' ({}) on chain {}",
-                        opts.name, key.account, opts.config.id
+                        opts.name,
+                        key.account,
+                        opts.config.id()
                     ))
                     .exit(),
                     Err(e) => Output::error(format!(
@@ -162,7 +164,9 @@ impl Runnable for KeysAddCmd {
                 match key {
                     Ok(key) => Output::success_msg(format!(
                         "Restored key '{}' ({}) on chain {}",
-                        opts.name, key.account, opts.config.id
+                        opts.name,
+                        key.account,
+                        opts.config.id()
                     ))
                     .exit(),
                     Err(e) => Output::error(format!(
@@ -190,7 +194,7 @@ pub fn add_key(
     hd_path: &HDPath,
     overwrite: bool,
 ) -> eyre::Result<KeyEntry> {
-    let mut keyring = KeyRing::new(Store::Test, &config.account_prefix, &config.id)?;
+    let mut keyring = KeyRing::new(Store::Test, &config.cosmos().account_prefix, &config.id())?;
 
     check_key_exists(&keyring, key_name, overwrite);
 
@@ -211,11 +215,12 @@ pub fn restore_key(
     let mnemonic_content =
         fs::read_to_string(mnemonic).map_err(|_| eyre!("error reading the mnemonic file"))?;
 
-    let mut keyring = KeyRing::new(Store::Test, &config.account_prefix, &config.id)?;
+    let mut keyring = KeyRing::new(Store::Test, &config.cosmos().account_prefix, &config.id())?;
 
     check_key_exists(&keyring, key_name, overwrite);
 
-    let key_entry = keyring.key_from_mnemonic(&mnemonic_content, hdpath, &config.address_type)?;
+    let key_entry =
+        keyring.key_from_mnemonic(&mnemonic_content, hdpath, &config.cosmos().address_type)?;
 
     keyring.add_key(key_name, key_entry.clone())?;
     Ok(key_entry)

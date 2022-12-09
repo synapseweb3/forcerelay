@@ -140,14 +140,14 @@ impl Configurable<Config> for CliCmd {
         let web = "https://hermes.informal.systems";
         let suffix = format!("{} {} ({})", CliCmd::name(), clap::crate_version!(), web);
         for ccfg in config.chains.iter_mut() {
-            ccfg.memo_prefix.apply_suffix(&suffix);
+            ccfg.cosmos_mut().memo_prefix.apply_suffix(&suffix);
         }
 
         // For all commands except for `start` Hermes retries
         // for a prolonged period of time.
         if !matches!(self, CliCmd::Start(_)) {
             for c in config.chains.iter_mut() {
-                c.rpc_timeout = Duration::from_secs(120);
+                c.cosmos_mut().rpc_timeout = Duration::from_secs(120);
             }
         }
 

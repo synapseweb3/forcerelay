@@ -87,15 +87,20 @@ pub fn validate_config(config: &Config) -> Result<(), Diagnostic<Error>> {
     // Check for duplicate chain configuration and invalid trust thresholds
     let mut unique_chain_ids = BTreeSet::new();
     for c in config.chains.iter() {
-        let already_present = !unique_chain_ids.insert(c.id.clone());
+        let already_present = !unique_chain_ids.insert(c.id().clone());
         if already_present {
-            return Err(Diagnostic::Error(Error::duplicate_chains(c.id.clone())));
+            return Err(Diagnostic::Error(Error::duplicate_chains(c.id().clone())));
         }
 
-        validate_trust_threshold(&c.id, c.trust_threshold)?;
+        let trust_threshold = c.cosmos().trust_threshold;
+        validate_trust_threshold(
+            c.id(),
+            TrustThreshold::new(trust_threshold.numerator(), trust_threshold.denominator())
+                .unwrap(),
+        )?;
 
         // Validate gas-related settings
-        validate_gas_settings(&c.id, c)?;
+        validate_gas_settings(c.id(), c)?;
     }
 
     // Check for invalid mode config
@@ -158,7 +163,7 @@ fn validate_trust_threshold(
 
 fn validate_gas_settings(id: &ChainId, config: &ChainConfig) -> Result<(), Diagnostic<Error>> {
     // Check that the gas_adjustment option is not set
-    if let Some(gas_adjustment) = config.gas_adjustment {
+    if let Some(gas_adjustment) = config.cosmos().gas_adjustment {
         let gas_multiplier = gas_adjustment + 1.0;
 
         return Err(Diagnostic::Error(Error::deprecated_gas_adjustment(

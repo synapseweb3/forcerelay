@@ -27,12 +27,12 @@ impl Settings {
         let max_clock_drift = match options.max_clock_drift {
             None => calculate_client_state_drift(src_chain_config, dst_chain_config),
             Some(user_value) => {
-                if user_value > dst_chain_config.max_block_time {
+                if user_value > dst_chain_config.cosmos().max_block_time {
                     warn!(
                         "user specified max_clock_drift ({}) exceeds max_block_time \
                         of the destination chain {}",
                         PrettyDuration(&user_value),
-                        dst_chain_config.id,
+                        dst_chain_config.id(),
                     );
                 }
                 user_value
@@ -40,7 +40,7 @@ impl Settings {
         };
         let trust_threshold = options
             .trust_threshold
-            .unwrap_or_else(|| src_chain_config.trust_threshold.into());
+            .unwrap_or_else(|| src_chain_config.cosmos().trust_threshold.into());
         Settings {
             max_clock_drift,
             trusting_period: options.trusting_period,
@@ -56,5 +56,7 @@ fn calculate_client_state_drift(
     src_chain_config: &ChainConfig,
     dst_chain_config: &ChainConfig,
 ) -> Duration {
+    let src_chain_config = src_chain_config.cosmos();
+    let dst_chain_config = dst_chain_config.cosmos();
     src_chain_config.clock_drift + dst_chain_config.clock_drift + dst_chain_config.max_block_time
 }

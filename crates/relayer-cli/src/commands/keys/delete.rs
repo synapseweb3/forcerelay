@@ -94,7 +94,7 @@ impl Runnable for KeysDeleteCmd {
         match opts.id {
             KeysDeleteId::All => match delete_all_keys(&opts.config) {
                 Ok(_) => {
-                    Output::success_msg(format!("Removed all keys on chain {}", opts.config.id))
+                    Output::success_msg(format!("Removed all keys on chain {}", opts.config.id()))
                         .exit()
                 }
                 Err(e) => Output::error(format!("{}", e)).exit(),
@@ -102,7 +102,8 @@ impl Runnable for KeysDeleteCmd {
             KeysDeleteId::Named(key_name) => match delete_key(&opts.config, key_name) {
                 Ok(_) => Output::success_msg(format!(
                     "Removed key ({}) on chain {}",
-                    key_name, opts.config.id
+                    key_name,
+                    opts.config.id()
                 ))
                 .exit(),
                 Err(e) => Output::error(format!("{}", e)).exit(),
@@ -112,13 +113,13 @@ impl Runnable for KeysDeleteCmd {
 }
 
 pub fn delete_key(config: &ChainConfig, key_name: &str) -> eyre::Result<()> {
-    let mut keyring = KeyRing::new(Store::Test, &config.account_prefix, &config.id)?;
+    let mut keyring = KeyRing::new(Store::Test, &config.cosmos().account_prefix, &config.id())?;
     keyring.remove_key(key_name)?;
     Ok(())
 }
 
 pub fn delete_all_keys(config: &ChainConfig) -> eyre::Result<()> {
-    let mut keyring = KeyRing::new(Store::Test, &config.account_prefix, &config.id)?;
+    let mut keyring = KeyRing::new(Store::Test, &config.cosmos().account_prefix, &config.id())?;
     let keys = keyring.keys()?;
     for key in keys {
         keyring.remove_key(&key.0)?;

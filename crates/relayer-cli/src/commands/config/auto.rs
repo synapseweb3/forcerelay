@@ -15,7 +15,12 @@ use std::path::PathBuf;
 use tracing::{info, warn};
 
 fn find_key(chain_config: &ChainConfig) -> Option<String> {
-    let keyring = KeyRing::new(Test, &chain_config.account_prefix, &chain_config.id).ok()?;
+    let keyring = KeyRing::new(
+        Test,
+        &chain_config.cosmos().account_prefix,
+        &chain_config.id(),
+    )
+    .ok()?;
     let keys = keyring.keys().ok()?;
     keys.first().map(|(name, _)| name.to_string())
 }
@@ -99,18 +104,18 @@ impl Runnable for AutoCmd {
                     .iter_mut()
                     .zip(names_and_keys.iter().map(|n| &n.1).cloned());
 
-                for (mut chain_config, key_option) in configs_and_keys {
+                for (chain_config, key_option) in configs_and_keys {
                     // If a key is provided, use it
                     if let Some(key_name) = key_option {
-                        info!("{}: uses key \"{}\"", &chain_config.id, &key_name);
-                        chain_config.key_name = key_name;
+                        info!("{}: uses key \"{}\"", &chain_config.id(), &key_name);
+                        chain_config.cosmos_mut().key_name = key_name;
                     } else {
                         // Otherwise, find the key in the keystore
-                        let chain_id = &chain_config.id;
+                        let chain_id = &chain_config.id();
                         let key = find_key(chain_config);
                         if let Some(key) = key {
                             info!("{}: uses key \"{}\"", &chain_id, &key);
-                            chain_config.key_name = key;
+                            chain_config.cosmos_mut().key_name = key;
                         } else {
                             // If no key is found, warn the user and continue
                             warn!("No key found for chain: {}", chain_id);

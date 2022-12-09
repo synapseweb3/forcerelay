@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use ibc_relayer_types::core::ics02_client::trust_threshold::TrustThreshold;
 
-use ibc_relayer::config::gas_multiplier::GasMultiplier;
+use ibc_relayer::config::cosmos::gas_multiplier::GasMultiplier;
 use ibc_relayer::foreign_client::CreateOptions;
 
 use ibc_test_framework::prelude::*;
@@ -129,8 +129,8 @@ impl BinaryChainTest for ClientFailsTest {
     ) -> Result<(), Error> {
         // Override the configuration in order to use a small `gas_multiplier` which will cause the update client to fail.
         let chains2 = override_connected_chains(chains, |config| {
-            config.chains[0].gas_multiplier = Some(GasMultiplier::unsafe_new(0.8));
-            config.chains[1].gas_multiplier = Some(GasMultiplier::unsafe_new(0.8));
+            config.chains[0].cosmos_mut().gas_multiplier = Some(GasMultiplier::unsafe_new(0.8));
+            config.chains[1].cosmos_mut().gas_multiplier = Some(GasMultiplier::unsafe_new(0.8));
         })?;
 
         // Use chains with misconfiguration in order to trigger a ChainError when submitting `MsgClientUpdate`

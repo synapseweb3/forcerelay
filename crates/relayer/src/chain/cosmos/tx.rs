@@ -11,7 +11,7 @@ use crate::chain::cosmos::query::tx::all_ibc_events_from_tx_search_response;
 use crate::chain::cosmos::types::account::Account;
 use crate::chain::cosmos::types::config::TxConfig;
 use crate::chain::cosmos::wait::wait_tx_succeed;
-use crate::config::types::Memo;
+use crate::config::cosmos::types::Memo;
 use crate::error::Error;
 use crate::event::IbcEventWithHeight;
 use crate::keyring::KeyEntry;
