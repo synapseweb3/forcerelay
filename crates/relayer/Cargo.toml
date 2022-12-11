@@ -62,7 +62,7 @@ moka = "0.9.4"
 uuid = { version = "1.2.1", features = ["v4"] }
 digest = "0.10.6"
 generic-array = "0.14.6"
-secp256k1 = { version = "0.24.1", features = ["rand-std"] }
+secp256k1 = { version = "0.24.2", features = ["rand-std"] }
 async-trait = "0.1"
 reqwest = { version = "0.11", features = ["json"]}
 reqwest-middleware = "0.1"
