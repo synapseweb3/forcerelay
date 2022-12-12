@@ -8,6 +8,7 @@ use ibc_proto::protobuf::Protobuf;
 use serde::{Deserialize, Serialize};
 
 use ibc_proto::google::protobuf::Any;
+use ibc_relayer_types::clients::ics07_ckb::client_state::ClientState as CkbClientState;
 use ibc_relayer_types::clients::ics07_eth::client_state::ClientState as EthClientState;
 use ibc_relayer_types::clients::ics07_tendermint::client_state::{
     ClientState as TmClientState, UpgradeOptions as TmUpgradeOptions,
@@ -54,6 +55,7 @@ impl UpgradeOptions for AnyUpgradeOptions {}
 pub enum AnyClientState {
     Tendermint(TmClientState),
     Eth(EthClientState),
+    Ckb(CkbClientState),
 
     #[cfg(test)]
     Mock(MockClientState),
@@ -64,6 +66,7 @@ impl AnyClientState {
         match self {
             Self::Tendermint(tm_state) => tm_state.latest_height(),
             Self::Eth(_) => todo!(),
+            Self::Ckb(_) => todo!(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.latest_height(),
@@ -74,6 +77,7 @@ impl AnyClientState {
         match self {
             Self::Tendermint(tm_state) => tm_state.frozen_height(),
             Self::Eth(_) => todo!(),
+            Self::Ckb(_) => todo!(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.frozen_height(),
@@ -84,6 +88,7 @@ impl AnyClientState {
         match self {
             AnyClientState::Tendermint(state) => Some(state.trust_threshold),
             AnyClientState::Eth(_) => todo!(),
+            AnyClientState::Ckb(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(_) => None,
@@ -94,6 +99,7 @@ impl AnyClientState {
         match self {
             AnyClientState::Tendermint(state) => state.max_clock_drift,
             AnyClientState::Eth(_) => todo!(),
+            AnyClientState::Ckb(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(_) => Duration::new(0, 0),
@@ -104,6 +110,7 @@ impl AnyClientState {
         match self {
             Self::Tendermint(state) => state.client_type(),
             Self::Eth(_) => todo!(),
+            Self::Ckb(_) => todo!(),
 
             #[cfg(test)]
             Self::Mock(state) => state.client_type(),
@@ -114,6 +121,7 @@ impl AnyClientState {
         match self {
             AnyClientState::Tendermint(tm_state) => tm_state.refresh_time(),
             AnyClientState::Eth(_) => todo!(),
+            AnyClientState::Ckb(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.refresh_time(),
@@ -155,6 +163,7 @@ impl From<AnyClientState> for Any {
                     .expect("encoding to `Any` from `AnyClientState::Tendermint`"),
             },
             AnyClientState::Eth(_) => todo!(),
+            AnyClientState::Ckb(_) => todo!(),
             #[cfg(test)]
             AnyClientState::Mock(value) => Any {
                 type_url: MOCK_CLIENT_STATE_TYPE_URL.to_string(),
@@ -170,6 +179,7 @@ impl ClientState for AnyClientState {
         match self {
             AnyClientState::Tendermint(tm_state) => tm_state.chain_id(),
             AnyClientState::Eth(_) => todo!(),
+            AnyClientState::Ckb(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.chain_id(),
@@ -205,6 +215,7 @@ impl ClientState for AnyClientState {
                 chain_id,
             ),
             AnyClientState::Eth(_) => todo!(),
+            AnyClientState::Ckb(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => {
@@ -217,6 +228,7 @@ impl ClientState for AnyClientState {
         match self {
             AnyClientState::Tendermint(tm_state) => tm_state.expired(elapsed_since_latest),
             AnyClientState::Eth(_) => todo!(),
+            AnyClientState::Ckb(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.expired(elapsed_since_latest),
@@ -233,6 +245,12 @@ impl From<TmClientState> for AnyClientState {
 impl From<EthClientState> for AnyClientState {
     fn from(value: EthClientState) -> Self {
         Self::Eth(value)
+    }
+}
+
+impl From<CkbClientState> for AnyClientState {
+    fn from(value: CkbClientState) -> Self {
+        Self::Ckb(value)
     }
 }
 

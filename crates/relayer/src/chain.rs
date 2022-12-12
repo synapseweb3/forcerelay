@@ -1,3 +1,4 @@
+pub mod ckb;
 pub mod client;
 pub mod cosmos;
 pub mod counterparty;
@@ -21,7 +22,7 @@ pub enum ChainType {
     CosmosSdk,
     Eth,
     Axon,
-    CKB,
+    Ckb,
 }
 
 impl<'de> Deserialize<'de> for ChainType {
@@ -36,7 +37,7 @@ impl<'de> Deserialize<'de> for ChainType {
             "cosmossdk" => Ok(Self::CosmosSdk),
             "eth" => Ok(Self::Eth),
             "axon" => Ok(Self::Axon),
-            "ckb" => Ok(Self::CKB),
+            "ckb" => Ok(Self::Ckb),
 
             // NOTE(new): Add a case here
             _ => Err(D::Error::unknown_variant(&original, &["cosmos-sdk"])), // NOTE(new): mention the new variant here

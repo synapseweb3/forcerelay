@@ -6,6 +6,7 @@ use core::ops::Deref;
 use ibc_proto::google::protobuf::Any;
 use ibc_proto::ibc::lightclients::tendermint::v1::Header as RawTmHeader;
 use ibc_proto::protobuf::Protobuf as ErasedProtobuf;
+use ibc_relayer_types::clients::ics07_ckb::header::Header as CkbHeader;
 use ibc_relayer_types::clients::ics07_eth::header::Header as EthHeader;
 use ibc_relayer_types::clients::ics07_tendermint::header::{
     decode_header as tm_decode_header, Header as TendermintHeader, TENDERMINT_HEADER_TYPE_URL,
@@ -82,6 +83,7 @@ pub fn decode_header(header_bytes: &[u8]) -> Result<Box<dyn Header>, Error> {
 pub enum AnyHeader {
     Tendermint(TendermintHeader),
     Eth(EthHeader),
+    Ckb(CkbHeader),
 }
 
 impl Header for AnyHeader {
@@ -89,6 +91,7 @@ impl Header for AnyHeader {
         match self {
             Self::Tendermint(header) => header.client_type(),
             Self::Eth(_) => todo!(),
+            Self::Ckb(_) => todo!(),
         }
     }
 
@@ -96,6 +99,7 @@ impl Header for AnyHeader {
         match self {
             Self::Tendermint(header) => header.height(),
             Self::Eth(_) => todo!(),
+            Self::Ckb(_) => todo!(),
         }
     }
 
@@ -103,6 +107,7 @@ impl Header for AnyHeader {
         match self {
             Self::Tendermint(header) => header.timestamp(),
             Self::Eth(_) => todo!(),
+            Self::Ckb(_) => todo!(),
         }
     }
 }
@@ -134,6 +139,7 @@ impl From<AnyHeader> for Any {
                     .expect("encoding to `Any` from `AnyHeader::Tendermint`"),
             },
             AnyHeader::Eth(_) => todo!(),
+            AnyHeader::Ckb(_) => todo!(),
         }
     }
 }
@@ -147,5 +153,11 @@ impl From<TendermintHeader> for AnyHeader {
 impl From<EthHeader> for AnyHeader {
     fn from(header: EthHeader) -> Self {
         Self::Eth(header)
+    }
+}
+
+impl From<CkbHeader> for AnyHeader {
+    fn from(header: CkbHeader) -> Self {
+        Self::Ckb(header)
     }
 }
