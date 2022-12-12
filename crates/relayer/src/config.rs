@@ -1,5 +1,6 @@
 //! Relayer configuration
 
+pub mod ckb;
 pub mod cosmos;
 pub mod error;
 pub mod eth;
@@ -25,6 +26,7 @@ use crate::error::Error as RelayerError;
 use crate::extension_options::ExtensionOptionDynamicFeeTx;
 
 pub use crate::config::Error as ConfigError;
+use ckb::ChainConfig as CkbChainConfig;
 use cosmos::CosmosChainConfig;
 pub use error::Error;
 use eth::ChainConfig as EthChainConfig;
@@ -180,6 +182,7 @@ pub mod default {
 pub enum ChainConfig {
     Cosmos(CosmosChainConfig),
     Eth(EthChainConfig),
+    Ckb(CkbChainConfig),
 }
 
 impl ChainConfig {
@@ -187,6 +190,7 @@ impl ChainConfig {
         match self {
             ChainConfig::Cosmos(c) => &c.id,
             ChainConfig::Eth(_) => todo!(),
+            ChainConfig::Ckb(_) => todo!(),
         }
     }
 
@@ -194,6 +198,7 @@ impl ChainConfig {
         match self {
             ChainConfig::Cosmos(c) => &c.packet_filter,
             ChainConfig::Eth(_) => todo!(),
+            ChainConfig::Ckb(_) => todo!(),
         }
     }
 
@@ -201,6 +206,7 @@ impl ChainConfig {
         match self {
             ChainConfig::Cosmos(c) => &c.key_name,
             ChainConfig::Eth(_) => todo!(),
+            ChainConfig::Ckb(_) => todo!(),
         }
     }
 
@@ -240,6 +246,7 @@ impl ChainConfig {
         match self {
             ChainConfig::Cosmos(_) => ChainType::CosmosSdk,
             ChainConfig::Eth(_) => ChainType::Eth,
+            ChainConfig::Ckb(_) => ChainType::Ckb,
         }
     }
 
@@ -247,6 +254,7 @@ impl ChainConfig {
         match self {
             ChainConfig::Cosmos(c) => c.max_block_time,
             ChainConfig::Eth(_) => todo!(),
+            ChainConfig::Ckb(_) => todo!(),
         }
     }
 }
