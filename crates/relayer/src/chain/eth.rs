@@ -1,6 +1,6 @@
 use ibc_relayer_types::clients::ics07_eth::{
     client_state::ClientState as EthClientState,
-    consensus_state::ConsensusState as EthConsensusState, header::Header as EthHeader,
+    consensus_state::ConsensusState as EthConsensusState, header::Update as EthHeader,
     light_block::ExecutionPayloadHeader as EthLightBlock,
 };
 use ibc_relayer_types::{

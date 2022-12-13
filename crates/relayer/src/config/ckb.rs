@@ -9,4 +9,5 @@ pub struct ChainConfig {
     pub ckb_rpc: Url,
     pub ckb_indexer_rpc: Url,
     pub lightclient_codehash: Hash,
+    pub key_name: String,
 }
