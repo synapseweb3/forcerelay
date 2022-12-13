@@ -1,13 +1,13 @@
 use crate::prelude::*;
-use serde_derive::{Deserialize, Serialize};
-use thiserror::Error;
-
-pub use ethereum_types::H256;
-pub use tree_hash::TreeHash;
 
 pub use bls::{AggregateSignature, PublicKey, PublicKeyBytes};
+pub use ethereum_types::H256;
+use serde_derive::{Deserialize, Serialize};
+use ssz_types::typenum::Unsigned;
 pub use ssz_types::typenum::{U20, U256, U4, U48, U512, U96};
 pub use ssz_types::{BitVector, FixedVector};
+use thiserror::Error;
+pub use tree_hash::TreeHash;
 
 pub use super::header::Header;
 
@@ -29,6 +29,7 @@ pub struct FinalityUpdate {
     pub finalized_header: Header,
     pub finality_branch: Vec<H256>,
     pub sync_aggregate: SyncAggregate,
+    #[serde(deserialize_with = "u64_deserialize")]
     pub signature_slot: u64,
 }
 
@@ -44,13 +45,16 @@ pub struct GenericUpdate {
 
 #[derive(Clone, PartialEq, tree_hash_derive::TreeHash, Deserialize, Serialize, Default, Debug)]
 pub struct SyncCommittee {
+    #[serde(deserialize_with = "nested_fixed_vector_deserialize")]
     pub pubkeys: FixedVector<BLSPubKey, U512>,
+    #[serde(deserialize_with = "fixed_vector_deserialize")]
     pub aggregate_pubkey: BLSPubKey,
 }
 
 #[derive(Clone, PartialEq, Deserialize, Serialize, Default, Debug)]
 pub struct SyncAggregate {
     pub sync_committee_bits: BitVector<U512>,
+    #[serde(deserialize_with = "fixed_vector_deserialize")]
     pub sync_committee_signature: SignatureBytes,
 }
 
@@ -62,6 +66,7 @@ pub struct Update {
     pub finalized_header: Header,
     pub finality_branch: Vec<H256>,
     pub sync_aggregate: SyncAggregate,
+    #[serde(deserialize_with = "u64_deserialize")]
     pub signature_slot: u64,
 }
 
@@ -93,42 +98,14 @@ impl From<&FinalityUpdate> for GenericUpdate {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Config {
-    pub consensus_rpc: String,
-    pub execution_rpc: String,
-    pub rpc_port: Option<u16>,
-    pub checkpoint: H256,
-    pub max_checkpoint_age: u64,
-    pub forks: Forks,
-    // ChainConfig
-    pub chain_id: u64,
-    pub genesis_time: u64,
-    pub genesis_root: H256, // Vec<u8> in helios
-}
-
-impl Config {
-    pub fn fork_version(&self, slot: u64) -> FixedVector<u8, U4> {
-        let epoch = slot / 32;
-
-        if epoch >= self.forks.bellatrix.epoch {
-            self.forks.bellatrix.fork_version.clone()
-        } else if epoch >= self.forks.altair.epoch {
-            self.forks.altair.fork_version.clone()
-        } else {
-            self.forks.genesis.fork_version.clone()
-        }
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Forks {
     pub genesis: Fork,
     pub altair: Fork,
     pub bellatrix: Fork,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Fork {
     pub epoch: u64,
     pub fork_version: FixedVector<u8, U4>,
@@ -158,4 +135,46 @@ pub enum ConsensusError {
     PayloadNotFound(u64),
     #[error("checkpoint is too old")]
     CheckpointTooOld,
+}
+
+pub fn u64_deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let val: String = serde::Deserialize::deserialize(deserializer)?;
+    Ok(val.parse().unwrap())
+}
+
+pub fn fixed_vector_deserialize<'de, D, N>(deserializer: D) -> Result<FixedVector<u8, N>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    N: Unsigned,
+{
+    let val: String = serde::Deserialize::deserialize(deserializer)?;
+    let val = val.strip_prefix("0x").unwrap();
+    let v = hex::decode(val).unwrap();
+    let result: FixedVector<u8, N> = FixedVector::from(v);
+    Ok(result)
+}
+
+pub fn nested_fixed_vector_deserialize<'de, D, N1, N2>(
+    deserializer: D,
+) -> Result<FixedVector<FixedVector<u8, N1>, N2>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    N1: Unsigned,
+    N2: Unsigned,
+{
+    let val: Vec<String> = serde::Deserialize::deserialize(deserializer)?;
+    let val = val
+        .into_iter()
+        .map(|v| {
+            let v = v.strip_prefix("0x").unwrap();
+            let v = hex::decode(v).unwrap();
+            let result: FixedVector<u8, N1> = FixedVector::from(v);
+            result
+        })
+        .collect::<Vec<_>>();
+    let result: FixedVector<FixedVector<u8, N1>, N2> = FixedVector::from(val);
+    Ok(result)
 }
