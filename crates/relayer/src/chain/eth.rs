@@ -1,7 +1,6 @@
 use ibc_relayer_types::clients::ics07_eth::{
     client_state::ClientState as EthClientState,
-    consensus_state::ConsensusState as EthConsensusState, header::Update as EthHeader,
-    light_block::ExecutionPayloadHeader as EthLightBlock,
+    consensus_state::ConsensusState as EthConsensusState, header::Header as EthHeader,
 };
 use ibc_relayer_types::{
     core::{
@@ -12,7 +11,7 @@ use ibc_relayer_types::{
             packet::Sequence,
         },
         ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
-        ics24_host::identifier::{ChannelId, ConnectionId, PortId},
+        ics24_host::identifier::{ChainId, ChannelId, ConnectionId, PortId},
     },
     signer::Signer,
     Height,
@@ -67,12 +66,9 @@ pub struct EthChain {
 }
 
 impl ChainEndpoint for EthChain {
-    type LightBlock = EthLightBlock;
-
+    type LightBlock = ChainId;
     type Header = EthHeader;
-
     type ConsensusState = EthConsensusState;
-
     type ClientState = EthClientState;
 
     fn config(&self) -> ChainConfig {

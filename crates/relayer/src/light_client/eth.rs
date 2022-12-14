@@ -8,27 +8,24 @@ use std::time::UNIX_EPOCH;
 use async_trait::async_trait;
 use eyre::eyre;
 use eyre::Result;
-use ibc_relayer_types::clients::ics07_eth::types::BitVector;
-use ibc_relayer_types::clients::ics07_eth::types::ConsensusError;
-use ibc_relayer_types::clients::ics07_eth::types::GenericUpdate;
-use ibc_relayer_types::clients::ics07_eth::types::PublicKey;
-use ibc_relayer_types::clients::ics07_eth::types::SignatureBytes;
-use ibc_relayer_types::clients::ics07_eth::types::TreeHash;
-use ibc_relayer_types::clients::ics07_eth::types::U512;
+use ibc_relayer_types::clients::ics07_eth::client_state::ClientState as EthClientState;
+use ibc_relayer_types::clients::ics07_eth::types::{
+    BitVector, Bootstrap, Config, ConsensusError, FinalityUpdate, GenericUpdate, PublicKey,
+    SignatureBytes, SyncCommittee, TreeHash, Update, H256, U512,
+};
+use ibc_relayer_types::core::ics02_client::client_state::ClientState;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
+use ibc_relayer_types::core::ics02_client::error::Error as ClientError;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use ibc_relayer_types::{
-    clients::ics07_eth::{
-        header::Header,
-        types::{Bootstrap, Config, FinalityUpdate, SyncCommittee, Update, H256},
-    },
-    core::ics02_client::events::UpdateClient,
-    Height,
+    clients::ics07_eth::header::Header, core::ics02_client::events::UpdateClient, Height,
 };
 use reqwest_middleware::ClientBuilder;
 use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 
+use crate::config::eth::ChainConfig as EthChainConfig;
 use crate::{
     chain::{endpoint::ChainEndpoint, eth::EthChain},
     client_state::AnyClientState,
@@ -36,6 +33,8 @@ use crate::{
     error::Error,
     misbehaviour::MisbehaviourEvidence,
 };
+
+use super::Verified;
 
 use self::utils::calc_sync_period;
 use self::utils::compute_domain;
@@ -109,7 +108,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         Ok(())
     }
 
-    fn verify_update(&self, update: &Update) -> Result<()> {
+    pub fn verify_update(&self, update: &Update) -> Result<()> {
         let update = GenericUpdate::from(update);
         self.verify_generic_update(&update)
     }
@@ -254,6 +253,7 @@ pub trait ConsensusRpc {
     async fn get_finality_update(&self) -> Result<FinalityUpdate>;
 }
 
+#[derive(Default)]
 pub struct LightClientStore {
     pub finalized_header: Header,
     pub current_sync_committee: SyncCommittee,
@@ -338,8 +338,24 @@ pub struct LightClient {
 }
 
 impl LightClient {
-    pub fn from_config(_config: &ChainConfig) -> Result<Self, Error> {
-        todo!()
+    pub fn from_config(config: &ChainConfig) -> Result<Self, Error> {
+        let eth_config: &EthChainConfig = config.try_into()?;
+        let initial_checkpoint = {
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(eth_config.initial_checkpoint.as_bytes());
+            hash
+        };
+        let light_client = LightClient {
+            chain_id: eth_config.id.clone(),
+            consensus_client: ConsensusClient::<NimbusRpc> {
+                rpc: NimbusRpc::new(&eth_config.lightclient_rpc.to_string()),
+                store: Default::default(),
+                initial_checkpoint,
+                last_checkpoint: None,
+                config: Default::default(), // should fill real world data
+            },
+        };
+        Ok(light_client)
     }
 }
 
@@ -349,7 +365,7 @@ impl super::LightClient<EthChain> for LightClient {
         _trusted: Height,
         _target: Height,
         _client_state: &AnyClientState,
-    ) -> Result<super::Verified<<EthChain as ChainEndpoint>::Header>, Error> {
+    ) -> Result<Verified<Header>, Error> {
         todo!()
     }
 
@@ -357,9 +373,20 @@ impl super::LightClient<EthChain> for LightClient {
         &mut self,
         _trusted: Height,
         _target: Height,
-        _client_state: &AnyClientState,
-    ) -> Result<super::Verified<<EthChain as ChainEndpoint>::LightBlock>, Error> {
-        todo!()
+        client_state: &AnyClientState,
+    ) -> Result<Verified<ChainId>, Error> {
+        let eth_client_state: &EthClientState = client_state.try_into().map_err(|_| {
+            Error::client_type_mismatch(ClientType::Eth, client_state.client_type())
+        })?;
+        self.consensus_client
+            .verify_update(&eth_client_state.lightclient_update)
+            .map_err(|e| {
+                Error::light_client_state(ClientError::header_verification_failure(e.to_string()))
+            })?;
+        Ok(Verified {
+            target: client_state.chain_id(),
+            supporting: vec![],
+        })
     }
 
     fn check_misbehaviour(

@@ -50,7 +50,7 @@ impl AnyUpgradeOptions {
 
 impl UpgradeOptions for AnyUpgradeOptions {}
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AnyClientState {
     Tendermint(TmClientState),
@@ -65,8 +65,8 @@ impl AnyClientState {
     pub fn latest_height(&self) -> Height {
         match self {
             Self::Tendermint(tm_state) => tm_state.latest_height(),
-            Self::Eth(_) => todo!(),
-            Self::Ckb(_) => todo!(),
+            Self::Eth(state) => state.latest_height(),
+            Self::Ckb(state) => state.latest_height(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.latest_height(),
@@ -76,8 +76,8 @@ impl AnyClientState {
     pub fn frozen_height(&self) -> Option<Height> {
         match self {
             Self::Tendermint(tm_state) => tm_state.frozen_height(),
-            Self::Eth(_) => todo!(),
-            Self::Ckb(_) => todo!(),
+            Self::Eth(state) => state.frozen_height(),
+            Self::Ckb(state) => state.frozen_height(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.frozen_height(),
@@ -87,8 +87,8 @@ impl AnyClientState {
     pub fn trust_threshold(&self) -> Option<TrustThreshold> {
         match self {
             AnyClientState::Tendermint(state) => Some(state.trust_threshold),
-            AnyClientState::Eth(_) => todo!(),
-            AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Eth(_) => None,
+            AnyClientState::Ckb(_) => None,
 
             #[cfg(test)]
             AnyClientState::Mock(_) => None,
@@ -98,8 +98,8 @@ impl AnyClientState {
     pub fn max_clock_drift(&self) -> Duration {
         match self {
             AnyClientState::Tendermint(state) => state.max_clock_drift,
-            AnyClientState::Eth(_) => todo!(),
-            AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Eth(_) => Duration::ZERO,
+            AnyClientState::Ckb(_) => Duration::ZERO,
 
             #[cfg(test)]
             AnyClientState::Mock(_) => Duration::new(0, 0),
@@ -109,8 +109,8 @@ impl AnyClientState {
     pub fn client_type(&self) -> ClientType {
         match self {
             Self::Tendermint(state) => state.client_type(),
-            Self::Eth(_) => todo!(),
-            Self::Ckb(_) => todo!(),
+            Self::Eth(state) => state.client_type(),
+            Self::Ckb(state) => state.client_type(),
 
             #[cfg(test)]
             Self::Mock(state) => state.client_type(),
@@ -120,8 +120,8 @@ impl AnyClientState {
     pub fn refresh_period(&self) -> Option<Duration> {
         match self {
             AnyClientState::Tendermint(tm_state) => tm_state.refresh_time(),
-            AnyClientState::Eth(_) => todo!(),
-            AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Eth(_) => None,
+            AnyClientState::Ckb(_) => None,
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.refresh_time(),
@@ -254,6 +254,42 @@ impl From<CkbClientState> for AnyClientState {
     }
 }
 
+impl<'a> TryFrom<&'a AnyClientState> for &'a TmClientState {
+    type Error = Error;
+
+    fn try_from(value: &'a AnyClientState) -> Result<Self, Self::Error> {
+        if let AnyClientState::Tendermint(value) = value {
+            Ok(value)
+        } else {
+            Err(Error::unknown_client_state_type("tendermint".to_owned()))
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a AnyClientState> for &'a EthClientState {
+    type Error = Error;
+
+    fn try_from(value: &'a AnyClientState) -> Result<Self, Self::Error> {
+        if let AnyClientState::Eth(value) = value {
+            Ok(value)
+        } else {
+            Err(Error::unknown_client_state_type("ethereum 2.0".to_owned()))
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a AnyClientState> for &'a CkbClientState {
+    type Error = Error;
+
+    fn try_from(value: &'a AnyClientState) -> Result<Self, Self::Error> {
+        if let AnyClientState::Ckb(value) = value {
+            Ok(value)
+        } else {
+            Err(Error::unknown_client_state_type("ckb".to_owned()))
+        }
+    }
+}
+
 #[cfg(test)]
 impl From<MockClientState> for AnyClientState {
     fn from(cs: MockClientState) -> Self {
@@ -276,7 +312,7 @@ impl From<&dyn ClientState> for AnyClientState {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub struct IdentifiedAnyClientState {
     pub client_id: ClientId,

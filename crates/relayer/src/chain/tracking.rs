@@ -1,6 +1,5 @@
 use core::fmt::{Display, Error as FmtError, Formatter};
 
-use bytes::Bytes;
 use ibc_proto::google::protobuf::Any;
 use uuid::Uuid;
 
@@ -55,14 +54,6 @@ impl Display for TrackingId {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum NonCosmosMsgs {
-    Unknown,
-    Axon(Vec<Bytes>),
-    Eth(Vec<Bytes>),
-    Ckb(Vec<Bytes>),
-}
-
 /// A wrapper over a vector of proto-encoded messages
 /// (`Vec<Any>`), which has an associated tracking
 /// number.
@@ -74,23 +65,17 @@ pub enum NonCosmosMsgs {
 pub struct TrackedMsgs {
     pub msgs: Vec<Any>,
     pub tracking_id: TrackingId,
-    pub noncosmos_msgs: NonCosmosMsgs,
 }
 
 impl TrackedMsgs {
     pub fn new(msgs: Vec<Any>, tracking_id: TrackingId) -> Self {
-        Self {
-            msgs,
-            tracking_id,
-            noncosmos_msgs: NonCosmosMsgs::Unknown,
-        }
+        Self { msgs, tracking_id }
     }
 
     pub fn new_static(msgs: Vec<Any>, tracking_id: &'static str) -> Self {
         Self {
             msgs,
             tracking_id: TrackingId::Static(tracking_id),
-            noncosmos_msgs: NonCosmosMsgs::Unknown,
         }
     }
 
@@ -98,7 +83,6 @@ impl TrackedMsgs {
         Self {
             msgs,
             tracking_id: TrackingId::Uuid(tracking_id),
-            noncosmos_msgs: NonCosmosMsgs::Unknown,
         }
     }
 
@@ -106,7 +90,6 @@ impl TrackedMsgs {
         Self {
             msgs: vec![msg],
             tracking_id: TrackingId::Static(tracking_id),
-            noncosmos_msgs: NonCosmosMsgs::Unknown,
         }
     }
 
@@ -114,7 +97,6 @@ impl TrackedMsgs {
         Self {
             msgs: vec![msg],
             tracking_id: TrackingId::Uuid(tracking_id),
-            noncosmos_msgs: NonCosmosMsgs::Unknown,
         }
     }
 
@@ -125,4 +107,10 @@ impl TrackedMsgs {
     pub fn tracking_id(&self) -> TrackingId {
         self.tracking_id
     }
+}
+
+#[allow(non_snake_case)]
+pub mod NonCosmosTrackingId {
+    pub const ETH_CREATE_CLIENT: &str = "eth_create_client";
+    pub const ETH_UPDATE_CLIENT: &str = "eth_update_client";
 }
