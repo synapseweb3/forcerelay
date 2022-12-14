@@ -9,7 +9,7 @@ use ethers::prelude::{Provider, StreamExt, Ws};
 use ethers::types::Address;
 use ethers_contract::LogMeta;
 use ethers_providers::Middleware;
-use ibc_relayer_types::clients::ics07_eth::header::Update as EthHeader;
+use ibc_relayer_types::clients::ics07_eth::header::Header as EthHeader;
 use ibc_relayer_types::core::ics02_client::events::{self, Attributes};
 use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::Height;

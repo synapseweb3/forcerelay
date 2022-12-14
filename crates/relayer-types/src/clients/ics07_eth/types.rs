@@ -1,17 +1,20 @@
-pub use ethereum_types::H256;
+use crate::prelude::*;
+use serde_derive::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub use ethereum_types::H256;
 pub use tree_hash::TreeHash;
 
 pub use bls::{AggregateSignature, PublicKey, PublicKeyBytes};
 pub use ssz_types::typenum::{U20, U256, U4, U48, U512, U96};
 pub use ssz_types::{BitVector, FixedVector};
 
-use crate::prelude::*;
-
-pub use super::header::{Header, SyncAggregate, SyncCommittee, Update, SignatureBytes, BLSPubKey};
+pub use super::header::Header;
 
 pub type Address = FixedVector<u8, U20>;
 pub type LogsBloom = FixedVector<u8, U256>;
+pub type BLSPubKey = FixedVector<u8, U48>;
+pub type SignatureBytes = FixedVector<u8, U96>;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Bootstrap {
@@ -37,6 +40,29 @@ pub struct GenericUpdate {
     pub next_sync_committee_branch: Option<Vec<H256>>,
     pub finalized_header: Option<Header>,
     pub finality_branch: Option<Vec<H256>>,
+}
+
+#[derive(Clone, PartialEq, tree_hash_derive::TreeHash, Deserialize, Serialize, Default, Debug)]
+pub struct SyncCommittee {
+    pub pubkeys: FixedVector<BLSPubKey, U512>,
+    pub aggregate_pubkey: BLSPubKey,
+}
+
+#[derive(Clone, PartialEq, Deserialize, Serialize, Default, Debug)]
+pub struct SyncAggregate {
+    pub sync_committee_bits: BitVector<U512>,
+    pub sync_committee_signature: SignatureBytes,
+}
+
+#[derive(Clone, PartialEq, Deserialize, Serialize, Default, Debug)]
+pub struct Update {
+    pub attested_header: Header,
+    pub next_sync_committee: SyncCommittee,
+    pub next_sync_committee_branch: Vec<H256>,
+    pub finalized_header: Header,
+    pub finality_branch: Vec<H256>,
+    pub sync_aggregate: SyncAggregate,
+    pub signature_slot: u64,
 }
 
 impl From<&Update> for GenericUpdate {
@@ -67,12 +93,12 @@ impl From<&FinalityUpdate> for GenericUpdate {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Config {
     pub consensus_rpc: String,
     pub execution_rpc: String,
     pub rpc_port: Option<u16>,
-    pub checkpoint: Vec<u8>,
+    pub checkpoint: H256,
     pub max_checkpoint_age: u64,
     pub forks: Forks,
     // ChainConfig
@@ -95,14 +121,14 @@ impl Config {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Forks {
     pub genesis: Fork,
     pub altair: Fork,
     pub bellatrix: Fork,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Fork {
     pub epoch: u64,
     pub fork_version: FixedVector<u8, U4>,

@@ -1,16 +1,15 @@
-use crate::core::ics02_client::error::Error as Ics02Error;
 use ethereum_types::H256;
 use ibc_proto::google::protobuf::Any;
+use ibc_proto::protobuf::Error as ProtoError;
 use ibc_proto::protobuf::Protobuf;
 use serde_derive::{Deserialize, Serialize};
-use ssz_types::typenum::{U48, U512, U96};
-use ssz_types::{BitVector, FixedVector};
 use tree_hash_derive::TreeHash;
 
+use crate::core::ics02_client;
+use crate::core::ics02_client::error::Error as Ics02Error;
 use crate::prelude::*;
 
-pub type BLSPubKey = FixedVector<u8, U48>;
-pub type SignatureBytes = FixedVector<u8, U96>;
+pub const FINALITY_HEADER_TYPE_URL: &str = "/eth.finality.v1.update";
 
 #[derive(Clone, PartialEq, Deserialize, Serialize, TreeHash, Default, Debug)]
 pub struct Header {
@@ -21,55 +20,43 @@ pub struct Header {
     pub body_root: H256,
 }
 
-#[derive(Clone, PartialEq, TreeHash, Deserialize, Serialize, Default, Debug)]
-pub struct SyncCommittee {
-    pub pubkeys: FixedVector<BLSPubKey, U512>,
-    pub aggregate_pubkey: BLSPubKey,
-}
-
-#[derive(Clone, PartialEq, TreeHash, Deserialize, Serialize, Default, Debug)]
-pub struct SyncAggregate {
-    pub sync_committee_bits: BitVector<U512>,
-    pub sync_committee_signature: SignatureBytes,
-}
-
-#[derive(Clone, PartialEq, Deserialize, Serialize, Default, Debug)]
-pub struct Update {
-    pub attested_header: Header,
-    pub next_sync_committee: SyncCommittee,
-    pub next_sync_committee_branch: Vec<H256>,
-    pub finalized_header: Header,
-    pub finality_branch: Vec<H256>,
-    pub sync_aggregate: SyncAggregate,
-    pub signature_slot: u64,
-}
-
-impl crate::core::ics02_client::header::Header for Update {
-    fn client_type(&self) -> crate::core::ics02_client::client_type::ClientType {
-        todo!()
+impl ics02_client::header::Header for Header {
+    fn client_type(&self) -> ics02_client::client_type::ClientType {
+        ics02_client::client_type::ClientType::Eth
     }
 
     fn height(&self) -> crate::Height {
-        todo!()
+        crate::Height::new(self.slot / 32, self.slot)
+            .expect("transform finalized slot to cosmos height")
     }
 
     fn timestamp(&self) -> crate::timestamp::Timestamp {
-        todo!()
+        crate::timestamp::Timestamp::none()
     }
 }
 
-impl Protobuf<Any> for Update {}
+impl Protobuf<Any> for Header {}
 
-impl TryFrom<Any> for Update {
+impl TryFrom<Any> for Header {
     type Error = Ics02Error;
 
-    fn try_from(_value: Any) -> Result<Self, Self::Error> {
-        todo!()
+    fn try_from(any: Any) -> Result<Self, Self::Error> {
+        if any.type_url != FINALITY_HEADER_TYPE_URL {
+            return Err(Ics02Error::unknown_header_type("ethereum 2.0".to_owned()));
+        }
+        let header: Header = serde_json::from_slice(&any.value).map_err(|e| {
+            Ics02Error::invalid_raw_header(ProtoError::try_from_protobuf(e.to_string()))
+        })?;
+        Ok(header)
     }
 }
 
-impl From<Update> for Any {
-    fn from(_header: Update) -> Self {
-        todo!()
+impl From<Header> for Any {
+    fn from(header: Header) -> Self {
+        let json = serde_json::to_string(&header).expect("jsonify finality update");
+        Any {
+            type_url: FINALITY_HEADER_TYPE_URL.to_owned(),
+            value: json.into_bytes(),
+        }
     }
 }

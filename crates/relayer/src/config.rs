@@ -189,8 +189,8 @@ impl ChainConfig {
     pub fn id(&self) -> &ChainId {
         match self {
             ChainConfig::Cosmos(c) => &c.id,
-            ChainConfig::Eth(_) => todo!(),
-            ChainConfig::Ckb(_) => todo!(),
+            ChainConfig::Eth(c) => &c.id,
+            ChainConfig::Ckb(c) => &c.id,
         }
     }
 
@@ -205,8 +205,8 @@ impl ChainConfig {
     pub fn key_name(&self) -> &str {
         match self {
             ChainConfig::Cosmos(c) => &c.key_name,
-            ChainConfig::Eth(_) => todo!(),
-            ChainConfig::Ckb(_) => todo!(),
+            ChainConfig::Eth(c) => &c.key_name,
+            ChainConfig::Ckb(c) => &c.key_name,
         }
     }
 
@@ -255,6 +255,90 @@ impl ChainConfig {
             ChainConfig::Cosmos(c) => c.max_block_time,
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ChainConfig> for &'a CosmosChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: &'a ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Cosmos(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Cosmos config".to_owned()),
+            )))
+        }
+    }
+}
+
+impl TryFrom<ChainConfig> for CosmosChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Cosmos(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Cosmos config".to_owned()),
+            )))
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ChainConfig> for &'a EthChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: &'a ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Eth(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Ethereum config".to_owned()),
+            )))
+        }
+    }
+}
+
+impl TryFrom<ChainConfig> for EthChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Eth(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Ethereum config".to_owned()),
+            )))
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ChainConfig> for &'a CkbChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: &'a ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Ckb(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Ckb config".to_owned()),
+            )))
+        }
+    }
+}
+
+impl TryFrom<ChainConfig> for CkbChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Ckb(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Ckb config".to_owned()),
+            )))
         }
     }
 }

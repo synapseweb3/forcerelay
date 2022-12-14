@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use ibc_relayer_types::clients::ics07_eth::{
     header::Header,
     types::{AggregateSignature, FixedVector, PublicKey, SignatureBytes, SyncCommittee, H256, U4},
@@ -33,19 +35,19 @@ pub fn is_finality_proof_valid(
     is_proof_valid(attested_header, finality_header, finality_branch, 6, 41)
 }
 
-// pub fn is_next_committee_proof_valid(
-//     attested_header: &Header,
-//     next_committee: &mut SyncCommittee,
-//     next_committee_branch: &Vec<H256>,
-// ) -> bool {
-//     is_proof_valid(
-//         attested_header,
-//         next_committee,
-//         next_committee_branch,
-//         5,
-//         23,
-//     )
-// }
+pub fn is_next_committee_proof_valid(
+    attested_header: &Header,
+    next_committee: &mut SyncCommittee,
+    next_committee_branch: &Vec<H256>,
+) -> bool {
+    is_proof_valid(
+        attested_header,
+        next_committee,
+        next_committee_branch,
+        5,
+        23,
+    )
+}
 
 pub fn is_proof_valid<L: TreeHash>(
     attested_header: &Header,
