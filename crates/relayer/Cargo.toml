@@ -73,6 +73,10 @@ tree_hash = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c
 ethers = { version = "1.0.0", features = ["rustls", "ws"] }
 ethers-contract = { version = "1.0.0" }
 ethers-providers = { version = "1.0.0" }
+ckb-sdk = "2.3.1"
+ckb-types = "0.105.1"
+ckb-jsonrpc-types = "0.105.1"
+jsonrpc-core = "18.0"
 
 [dependencies.num-bigint]
 version = "0.4"

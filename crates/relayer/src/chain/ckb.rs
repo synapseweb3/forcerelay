@@ -1,8 +1,10 @@
+use ibc_proto::protobuf::Error as ProtoError;
 use ibc_relayer_types::clients::ics07_ckb::{
     client_state::ClientState as CkbClientState,
     consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
     light_block::LightBlock as CkbLightBlock,
 };
+use ibc_relayer_types::clients::ics07_eth::types::Update as EthUpdate;
 use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
@@ -19,15 +21,18 @@ use ibc_relayer_types::{
 };
 use semver::Version;
 use std::sync::Arc;
-use tendermint_rpc::{endpoint::broadcast::tx_sync::Response, HttpClient};
+use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime as TokioRuntime;
 
+use crate::keyring::KeyRing;
 use crate::{
     account::Balance,
+    chain::cosmos::encode::key_entry_to_signer,
     chain::endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::ckb::ChainConfig as CkbChainConfig,
     config::ChainConfig,
+    config::Error as ConfigError,
     consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight},
     denom::DenomTrace,
     error::Error,
@@ -35,7 +40,7 @@ use crate::{
     misbehaviour::MisbehaviourEvidence,
 };
 
-use super::tracking::TrackedMsgs;
+use super::tracking::{NonCosmosMsgs, TrackedMsgs};
 use super::{
     client::ClientSettings,
     requests::{
@@ -50,10 +55,14 @@ use super::{
     },
 };
 
+mod rpc_client;
+use rpc_client::RpcClient;
+
 pub struct CkbChain {
     pub rt: Arc<TokioRuntime>,
-    pub rpc_client: HttpClient,
+    pub rpc_client: RpcClient,
     pub config: CkbChainConfig,
+    pub keybase: KeyRing,
 }
 
 impl ChainEndpoint for CkbChain {
@@ -66,8 +75,22 @@ impl ChainEndpoint for CkbChain {
         ChainConfig::Ckb(self.config.clone())
     }
 
-    fn bootstrap(_config: ChainConfig, _rt: Arc<TokioRuntime>) -> Result<Self, Error> {
-        todo!()
+    fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
+        if let ChainConfig::Ckb(config) = config {
+            let rpc_client = RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc);
+            let keybase =
+                KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
+            Ok(CkbChain {
+                rt,
+                rpc_client,
+                config,
+                keybase,
+            })
+        } else {
+            Err(Error::config(ConfigError::encode(
+                toml::ser::Error::Custom("not CKB config".to_owned()),
+            )))
+        }
     }
 
     fn shutdown(self) -> Result<(), Error> {
@@ -75,30 +98,47 @@ impl ChainEndpoint for CkbChain {
     }
 
     fn health_check(&self) -> Result<HealthCheck, Error> {
-        todo!()
+        Ok(HealthCheck::Healthy)
     }
 
-    fn keybase(&self) -> &crate::keyring::KeyRing {
-        todo!()
+    fn keybase(&self) -> &KeyRing {
+        &self.keybase
     }
 
-    fn keybase_mut(&mut self) -> &mut crate::keyring::KeyRing {
-        todo!()
+    fn keybase_mut(&mut self) -> &mut KeyRing {
+        &mut self.keybase
     }
 
     fn get_signer(&self) -> Result<Signer, Error> {
-        todo!()
+        let key_entry = self
+            .keybase()
+            .get_key(&self.config.key_name)
+            .map_err(Error::key_base)?;
+        let signer = key_entry_to_signer(&key_entry, "ckb")?;
+        Ok(signer)
     }
 
     fn ibc_version(&self) -> Result<Option<Version>, Error> {
-        todo!()
+        Ok(None)
     }
 
     fn send_messages_and_wait_commit(
         &mut self,
-        _tracked_msgs: TrackedMsgs,
+        tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        todo!()
+        match tracked_msgs.noncosmos_msgs {
+            NonCosmosMsgs::Eth(msgs) => {
+                let _updates = msgs
+                    .into_iter()
+                    .map(|msg| serde_json::from_slice(&msg.to_vec()))
+                    .collect::<Result<Vec<EthUpdate>, _>>()
+                    .map_err(|e| Error::decode(ProtoError::try_from_protobuf(e.to_string())))?;
+                // TODO
+                Ok(vec![])
+            }
+            NonCosmosMsgs::Axon(_) => Ok(vec![]),
+            _ => Err(Error::send_tx("unknown msg".to_owned())),
+        }
     }
 
     fn send_messages_and_wait_check_tx(

@@ -5,14 +5,11 @@ pub use tree_hash::TreeHash;
 pub use bls::{AggregateSignature, PublicKey, PublicKeyBytes};
 pub use ssz_types::typenum::{U20, U256, U4, U48, U512, U96};
 pub use ssz_types::{BitVector, FixedVector};
-use tree_hash_derive::TreeHash;
 
 use crate::prelude::*;
 
-use super::header::Header;
+pub use super::header::{Header, SyncAggregate, SyncCommittee, Update, SignatureBytes, BLSPubKey};
 
-pub type BLSPubKey = FixedVector<u8, U48>;
-pub type SignatureBytes = FixedVector<u8, U96>;
 pub type Address = FixedVector<u8, U20>;
 pub type LogsBloom = FixedVector<u8, U256>;
 
@@ -30,23 +27,6 @@ pub struct FinalityUpdate {
     pub finality_branch: Vec<H256>,
     pub sync_aggregate: SyncAggregate,
     pub signature_slot: u64,
-}
-
-#[derive(serde::Deserialize, Debug, Clone)]
-pub struct Update {
-    pub attested_header: Header,
-    pub next_sync_committee: SyncCommittee,
-    pub next_sync_committee_branch: Vec<H256>,
-    pub finalized_header: Header,
-    pub finality_branch: Vec<H256>,
-    pub sync_aggregate: SyncAggregate,
-    pub signature_slot: u64,
-}
-
-#[derive(Debug, Clone, TreeHash, serde::Deserialize)]
-pub struct SyncAggregate {
-    pub sync_committee_bits: BitVector<U512>,
-    pub sync_committee_signature: SignatureBytes,
 }
 
 pub struct GenericUpdate {
@@ -85,12 +65,6 @@ impl From<&FinalityUpdate> for GenericUpdate {
             finality_branch: Some(value.finality_branch.clone()),
         }
     }
-}
-
-#[derive(Clone, TreeHash, serde::Deserialize, Debug)]
-pub struct SyncCommittee {
-    pub pubkeys: FixedVector<BLSPubKey, U512>,
-    pub aggregate_pubkey: BLSPubKey,
 }
 
 #[derive(Debug, Default)]
