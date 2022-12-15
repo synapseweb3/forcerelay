@@ -15,7 +15,7 @@ pub struct EthChainConfig {
     pub websocket_addr: Url,
     pub initial_checkpoint: [u8; 32],
     pub key_name: String,
-    pub rpc_addr: Option<String>,
+    pub rpc_addr: String,
     pub rpc_port: u16,
     pub forks: Forks,
     pub max_checkpoint_age: u64,
@@ -49,7 +49,7 @@ impl EthChainConfig {
             .unwrap()
             .into(),
             websocket_addr: Url::from_str("http://www.dummy.com").unwrap(),
-            rpc_addr: None,
+            rpc_addr: Default::default(),
             rpc_port: 8545,
             forks: Forks {
                 genesis: Fork {

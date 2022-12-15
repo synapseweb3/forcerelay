@@ -29,6 +29,8 @@ use ibc_relayer_types::mock::client_state::MockClientState;
 use ibc_relayer_types::mock::client_state::MOCK_CLIENT_STATE_TYPE_URL;
 use ibc_relayer_types::Height;
 
+use crate::error::Error as RelayerError;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AnyUpgradeOptions {
@@ -255,37 +257,46 @@ impl From<CkbClientState> for AnyClientState {
 }
 
 impl<'a> TryFrom<&'a AnyClientState> for &'a TmClientState {
-    type Error = Error;
+    type Error = RelayerError;
 
     fn try_from(value: &'a AnyClientState) -> Result<Self, Self::Error> {
         if let AnyClientState::Tendermint(value) = value {
             Ok(value)
         } else {
-            Err(Error::unknown_client_state_type("tendermint".to_owned()))
+            Err(RelayerError::client_type_mismatch(
+                ClientType::Tendermint,
+                value.client_type(),
+            ))
         }
     }
 }
 
 impl<'a> TryFrom<&'a AnyClientState> for &'a EthClientState {
-    type Error = Error;
+    type Error = RelayerError;
 
     fn try_from(value: &'a AnyClientState) -> Result<Self, Self::Error> {
         if let AnyClientState::Eth(value) = value {
             Ok(value)
         } else {
-            Err(Error::unknown_client_state_type("ethereum 2.0".to_owned()))
+            Err(RelayerError::client_type_mismatch(
+                ClientType::Eth,
+                value.client_type(),
+            ))
         }
     }
 }
 
 impl<'a> TryFrom<&'a AnyClientState> for &'a CkbClientState {
-    type Error = Error;
+    type Error = RelayerError;
 
     fn try_from(value: &'a AnyClientState) -> Result<Self, Self::Error> {
         if let AnyClientState::Ckb(value) = value {
             Ok(value)
         } else {
-            Err(Error::unknown_client_state_type("ckb".to_owned()))
+            Err(RelayerError::client_type_mismatch(
+                ClientType::Ckb,
+                value.client_type(),
+            ))
         }
     }
 }

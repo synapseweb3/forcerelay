@@ -70,6 +70,24 @@ pub struct Update {
     pub signature_slot: u64,
 }
 
+impl Update {
+    pub fn from_finality_update(
+        update: FinalityUpdate,
+        next_sync_committee: SyncCommittee,
+        next_sync_committee_branch: Vec<H256>,
+    ) -> Self {
+        Self {
+            attested_header: update.attested_header,
+            finalized_header: update.finalized_header,
+            finality_branch: update.finality_branch,
+            sync_aggregate: update.sync_aggregate,
+            signature_slot: update.signature_slot,
+            next_sync_committee,
+            next_sync_committee_branch,
+        }
+    }
+}
+
 impl From<&Update> for GenericUpdate {
     fn from(update: &Update) -> Self {
         GenericUpdate {
