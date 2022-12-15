@@ -18,7 +18,7 @@ pub fn is_current_committee_proof_valid(
         current_committee,
         current_committee_branch,
         5,
-        23,
+        22,
     )
 }
 

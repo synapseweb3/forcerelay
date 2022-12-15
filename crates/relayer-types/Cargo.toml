@@ -51,6 +51,7 @@ tree_hash = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c
 tree_hash_derive = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }
 thiserror = "1.0"
 ethereum-types = "0.12.1"
+hex = "0.4"
 
 [dependencies.tendermint]
 version = "0.27.0"

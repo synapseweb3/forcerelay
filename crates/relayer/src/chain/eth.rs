@@ -29,7 +29,7 @@ use crate::{
     account::Balance,
     chain::endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
     client_state::{AnyClientState, IdentifiedAnyClientState},
-    config::eth::ChainConfig as EthChainConfig,
+    config::eth::EthChainConfig,
     config::ChainConfig,
     consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight},
     denom::DenomTrace,

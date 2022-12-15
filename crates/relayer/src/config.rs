@@ -29,7 +29,7 @@ pub use crate::config::Error as ConfigError;
 use ckb::ChainConfig as CkbChainConfig;
 use cosmos::CosmosChainConfig;
 pub use error::Error;
-use eth::ChainConfig as EthChainConfig;
+use eth::EthChainConfig;
 
 use self::filter::PacketFilter;
 
