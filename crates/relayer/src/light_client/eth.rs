@@ -642,6 +642,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_verify_update_invalid_finality() {
+        let client = get_client(true).await;
+        let period = calc_sync_period(client.store.finalized_header.slot);
+        let updates = client
+            .rpc
+            .get_updates(period, MAX_REQUEST_LIGHT_CLIENT_UPDATES)
+            .await
+            .unwrap();
+
+        let mut update = updates[0].clone();
+        update.finalized_header = Header::default();
+
+        let err = client.verify_update(&mut update).err().unwrap();
+        assert_eq!(
+            err.to_string(),
+            ConsensusError::InvalidFinalityProof.to_string()
+        );
+    }
+
+    #[tokio::test]
     async fn test_verify_finality_invalid_finality() {
         let mut client = get_client(true).await;
         client.sync().await.unwrap();
@@ -653,6 +673,21 @@ mod tests {
         assert_eq!(
             err.to_string(),
             ConsensusError::InvalidFinalityProof.to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_verify_finality_invalid_sit() {
+        let mut client = get_client(true).await;
+        client.sync().await.unwrap();
+
+        let mut update = client.rpc.get_finality_update().await.unwrap();
+        update.sync_aggregate.sync_committee_signature = FixedVector::default();
+
+        let err = client.verify_finality_update(&update).err().unwrap();
+        assert_eq!(
+            err.to_string(),
+            ConsensusError::InvalidSignature.to_string()
         );
     }
 
@@ -694,5 +729,13 @@ mod tests {
             err.to_string(),
             ConsensusError::InvalidNextSyncCommitteeProof.to_string()
         );
+    }
+
+    #[tokio::test]
+    async fn test_sync() {
+        let mut client = get_client(true).await;
+        client.sync().await.unwrap();
+
+        assert_eq!(client.store.finalized_header.slot, 3818112);
     }
 }
