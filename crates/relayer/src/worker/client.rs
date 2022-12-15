@@ -3,11 +3,13 @@ use core::time::Duration;
 use crossbeam_channel::Receiver;
 use std::time::Instant;
 use tracing::{debug, span, trace, warn};
+use uuid::Uuid;
 
 use ibc_relayer_types::events::IbcEvent;
 use retry::delay::Fibonacci;
 use retry::retry_with_index;
 
+use crate::chain::tracking::{TrackedMsgs, TrackingId};
 use crate::util::retry::clamp_total;
 use crate::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
 use crate::{
@@ -139,7 +141,30 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                         }
                     }
 
-                    WorkerCmd::NewBlock { .. } => {}
+                    WorkerCmd::NewBlock { height, .. } => {
+                        let dst_chain = client.dst_chain();
+                        let client_state = dst_chain
+                            .build_client_state(height, crate::chain::client::ClientSettings::Ckb);
+                        if client_state.is_err() {
+                            trace!(
+                                "encounter error when building client state: {:?}",
+                                client_state.unwrap_err()
+                            );
+                            return Ok(Next::Continue);
+                        }
+                        let client_state = client_state.unwrap();
+                        let tracked_msgs = TrackedMsgs {
+                            msgs: vec![client_state.into()],
+                            tracking_id: TrackingId::Uuid(Uuid::default()),
+                        };
+                        let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
+                        if ret.is_err() {
+                            trace!(
+                                "encounter error when sending messages: {:?}",
+                                ret.unwrap_err()
+                            );
+                        }
+                    }
                     WorkerCmd::ClearPendingPackets => {}
                 }
             }
