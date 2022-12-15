@@ -19,7 +19,7 @@ use ibc_relayer_types::{
 use semver::Version;
 use std::sync::Arc;
 use std::thread;
-use tendermint_rpc::{endpoint::broadcast::tx_sync::Response, HttpClient};
+use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime as TokioRuntime;
 
 use crate::chain::eth::event::monitor::EthEventMonitor;
@@ -59,10 +59,9 @@ pub mod types;
 
 pub struct EthChain {
     pub rt: Arc<TokioRuntime>,
-    pub rpc_client: HttpClient,
     pub config: EthChainConfig,
     pub light_client: EthLightClient,
-    tx_monitor_cmd: Option<TxMonitorCmd>,
+    pub tx_monitor_cmd: Option<TxMonitorCmd>,
 }
 
 impl ChainEndpoint for EthChain {
@@ -75,8 +74,15 @@ impl ChainEndpoint for EthChain {
         ChainConfig::Eth(self.config.clone())
     }
 
-    fn bootstrap(_config: ChainConfig, _rt: Arc<TokioRuntime>) -> Result<Self, Error> {
-        todo!()
+    fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
+        let config: EthChainConfig = config.try_into()?;
+        let light_client = EthLightClient::from_config(&config, rt.clone())?;
+        Ok(EthChain {
+            rt,
+            config,
+            light_client,
+            tx_monitor_cmd: None,
+        })
     }
 
     fn shutdown(self) -> Result<(), Error> {
@@ -84,7 +90,7 @@ impl ChainEndpoint for EthChain {
     }
 
     fn health_check(&self) -> Result<HealthCheck, Error> {
-        todo!()
+        Ok(HealthCheck::Healthy)
     }
 
     fn keybase(&self) -> &crate::keyring::KeyRing {
@@ -338,7 +344,7 @@ impl ChainEndpoint for EthChain {
 
     fn build_client_state(
         &self,
-        _height: Height,
+        _slot: Height,
         _settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
         todo!()

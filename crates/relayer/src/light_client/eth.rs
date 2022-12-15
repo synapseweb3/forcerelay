@@ -1,9 +1,13 @@
 mod utils;
 
 use std::cmp;
+use std::collections::HashMap;
 use std::ops::Index;
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
+use tokio::runtime::Runtime as TokioRuntime;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::Mutex;
 
 use async_trait::async_trait;
 use eyre::eyre;
@@ -14,7 +18,6 @@ use ibc_relayer_types::clients::ics07_eth::types::{
     SyncCommittee, TreeHash, Update, H256, U512,
 };
 use ibc_relayer_types::core::ics02_client::client_state::ClientState;
-use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::error::Error as ClientError;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use ibc_relayer_types::{
@@ -29,7 +32,6 @@ use crate::config::eth::EthChainConfig;
 use crate::{
     chain::{endpoint::ChainEndpoint, eth::EthChain},
     client_state::AnyClientState,
-    config::ChainConfig,
     error::Error,
     misbehaviour::MisbehaviourEvidence,
 };
@@ -47,31 +49,89 @@ use self::utils::is_next_committee_proof_valid;
 pub const MAX_REQUEST_LIGHT_CLIENT_UPDATES: u8 = 128;
 
 pub struct ConsensusClient<R: ConsensusRpc> {
-    pub rpc: R,
-    pub store: LightClientStore,
-    pub initial_checkpoint: [u8; 32],      // Vec<u8>
-    pub last_checkpoint: Option<[u8; 32]>, // Vec<u8>
-    pub config: Arc<EthChainConfig>,
+    rpc: R,
+    store: LightClientStore,
+    initial_checkpoint: [u8; 32],      // Vec<u8>
+    last_checkpoint: Option<[u8; 32]>, // Vec<u8>
+    config: Arc<EthChainConfig>,
+    new_block_emitors: Vec<UnboundedSender<Header>>,
+    enable_emitor: bool,
 }
 
 impl<R: ConsensusRpc> ConsensusClient<R> {
     pub fn new(
         rpc: &str,
-        checkpoint_block_root: &[u8],
+        checkpoint_block_root: &[u8; 32],
         config: Arc<EthChainConfig>,
-    ) -> Result<ConsensusClient<R>> {
-        let rpc = R::new(rpc);
-        let initial_checkpoint = checkpoint_block_root.to_vec().try_into().unwrap(); // FIXME
-        Ok(ConsensusClient {
-            rpc,
+    ) -> ConsensusClient<R> {
+        ConsensusClient {
+            rpc: R::new(rpc),
             store: LightClientStore::default(),
-            initial_checkpoint,
+            initial_checkpoint: checkpoint_block_root.clone(),
             last_checkpoint: None,
             config,
-        })
+            new_block_emitors: vec![],
+            enable_emitor: false,
+        }
     }
 
-    pub async fn bootstrap(&mut self) -> Result<()> {
+    pub fn subscribe(&mut self) -> UnboundedReceiver<Header> {
+        let (sender, receiver) = unbounded_channel();
+        self.new_block_emitors.push(sender);
+        receiver
+    }
+
+    pub async fn sync(&mut self) -> Result<()> {
+        self.bootstrap().await?;
+
+        let current_period = calc_sync_period(self.store.finalized_header.slot);
+        let updates = self
+            .rpc
+            .get_updates(current_period, MAX_REQUEST_LIGHT_CLIENT_UPDATES)
+            .await?;
+        for update in updates {
+            self.verify_update(&update)?;
+            self.apply_update(&update);
+            self.store
+                .finality_updates
+                .insert(update.finalized_header.slot, update.clone());
+        }
+
+        let finality_update = self.rpc.get_finality_update().await?;
+        self.verify_finality_update(&finality_update)?;
+        self.apply_finality_update(&finality_update);
+        self.store_finality_update(finality_update);
+        self.enable_emitor = true;
+
+        Ok(())
+    }
+
+    fn store_finality_update(&mut self, finality_update: FinalityUpdate) {
+        if self.store.next_sync_committee.is_none() {
+            println!(
+                "[eth_light_client] skip finality_update store of slot {}",
+                finality_update.finalized_header.slot
+            );
+            return;
+        }
+        let update = Update::from_finality_update(
+            finality_update,
+            self.store.next_sync_committee.clone().unwrap(),
+            self.store.next_sync_committee_branch.clone().unwrap(),
+        );
+        self.store
+            .finality_updates
+            .insert(update.finalized_header.slot, update);
+    }
+
+    pub fn get_finality_update(&self, finality_update_slot: u64) -> Option<Update> {
+        self.store
+            .finality_updates
+            .get(&finality_update_slot)
+            .cloned()
+    }
+
+    async fn bootstrap(&mut self) -> Result<()> {
         let mut bootstrap = self
             .rpc
             .get_bootstrap(&self.initial_checkpoint)
@@ -104,45 +164,66 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             finalized_header: bootstrap.header.clone(),
             current_sync_committee: bootstrap.current_sync_committee,
             next_sync_committee: None,
+            next_sync_committee_branch: None,
             previous_max_active_participants: 0,
             current_max_active_participants: 0,
+            finality_updates: HashMap::new(),
         };
 
         Ok(())
     }
 
-    pub async fn sync(&mut self) -> Result<()> {
-        self.bootstrap().await?;
+    pub fn duration_until_next_update(&self) -> std::time::Duration {
+        let current_slot = self.expected_current_slot();
+        let next_slot = current_slot + 1;
+        let next_slot_timestamp = self.slot_timestamp(next_slot);
 
-        let current_period = calc_sync_period(self.store.finalized_header.slot);
-        let updates = self
-            .rpc
-            .get_updates(current_period, MAX_REQUEST_LIGHT_CLIENT_UPDATES)
-            .await?;
-        for update in updates {
-            self.verify_update(&update)?;
-            self.apply_update(&update);
-        }
+        let now = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
+        let time_to_next_slot = next_slot_timestamp - now;
+        let next_update = time_to_next_slot + 4;
+
+        std::time::Duration::from_secs(next_update)
+    }
+
+    pub async fn advance(&mut self) -> Result<()> {
         let finality_update = self.rpc.get_finality_update().await?;
         self.verify_finality_update(&finality_update)?;
-        self.apply_finality_update(&finality_update)?;
+        self.apply_finality_update(&finality_update);
+
+        if self.store.next_sync_committee.is_none() {
+            let current_period = calc_sync_period(self.store.finalized_header.slot);
+            let mut updates = self.rpc.get_updates(current_period, 1).await?;
+
+            if updates.len() == 1 {
+                let update = updates.get_mut(0).unwrap();
+                let res = self.verify_update(update);
+
+                if res.is_ok() {
+                    self.apply_update(update);
+                    return Ok(());
+                }
+            }
+        }
+        self.store_finality_update(finality_update);
 
         Ok(())
     }
 
     fn apply_update(&mut self, update: &Update) {
-        let update = GenericUpdate::from(update);
-        self.apply_generic_update(&update);
+        let generic_update = GenericUpdate::from(update);
+        self.apply_generic_update(&generic_update);
     }
 
-    pub fn apply_finality_update(&mut self, update: &FinalityUpdate) -> Result<()> {
-        let update = GenericUpdate::from(update);
-        self.apply_generic_update(&update);
-        Ok(())
+    fn apply_finality_update(&mut self, update: &FinalityUpdate) {
+        let generic_update = GenericUpdate::from(update);
+        self.apply_generic_update(&generic_update);
     }
 
-    pub fn apply_generic_update(&mut self, update: &GenericUpdate) {
+    fn apply_generic_update(&mut self, update: &GenericUpdate) {
         let committee_bits = &update.sync_aggregate.sync_committee_bits.num_set_bits();
 
         self.store.current_max_active_participants = u64::max(
@@ -165,19 +246,28 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             && self.has_finality_update(update)
             && update_finalized_period == update_attested_period;
 
+        let update_is_newer = update_finalized_slot > self.store.finalized_header.slot;
         let should_apply_update = {
             let has_majority = committee_bits * 3 >= 512 * 2;
-            let update_is_newer = update_finalized_slot > self.store.finalized_header.slot;
             let good_update = update_is_newer || update_has_finalized_next_committee;
 
             has_majority && good_update
         };
+
+        if self.enable_emitor && update_is_newer {
+            self.new_block_emitors.iter().for_each(|emitor| {
+                if let Err(e) = emitor.send(update.finalized_header.clone().unwrap()) {
+                    println!("[eth_light_client] new_block emitor error: {}", e);
+                }
+            });
+        }
 
         if should_apply_update {
             let store_period = calc_sync_period(self.store.finalized_header.slot);
 
             if self.store.next_sync_committee.is_none() {
                 self.store.next_sync_committee = update.next_sync_committee.clone();
+                self.store.next_sync_committee_branch = update.next_sync_committee_branch.clone();
             } else if update_finalized_period == store_period + 1 {
                 self.store.current_sync_committee = self.store.next_sync_committee.clone().unwrap();
                 self.store.next_sync_committee = update.next_sync_committee.clone();
@@ -188,8 +278,6 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
 
             if update_finalized_slot > self.store.finalized_header.slot {
                 self.store.finalized_header = update.finalized_header.clone().unwrap();
-                // self.log_finality_update(update);
-
                 if self.store.finalized_header.slot % 32 == 0 {
                     let checkpoint_res = self.store.finalized_header.tree_hash_root();
                     self.last_checkpoint = Some(checkpoint_res.into())
@@ -206,7 +294,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         update.finalized_header.is_some() && update.finality_branch.is_some()
     }
 
-    pub fn verify_finality_update(&self, update: &FinalityUpdate) -> Result<()> {
+    pub(crate) fn verify_finality_update(&self, update: &FinalityUpdate) -> Result<()> {
         let update = GenericUpdate::from(update);
         self.verify_generic_update(&update)
     }
@@ -373,8 +461,10 @@ pub struct LightClientStore {
     pub finalized_header: Header,
     pub current_sync_committee: SyncCommittee,
     pub next_sync_committee: Option<SyncCommittee>,
+    pub next_sync_committee_branch: Option<Vec<H256>>,
     pub previous_max_active_participants: u64,
     pub current_max_active_participants: u64,
+    pub finality_updates: HashMap<u64, Update>,
 }
 
 pub struct NimbusRpc {
@@ -449,34 +539,78 @@ impl ConsensusRpc for NimbusRpc {
 
 pub struct LightClient {
     pub chain_id: ChainId,
-    pub consensus_client: ConsensusClient<NimbusRpc>,
+    pub consensus_client: Arc<Mutex<ConsensusClient<NimbusRpc>>>,
+    pub rt: Arc<TokioRuntime>,
 }
 
 impl LightClient {
-    pub fn from_config(config: ChainConfig) -> Result<Self, Error> {
-        let eth_config: EthChainConfig = config.try_into()?;
+    pub fn from_config(config: &EthChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
+        let client = ConsensusClient::<NimbusRpc>::new(
+            &config.rpc_addr,
+            &config.initial_checkpoint,
+            Arc::new(config.clone()),
+        );
         let light_client = LightClient {
-            chain_id: eth_config.id.clone(),
-            consensus_client: ConsensusClient::<NimbusRpc> {
-                rpc: NimbusRpc::new(&eth_config.rpc_addr.as_ref().unwrap().clone()),
-                store: Default::default(),
-                initial_checkpoint: eth_config.initial_checkpoint,
-                last_checkpoint: None,
-                config: Arc::new(eth_config), // should fill real world data
-            },
+            chain_id: config.id.clone(),
+            consensus_client: Arc::new(Mutex::new(client)),
+            rt,
         };
         Ok(light_client)
+    }
+
+    pub fn subscribe(&mut self) -> UnboundedReceiver<Header> {
+        self.rt.block_on(self.consensus_client.lock()).subscribe()
+    }
+
+    pub fn bootstrap(&mut self) -> Result<(), Error> {
+        let client = self.consensus_client.clone();
+        self.rt
+            .block_on(self.rt.block_on(client.lock()).sync())
+            .map_err(|_| Error::create_client(self.chain_id.to_string()))?;
+        tokio::spawn(async move {
+            loop {
+                let res = client.lock().await.advance().await;
+                if let Err(err) = res {
+                    println!("[eth_light_client] consensus error: {}", err);
+                }
+
+                let next_update = client.lock().await.duration_until_next_update();
+                tokio::time::sleep(next_update).await;
+            }
+        });
+        Ok(())
+    }
+
+    pub fn get_finality_update(&self, finality_slot: u64) -> Option<Update> {
+        self.rt
+            .block_on(self.consensus_client.lock())
+            .get_finality_update(finality_slot)
+    }
+
+    pub fn get_finality_updates_from(&self, mut finality_slot: u64) -> Vec<Update> {
+        let client = self.rt.block_on(self.consensus_client.lock());
+        let mut updates = vec![];
+        while let Some(update) = client.get_finality_update(finality_slot) {
+            updates.push(update);
+            finality_slot += 1;
+        }
+        updates
     }
 }
 
 impl super::LightClient<EthChain> for LightClient {
     fn header_and_minimal_set(
         &mut self,
-        _trusted: Height,
-        _target: Height,
-        _client_state: &AnyClientState,
+        trusted: Height,
+        target: Height,
+        client_state: &AnyClientState,
     ) -> Result<Verified<Header>, Error> {
-        todo!()
+        self.verify(trusted, target, client_state)?;
+        let eth_client_state: &EthClientState = client_state.try_into()?;
+        Ok(Verified {
+            target: eth_client_state.lightclient_update.finalized_header.clone(),
+            supporting: vec![],
+        })
     }
 
     fn verify(
@@ -485,10 +619,9 @@ impl super::LightClient<EthChain> for LightClient {
         _target: Height,
         client_state: &AnyClientState,
     ) -> Result<Verified<ChainId>, Error> {
-        let eth_client_state: &EthClientState = client_state.try_into().map_err(|_| {
-            Error::client_type_mismatch(ClientType::Eth, client_state.client_type())
-        })?;
-        self.consensus_client
+        let eth_client_state: &EthClientState = client_state.try_into()?;
+        self.rt
+            .block_on(self.consensus_client.lock())
             .verify_update(&eth_client_state.lightclient_update)
             .map_err(|e| {
                 Error::light_client_state(ClientError::header_verification_failure(e.to_string()))
@@ -610,10 +743,11 @@ mod tests {
         };
         let checkpoint =
             hex::decode("1e591af1e90f2db918b2a132991c7c2ee9a4ab26da496bd6e71e4f0bd65ea870")
+                .unwrap()
+                .try_into()
                 .unwrap();
 
-        let mut client =
-            ConsensusClient::new("src/testdata/", &checkpoint, Arc::new(config)).unwrap();
+        let mut client = ConsensusClient::new("src/testdata/", &checkpoint, Arc::new(config));
         client.bootstrap().await.unwrap();
         client
     }
