@@ -2,6 +2,9 @@ use ibc_relayer_types::clients::ics07_eth::{
     client_state::ClientState as EthClientState,
     consensus_state::ConsensusState as EthConsensusState, header::Header as EthHeader,
 };
+use ibc_relayer_types::clients::ics07_tendermint::error as ics07_error;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
+use ibc_relayer_types::core::ics24_host::identifier::ClientId;
 use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
@@ -367,10 +370,23 @@ impl ChainEndpoint for EthChain {
 
     fn build_client_state(
         &self,
-        _slot: Height,
+        slot: Height,
         _settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
-        todo!()
+        if let Some(update) = self
+            .light_client
+            .get_finality_update(slot.revision_height())
+        {
+            let client_state = EthClientState {
+                chain_id: self.config.id.clone(),
+                lightclient_update: update,
+            };
+            Ok(client_state)
+        } else {
+            Err(Error::ics07(
+                ics07_error::Error::processed_height_not_found(Default::default(), slot),
+            ))
+        }
     }
 
     fn build_consensus_state(
