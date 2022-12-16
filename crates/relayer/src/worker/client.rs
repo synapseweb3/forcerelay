@@ -1,7 +1,9 @@
 use core::convert::Infallible;
 use core::time::Duration;
 use crossbeam_channel::Receiver;
+
 use std::time::Instant;
+use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
 use tracing::{debug, span, trace, warn};
 use uuid::Uuid;
 
@@ -9,7 +11,9 @@ use ibc_relayer_types::events::IbcEvent;
 use retry::delay::Fibonacci;
 use retry::retry_with_index;
 
+use crate::chain::requests::{PageRequest, QueryClientStatesRequest};
 use crate::chain::tracking::{TrackedMsgs, TrackingId};
+use crate::error::ErrorDetail::LightClientVerification;
 use crate::util::retry::clamp_total;
 use crate::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
 use crate::{
@@ -143,27 +147,76 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
 
                     WorkerCmd::NewBlock { height, .. } => {
                         let dst_chain = client.dst_chain();
-                        let client_state = dst_chain
-                            .build_client_state(height, crate::chain::client::ClientSettings::Ckb);
-                        if client_state.is_err() {
-                            trace!(
-                                "encounter error when building client state: {:?}",
-                                client_state.unwrap_err()
-                            );
-                            return Ok(Next::Continue);
-                        }
-                        let client_state = client_state.unwrap();
-                        let tracked_msgs = TrackedMsgs {
-                            msgs: vec![client_state.into()],
-                            tracking_id: TrackingId::Uuid(Uuid::default()),
+                        let src_chain = client.src_chain();
+                        let mut start_height = height.revision_height();
+                        let end_height = height.revision_height();
+
+                        let client_state = src_chain
+                            .build_client_state(height, crate::chain::client::ClientSettings::Eth);
+                        if let Err(err) = client_state {
+                            start_height = match err.detail() {
+                                LightClientVerification(e) => match &e.source {
+                                    MissingLastBlockId(height) => height.height.into(),
+                                    _ => u64::MAX,
+                                },
+                                _ => u64::MAX,
+                            };
+                            if start_height == u64::MAX {
+                                panic!("receive unexpected error: {:?}", err)
+                            }
                         };
-                        let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
-                        if ret.is_err() {
-                            trace!(
-                                "encounter error when sending messages: {:?}",
-                                ret.unwrap_err()
-                            );
+
+                        let mut i = start_height;
+                        const LIMIT: u64 = 10;
+                        while i <= end_height {
+                            let limit = if LIMIT < end_height - i + 1 {
+                                LIMIT
+                            } else {
+                                end_height - i + 1
+                            };
+                            let request = QueryClientStatesRequest {
+                                pagination: Some(PageRequest {
+                                    offset: i,
+                                    limit,
+                                    ..Default::default()
+                                }),
+                            };
+                            let client_states = src_chain.query_clients(request).unwrap();
+                            let len = client_states.len() as u64;
+                            trace!("get ETH headers from {} to {}", i, i + len - 1);
+                            let tracked_msgs = TrackedMsgs {
+                                msgs: client_states
+                                    .into_iter()
+                                    .map(|s| s.client_state.into())
+                                    .collect(),
+                                tracking_id: TrackingId::Uuid(Uuid::default()),
+                            };
+                            let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
+                            if ret.is_ok() {
+                                trace!(
+                                    "ETH headers from {} to {} are relayed to CKB",
+                                    i,
+                                    i + len - 1
+                                );
+                                if len < limit {
+                                    trace!("can't find enought ETH header to relay");
+                                    return Ok(Next::Continue);
+                                }
+                                i += len;
+                            } else {
+                                trace!(
+                                    "encounter error when sending messages: {:?}",
+                                    ret.unwrap_err()
+                                );
+                                return Ok(Next::Continue);
+                                // TODO: how to handle situation when failling to send header?
+                            }
                         }
+                        trace!(
+                            "finish relay for ETH headers from {} to {}",
+                            start_height,
+                            end_height
+                        );
                     }
                     WorkerCmd::ClearPendingPackets => {}
                 }
