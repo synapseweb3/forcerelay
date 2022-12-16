@@ -170,9 +170,30 @@ impl ChainEndpoint for EthChain {
 
     fn query_clients(
         &self,
-        _request: QueryClientStatesRequest,
+        request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
-        todo!()
+        let pagination = request.pagination;
+        if pagination.is_none() {
+            return Err(Error::query("pagination is none".to_string()));
+        }
+        let pagination = pagination.unwrap();
+        let start_height = pagination.offset;
+        let mut client_states = Vec::new();
+        for i in 0..pagination.limit {
+            if let Some(update) = self.light_client.get_finality_update(start_height + i) {
+                let client_state = IdentifiedAnyClientState {
+                    client_id: ClientId::new(ClientType::Eth, 0).unwrap(),
+                    client_state: AnyClientState::Eth(EthClientState {
+                        chain_id: self.config.id.clone(),
+                        lightclient_update: update,
+                    }),
+                };
+                client_states.push(client_state);
+            } else {
+                break;
+            }
+        }
+        Ok(client_states)
     }
 
     fn query_client_state(
