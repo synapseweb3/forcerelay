@@ -1541,6 +1541,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "derivation-path"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e5c37193a1db1d8ed868c03ec7b152175f26160a5b740e5e484143877e0adf0"
+
+[[package]]
 name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1691,6 +1697,7 @@ version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e9c280362032ea4203659fc489832d0204ef09f247a0506f170dafcac08c369"
 dependencies = [
+ "serde",
  "signature",
 ]
 
@@ -1702,8 +1709,23 @@ checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
+ "rand 0.7.3",
+ "serde",
+ "serde_bytes",
  "sha2 0.9.9",
  "zeroize",
+]
+
+[[package]]
+name = "ed25519-dalek-bip32"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d2be62a4061b872c8c0873ee4fc6f101ce7b889d039f019c5fa2af471a59908"
+dependencies = [
+ "derivation-path",
+ "ed25519-dalek",
+ "hmac",
+ "sha2 0.10.6",
 ]
 
 [[package]]
@@ -3016,7 +3038,7 @@ dependencies = [
 
 [[package]]
 name = "ibc-chain-registry"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "flex-error",
@@ -3034,7 +3056,7 @@ dependencies = [
 
 [[package]]
 name = "ibc-integration-test"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "http",
  "ibc-relayer",
@@ -3051,9 +3073,9 @@ dependencies = [
 
 [[package]]
 name = "ibc-proto"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "761c5a16ce1ac9943bfd46ddad61512a0e5e02f527abed578b7fae342c8cd5e2"
+checksum = "32e01271bba1bcd3065da99a2288bdc2b539045c780b641bfe40076fdb4c211c"
 dependencies = [
  "base64 0.13.1",
  "bytes",
@@ -3067,13 +3089,14 @@ dependencies = [
 
 [[package]]
 name = "ibc-relayer"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
  "bech32 0.9.1",
  "bitcoin",
+ "bs58",
  "bytes",
  "ckb-jsonrpc-types",
  "ckb-sdk",
@@ -3081,6 +3104,9 @@ dependencies = [
  "crossbeam-channel 0.5.6",
  "digest 0.10.6",
  "dirs-next",
+ "ed25519",
+ "ed25519-dalek",
+ "ed25519-dalek-bip32",
  "env_logger 0.10.0",
  "ethers",
  "ethers-contract",
@@ -3117,6 +3143,7 @@ dependencies = [
  "serial_test",
  "sha2 0.10.6",
  "signature",
+ "strum",
  "subtle-encoding",
  "tendermint",
  "tendermint-light-client",
@@ -3139,7 +3166,7 @@ dependencies = [
 
 [[package]]
 name = "ibc-relayer-cli"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "abscissa_core",
  "atty",
@@ -3153,6 +3180,7 @@ dependencies = [
  "eyre",
  "flex-error",
  "futures",
+ "hdpath",
  "http",
  "humantime",
  "ibc-chain-registry",
@@ -3178,7 +3206,7 @@ dependencies = [
 
 [[package]]
 name = "ibc-relayer-rest"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "crossbeam-channel 0.5.6",
  "ibc-relayer",
@@ -3193,7 +3221,7 @@ dependencies = [
 
 [[package]]
 name = "ibc-relayer-types"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "bls",
  "bytes",
@@ -3234,7 +3262,7 @@ dependencies = [
 
 [[package]]
 name = "ibc-telemetry"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "dashmap",
  "ibc-relayer-types",
@@ -3251,12 +3279,13 @@ dependencies = [
 
 [[package]]
 name = "ibc-test-framework"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "color-eyre",
  "crossbeam-channel 0.5.6",
  "eyre",
  "flex-error",
+ "hdpath",
  "hex",
  "http",
  "ibc-proto",
@@ -6184,9 +6213,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eeb6f9c129bc9f1a3c38bc91c63a5e8d3c00ed998e7fa4ca44e06467466d0e77"
+checksum = "c518c082146825f10d6f9a32159ae46edcfd7dae8ac630c8067594bb2a784d72"
 dependencies = [
  "bytes",
  "ed25519",
@@ -6214,9 +6243,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint-config"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "414d0e7b47e20accc2e950fa623e76269eb0daeb8a20b6d7af2a61211f2806bf"
+checksum = "6f58b86374e3bcfc8135770a6c55388fce101c00de4a5f03224fa5830c9240b7"
 dependencies = [
  "flex-error",
  "serde",
@@ -6228,9 +6257,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint-light-client"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb02103eb4c9e71ebf0b330fd78885cc5ce11f8714cdc90dcb3b9d26ac1a61a8"
+checksum = "9ab1450566e4347f3a81e27d3e701d74313f9fc2efb072fc3f49e0a762cb2a0f"
 dependencies = [
  "contracts",
  "crossbeam-channel 0.4.4",
@@ -6250,9 +6279,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint-light-client-verifier"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56df17ee76ef1e482804443b0d66673d2c8be38ad58913c09120b64d35777aba"
+checksum = "c742bb914f9fb025ce0e481fbef9bb59c94d5a4bbd768798102675a2e0fb7440"
 dependencies = [
  "derive_more",
  "flex-error",
@@ -6263,9 +6292,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint-proto"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5895470f28c530f8ae8c4071bf8190304ce00bd131d25e81730453124a3375c"
+checksum = "890f1fb6dee48900c85f0cdf711ebf130e505ac09ad918cee5c34ed477973b05"
 dependencies = [
  "bytes",
  "flex-error",
@@ -6281,9 +6310,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint-rpc"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "367e0417ca8bb40edc0a7af65600840f7c199b0b6109fdb12c5827733bec155f"
+checksum = "06df4715f9452ec0a21885d6da8d804799455ba50d8bc40be1ec1c800afd4bd8"
 dependencies = [
  "async-trait",
  "async-tungstenite",
@@ -6315,9 +6344,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint-testgen"
-version = "0.27.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ef33edec3a7ae9d5a3ba488ade1b50d72b564690be0b1a23e67e35673053ec7"
+checksum = "05912d3072284786c0dec18e82779003724e0da566676fbd90e4fba6845fd81a"
 dependencies = [
  "ed25519-dalek",
  "gumdrop",
