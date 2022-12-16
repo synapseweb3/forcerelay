@@ -1,9 +1,12 @@
+use ckb_types::core::TransactionBuilder;
 use ibc_relayer_types::clients::ics07_ckb::{
     client_state::ClientState as CkbClientState,
     consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
     light_block::LightBlock as CkbLightBlock,
 };
-use ibc_relayer_types::clients::ics07_eth::client_state::ClientState as EthClient;
+use ibc_relayer_types::clients::ics07_eth::{
+    client_state::ClientState as EthClient, types::Update as EthUpdate,
+};
 use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
@@ -20,6 +23,7 @@ use ibc_relayer_types::{
 };
 use semver::Version;
 use std::sync::Arc;
+use tendermint_light_client::errors::Error as LightClientError;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -56,11 +60,57 @@ use super::{
 mod rpc_client;
 use rpc_client::RpcClient;
 
+#[derive(Default)]
+pub struct EthEndpoint {
+    pub latest_slot: u64,
+    pub header_upperbound: u8,
+    pub queue: Vec<EthUpdate>,
+}
+
 pub struct CkbChain {
     pub rt: Arc<TokioRuntime>,
     pub rpc_client: RpcClient,
     pub config: CkbChainConfig,
     pub keybase: KeyRing<Secp256k1KeyPair>,
+    pub eth_endpoint: EthEndpoint,
+}
+
+impl CkbChain {
+    fn create_eth_client(&mut self) -> Result<Vec<IbcEventWithHeight>, Error> {
+        Ok(vec![])
+    }
+
+    fn update_eth_client(
+        &mut self,
+        header_update: Vec<EthUpdate>,
+    ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        if header_update.is_empty() {
+            return Err(Error::empty_upgraded_client_state());
+        }
+        let start_slot = header_update[0].finalized_header.slot;
+        for i in 0..header_update.len() {
+            if header_update[i].finalized_header.slot != i as u64 + start_slot {
+                return Err(Error::send_tx("uncontinuous header slot".to_owned()));
+            }
+        }
+        let mut expected_start_slot = self.eth_endpoint.latest_slot + 1;
+        if let Some(tip) = self.eth_endpoint.queue.last() {
+            expected_start_slot = tip.finalized_header.slot + 1;
+        }
+        if start_slot != expected_start_slot {
+            let height = expected_start_slot.try_into().expect("slot to height");
+            return Err(Error::light_client_verification(
+                self.id().to_string(),
+                LightClientError::missing_last_block_id(height),
+            ));
+        }
+        // TODO
+        let _tx = header_update
+            .chunks(self.eth_endpoint.header_upperbound.into())
+            .map(|_updates| TransactionBuilder::default().build())
+            .collect::<Vec<_>>();
+        Ok(vec![])
+    }
 }
 
 impl ChainEndpoint for CkbChain {
@@ -79,11 +129,13 @@ impl ChainEndpoint for CkbChain {
         let rpc_client = RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc);
         let keybase =
             KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
+
         Ok(CkbChain {
             rt,
             rpc_client,
             config,
             keybase,
+            eth_endpoint: Default::default(),
         })
     }
 
@@ -122,18 +174,19 @@ impl ChainEndpoint for CkbChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         match tracked_msgs.tracking_id {
             TrackingId::Static(NonCosmos::ETH_CREATE_CLIENT) => {
-                // TODO
-                Ok(vec![])
+                return self.create_eth_client();
             }
             TrackingId::Static(NonCosmos::ETH_UPDATE_CLIENT) => {
-                let _clients = tracked_msgs
+                let updates = tracked_msgs
                     .msgs
                     .into_iter()
                     .map(|msg| msg.try_into())
                     .collect::<Result<Vec<EthClient>, _>>()
-                    .map_err(|e| Error::send_tx(e.to_string()))?;
-                // TODO
-                Ok(vec![])
+                    .map_err(|e| Error::send_tx(e.to_string()))?
+                    .into_iter()
+                    .map(|client| client.lightclient_update)
+                    .collect();
+                return self.update_eth_client(updates);
             }
             _ => Err(Error::send_tx("unknown msg".to_owned())),
         }
