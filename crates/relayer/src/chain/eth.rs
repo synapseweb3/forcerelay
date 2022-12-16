@@ -24,6 +24,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 use crate::chain::eth::event::monitor::EthEventMonitor;
 use crate::event::monitor::TxMonitorCmd;
+use crate::keyring::Secp256k1KeyPair;
 use crate::light_client::LightClient;
 use crate::{
     account::Balance,
@@ -69,6 +70,7 @@ impl ChainEndpoint for EthChain {
     type Header = EthHeader;
     type ConsensusState = EthConsensusState;
     type ClientState = EthClientState;
+    type SigningKeyPair = Secp256k1KeyPair;
 
     fn config(&self) -> ChainConfig {
         ChainConfig::Eth(self.config.clone())
@@ -93,11 +95,11 @@ impl ChainEndpoint for EthChain {
         Ok(HealthCheck::Healthy)
     }
 
-    fn keybase(&self) -> &crate::keyring::KeyRing {
+    fn keybase(&self) -> &crate::keyring::KeyRing<Self::SigningKeyPair> {
         todo!()
     }
 
-    fn keybase_mut(&mut self) -> &mut crate::keyring::KeyRing {
+    fn keybase_mut(&mut self) -> &mut crate::keyring::KeyRing<Self::SigningKeyPair> {
         todo!()
     }
 

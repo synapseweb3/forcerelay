@@ -23,10 +23,10 @@ use std::sync::Arc;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime as TokioRuntime;
 
-use crate::keyring::KeyRing;
+use crate::keyring::{KeyRing, Secp256k1KeyPair};
 use crate::{
     account::Balance,
-    chain::cosmos::encode::key_entry_to_signer,
+    chain::cosmos::encode::key_pair_to_signer,
     chain::endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::ckb::ChainConfig as CkbChainConfig,
@@ -60,7 +60,7 @@ pub struct CkbChain {
     pub rt: Arc<TokioRuntime>,
     pub rpc_client: RpcClient,
     pub config: CkbChainConfig,
-    pub keybase: KeyRing,
+    pub keybase: KeyRing<Secp256k1KeyPair>,
 }
 
 impl ChainEndpoint for CkbChain {
@@ -68,6 +68,7 @@ impl ChainEndpoint for CkbChain {
     type Header = CkbHeader;
     type ConsensusState = CkbConsensusState;
     type ClientState = CkbClientState;
+    type SigningKeyPair = Secp256k1KeyPair;
 
     fn config(&self) -> ChainConfig {
         ChainConfig::Ckb(self.config.clone())
@@ -94,11 +95,11 @@ impl ChainEndpoint for CkbChain {
         Ok(HealthCheck::Healthy)
     }
 
-    fn keybase(&self) -> &KeyRing {
+    fn keybase(&self) -> &KeyRing<Self::SigningKeyPair> {
         &self.keybase
     }
 
-    fn keybase_mut(&mut self) -> &mut KeyRing {
+    fn keybase_mut(&mut self) -> &mut KeyRing<Self::SigningKeyPair> {
         &mut self.keybase
     }
 
@@ -107,7 +108,7 @@ impl ChainEndpoint for CkbChain {
             .keybase()
             .get_key(&self.config.key_name)
             .map_err(Error::key_base)?;
-        let signer = key_entry_to_signer(&key_entry, "ckb")?;
+        let signer = key_pair_to_signer(&key_entry)?;
         Ok(signer)
     }
 
