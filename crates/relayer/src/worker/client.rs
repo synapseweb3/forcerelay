@@ -148,6 +148,12 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                     WorkerCmd::NewBlock { height, .. } => {
                         let dst_chain = client.dst_chain();
                         let src_chain = client.src_chain();
+                        if !matches!(src_chain.config().unwrap(), ChainConfig::Eth(_))
+                            || !matches!(dst_chain.config().unwrap(), ChainConfig::Ckb(_))
+                        {
+                            trace!("ignore header relay while src chain is not eth or dst chain is not ckb");
+                            return Ok(Next::Continue);
+                        }
                         let client_state = src_chain
                             .build_client_state(height, crate::chain::client::ClientSettings::Eth)
                             .unwrap();
