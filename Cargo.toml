@@ -7,6 +7,7 @@ members = [
     "crates/relayer-types",
     "crates/relayer-cli",
     "crates/relayer-rest",
+    "crates/relayer-storage",
     "crates/telemetry",
     "crates/chain-registry",
     "tools/integration-test",
@@ -22,7 +23,3 @@ members = [
 # tendermint-light-client = { git = "https://github.com/informalsystems/tendermint-rs", branch = "v0.23.x" }
 # tendermint-light-client-verifier = { git = "https://github.com/informalsystems/tendermint-rs", branch = "v0.23.x" }
 # tendermint-testgen      = { git = "https://github.com/informalsystems/tendermint-rs", branch = "v0.23.x" }
-eth2_hashing = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }
-eth2_serde_utils = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }
-eth2_ssz = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }
-tree_hash = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }

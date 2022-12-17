@@ -21,9 +21,16 @@ profiling = []
 telemetry = ["ibc-telemetry"]
 
 [dependencies]
-ibc-proto         = { version = "0.24.0" }
-ibc-telemetry     = { version = "0.21.0", path = "../telemetry", optional = true }
-ibc-relayer-types = { version = "0.21.0", path = "../relayer-types", features = ["mocks"] }
+ibc-proto           = { version = "0.24.0" }
+ibc-telemetry       = { version = "0.21.0", path = "../telemetry", optional = true }
+ibc-relayer-types   = { version = "0.21.0", path = "../relayer-types", features = ["mocks"] }
+ibc-relayer-storage = { version = "0.1.0",  path = "../relayer-storage" }
+
+eth2_types       = { git = "https://github.com/yangby-cryptape/lighthouse", rev = "62dc610", package = "types" }
+tree_hash_derive = { git = "https://github.com/yangby-cryptape/lighthouse", rev = "62dc610" }
+tree_hash        = { git = "https://github.com/yangby-cryptape/lighthouse", rev = "62dc610" }
+
+eth_light_client_in_ckb-verification = { git = "https://github.com/yangby-cryptape/eth-light-client-in-ckb", rev = "fa03b54", package = "eth_light_client_in_ckb-verification" }
 
 subtle-encoding = "0.5"
 humantime-serde = "1.1.1"
@@ -72,8 +79,6 @@ reqwest = { version = "0.11", features = ["json"]}
 reqwest-middleware = "0.1"
 reqwest-retry = "0.1"
 eyre = "0.6"
-tree_hash_derive = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }
-tree_hash = { git = "https://github.com/sigp/lighthouse", rev = "bf533c8e42cc73c35730e285c21df8add0195369" }
 ethers = { version = "1.0.0", features = ["rustls", "ws"] }
 ethers-contract = { version = "1.0.0" }
 ethers-providers = { version = "1.0.0" }

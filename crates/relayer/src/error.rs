@@ -22,6 +22,7 @@ use tonic::{
     Status as GrpcStatus,
 };
 
+use ibc_relayer_storage::error::Error as StorageError;
 use ibc_relayer_types::{
     applications::ics29_fee::error::Error as FeeError,
     clients::ics07_tendermint::error as tendermint_error,
@@ -285,6 +286,10 @@ define_error! {
         Ics29
             [ FeeError ]
             | _ | { "ICS 29 error" },
+
+        StorageError
+            { inner: StorageError }
+            |e| { format!("storage error {}", e.inner) },
 
         InvalidUri
             { uri: String }
@@ -559,6 +564,12 @@ define_error! {
             |e| {
                 format!("Invalid key type {} for the current chain", e.key_type)
             }
+    }
+}
+
+impl From<StorageError> for Error {
+    fn from(err: StorageError) -> Error {
+        Error::storage_error(err)
     }
 }
 
