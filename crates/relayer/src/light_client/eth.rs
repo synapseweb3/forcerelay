@@ -587,12 +587,18 @@ impl LightClient {
             .get_finality_update(finality_slot)
     }
 
-    pub fn get_finality_updates_from(&self, mut finality_slot: u64) -> Vec<Update> {
+    pub fn get_finality_updates_from(&self, mut finality_slot: u64, limit: u64) -> Vec<Update> {
         let client = self.rt.block_on(self.consensus_client.lock());
         let mut updates = vec![];
+        let is_limit = limit != 0;
+        let mut count = 0;
         while let Some(update) = client.get_finality_update(finality_slot) {
             updates.push(update);
             finality_slot += 1;
+            count += 1;
+            if is_limit && count == limit {
+                break;
+            }
         }
         updates
     }
