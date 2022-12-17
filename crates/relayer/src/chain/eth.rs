@@ -28,6 +28,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 use crate::chain::eth::event::monitor::EthEventMonitor;
 use crate::event::monitor::TxMonitorCmd;
 use crate::keyring::Secp256k1KeyPair;
+use crate::light_client::eth::{ConsensusClient, NimbusRpc};
 use crate::light_client::LightClient;
 use crate::{
     account::Balance,
@@ -433,10 +434,15 @@ impl EthChain {
     fn init_event_monitor(&self) -> Result<TxMonitorCmd, Error> {
         crate::time!("eth_init_event_monitor");
 
+        let header_receiver =
+            ConsensusClient::<NimbusRpc>::new("", &[0; 32], Arc::new(self.config.clone()))
+                .subscribe();
+        // TODO: configure URLs
         let (event_monitor, monitor_tx) = EthEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
-            String::from(""), // TODO: send string from chain config
+            String::from(""),
+            header_receiver,
             self.rt.clone(),
         )
         .map_err(Error::event_monitor)?;
