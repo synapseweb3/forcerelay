@@ -148,26 +148,37 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                     WorkerCmd::NewBlock { height, .. } => {
                         let dst_chain = client.dst_chain();
                         let src_chain = client.src_chain();
-                        let mut start_height = height.revision_height();
-                        let end_height = height.revision_height();
-
                         let client_state = src_chain
-                            .build_client_state(height, crate::chain::client::ClientSettings::Eth);
-                        if let Err(err) = client_state {
-                            start_height = match err.detail() {
-                                LightClientVerification(e) => match &e.source {
-                                    MissingLastBlockId(height) => height.height.into(),
-                                    _ => u64::MAX,
-                                },
-                                _ => u64::MAX,
-                            };
-                            if start_height == u64::MAX {
-                                panic!("receive unexpected error: {:?}", err)
-                            }
-                        };
+                            .build_client_state(height, crate::chain::client::ClientSettings::Eth)
+                            .unwrap();
 
+                        let tracked_msgs = TrackedMsgs {
+                            msgs: vec![client_state.into()],
+                            tracking_id: TrackingId::Uuid(Uuid::default()),
+                        };
+                        // try sending header
+                        let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
+                        if ret.is_ok() {
+                            trace!("finish relay for ETH headers {}", height.revision_height(),);
+                            return Ok(Next::Continue);
+                        }
+
+                        let end_height = height.revision_height();
+                        // returned err indicates headers falling behind
+                        let err = ret.unwrap_err();
+                        let start_height = match err.detail() {
+                            LightClientVerification(e) => match &e.source {
+                                MissingLastBlockId(height) => height.height.into(),
+                                _ => u64::MAX,
+                            },
+                            _ => u64::MAX,
+                        };
+                        if start_height == u64::MAX {
+                            panic!("receive unexpected error: {:?}", err)
+                        }
                         let mut i = start_height;
                         const LIMIT: u64 = 10;
+                        // header chasing
                         while i <= end_height {
                             let limit = if LIMIT < end_height - i + 1 {
                                 LIMIT
