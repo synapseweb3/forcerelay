@@ -13,6 +13,7 @@ use retry::retry_with_index;
 
 use crate::chain::requests::{PageRequest, QueryClientStatesRequest};
 use crate::chain::tracking::{TrackedMsgs, TrackingId};
+use crate::config::ChainConfig;
 use crate::error::ErrorDetail::LightClientVerification;
 use crate::util::retry::clamp_total;
 use crate::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
@@ -154,6 +155,7 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                             trace!("ignore header relay while src chain is not eth or dst chain is not ckb");
                             return Ok(Next::Continue);
                         }
+                        trace!("start to relayer header up to {}", height.revision_height());
                         let client_state = src_chain
                             .build_client_state(height, crate::chain::client::ClientSettings::Eth)
                             .unwrap();
@@ -168,8 +170,6 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                             trace!("finish relay for ETH headers {}", height.revision_height(),);
                             return Ok(Next::Continue);
                         }
-
-                        let end_height = height.revision_height();
                         // returned err indicates headers falling behind
                         let err = ret.unwrap_err();
                         let start_height = match err.detail() {
@@ -180,60 +180,48 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                             _ => u64::MAX,
                         };
                         if start_height == u64::MAX {
-                            panic!("receive unexpected error: {:?}", err)
+                            trace!("receive unexpected error: {:?}", err);
+                            return Ok(Next::Continue);
                         }
-                        let mut i = start_height;
-                        const LIMIT: u64 = 10;
-                        // header chasing
-                        while i <= end_height {
-                            let limit = if LIMIT < end_height - i + 1 {
-                                LIMIT
-                            } else {
-                                end_height - i + 1
-                            };
-                            let request = QueryClientStatesRequest {
-                                pagination: Some(PageRequest {
-                                    offset: i,
-                                    limit,
-                                    ..Default::default()
-                                }),
-                            };
-                            let client_states = src_chain.query_clients(request).unwrap();
-                            let len = client_states.len() as u64;
-                            trace!("get ETH headers from {} to {}", i, i + len - 1);
-                            let tracked_msgs = TrackedMsgs {
-                                msgs: client_states
-                                    .into_iter()
-                                    .map(|s| s.client_state.into())
-                                    .collect(),
-                                tracking_id: TrackingId::Uuid(Uuid::default()),
-                            };
-                            let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
-                            if ret.is_ok() {
-                                trace!(
-                                    "ETH headers from {} to {} are relayed to CKB",
-                                    i,
-                                    i + len - 1
-                                );
-                                if len < limit {
-                                    trace!("can't find enought ETH header to relay");
-                                    return Ok(Next::Continue);
-                                }
-                                i += len;
-                            } else {
-                                trace!(
-                                    "encounter error when sending messages: {:?}",
-                                    ret.unwrap_err()
-                                );
-                                return Ok(Next::Continue);
-                                // TODO: how to handle situation when failling to send header?
-                            }
-                        }
+                        let limit = height.revision_height() - start_height + 1;
+                        let request = QueryClientStatesRequest {
+                            pagination: Some(PageRequest {
+                                offset: start_height,
+                                limit,
+                                ..Default::default()
+                            }),
+                        };
+                        let client_states = src_chain.query_clients(request).unwrap();
+                        let len = client_states.len() as u64;
                         trace!(
-                            "finish relay for ETH headers from {} to {}",
+                            "get ETH headers from {} to {}",
                             start_height,
-                            end_height
+                            start_height + len - 1
                         );
+                        let tracked_msgs = TrackedMsgs {
+                            msgs: client_states
+                                .into_iter()
+                                .map(|s| s.client_state.into())
+                                .collect(),
+                            tracking_id: TrackingId::Uuid(Uuid::default()),
+                        };
+                        let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
+                        if ret.is_ok() {
+                            trace!(
+                                "ETH headers from {} to {} are relayed to CKB",
+                                start_height,
+                                start_height + len - 1
+                            );
+                            if len < limit {
+                                trace!("warning: can't find enought ETH header to relay");
+                            }
+                        } else {
+                            trace!(
+                                "encounter error when relaying ETH header: {:?}",
+                                ret.unwrap_err()
+                            );
+                            // TODO: how to handle fails of sending header?
+                        }
                     }
                     WorkerCmd::ClearPendingPackets => {}
                 }
