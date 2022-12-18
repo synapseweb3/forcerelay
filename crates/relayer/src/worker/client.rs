@@ -206,21 +206,24 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                             tracking_id: TrackingId::Uuid(Uuid::default()),
                         };
                         let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
-                        if ret.is_ok() {
-                            trace!(
-                                "ETH headers from {} to {} are relayed to CKB",
-                                start_height,
-                                start_height + len - 1
-                            );
-                            if len < limit {
-                                trace!("warning: can't find enought ETH header to relay");
+                        match ret {
+                            Ok(_) => {
+                                trace!(
+                                    "ETH headers from {} to {} are relayed to CKB",
+                                    start_height,
+                                    start_height + len - 1
+                                );
+                                if len < limit {
+                                    trace!("warning: can't find enought ETH header to relay");
+                                }
                             }
-                        } else {
-                            trace!(
-                                "encounter error when relaying ETH header: {:?}",
-                                ret.unwrap_err()
-                            );
-                            // TODO: how to handle fails of sending header?
+                            Err(_) => {
+                                trace!(
+                                    "encounter error when relaying ETH header: {:?}",
+                                    ret.unwrap_err()
+                                );
+                                // TODO: how to handle fails of sending header?
+                            }
                         }
                     }
                     WorkerCmd::ClearPendingPackets => {}
