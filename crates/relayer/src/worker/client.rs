@@ -4,7 +4,7 @@ use crossbeam_channel::Receiver;
 
 use std::time::Instant;
 use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
-use tracing::{debug, span, trace, warn};
+use tracing::{debug, error, span, trace, warn};
 use uuid::Uuid;
 
 use ibc_relayer_types::events::IbcEvent;
@@ -152,7 +152,7 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                         if !matches!(src_chain.config().unwrap(), ChainConfig::Eth(_))
                             || !matches!(dst_chain.config().unwrap(), ChainConfig::Ckb(_))
                         {
-                            trace!("ignore header relay while src chain is not eth or dst chain is not ckb");
+                            error!("ignore header relay while src chain is not eth or dst chain is not ckb");
                             return Ok(Next::Continue);
                         }
                         trace!("start to relayer header up to {}", height.revision_height());
@@ -180,7 +180,7 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                             _ => u64::MAX,
                         };
                         if start_height == u64::MAX {
-                            trace!("receive unexpected error: {:?}", err);
+                            error!("receive unexpected error: {:?}", err);
                             return Ok(Next::Continue);
                         }
                         let limit = height.revision_height() - start_height + 1;
@@ -218,7 +218,7 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                                 }
                             }
                             Err(_) => {
-                                trace!(
+                                error!(
                                     "encounter error when relaying ETH header: {:?}",
                                     ret.unwrap_err()
                                 );

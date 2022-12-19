@@ -20,7 +20,7 @@ use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonit
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tendermint_rpc::Url;
 use tokio::runtime::Runtime as TokioRuntime;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, info};
 
 type Client = Provider<Ws>;
 
@@ -159,8 +159,8 @@ impl EthEventMonitor {
     }
 
     fn process_event(&mut self, event: IBCEvents, meta: LogMeta) -> Result<()> {
-        println!("[event] = {:?}", event);
-        println!("[event_meta] = {:?}\n", meta);
+        info!("[event] = {:?}", event);
+        info!("[event_meta] = {:?}\n", meta);
         let batch = EventBatch {
             chain_id: self.chain_id.clone(),
             tracking_id: TrackingId::new_uuid(),
