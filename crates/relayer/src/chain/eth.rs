@@ -2,6 +2,9 @@ use ibc_relayer_types::clients::ics07_eth::{
     client_state::ClientState as EthClientState,
     consensus_state::ConsensusState as EthConsensusState, header::Header as EthHeader,
 };
+use ibc_relayer_types::clients::ics07_tendermint::error as ics07_error;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
+use ibc_relayer_types::core::ics24_host::identifier::ClientId;
 use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
@@ -170,9 +173,28 @@ impl ChainEndpoint for EthChain {
 
     fn query_clients(
         &self,
-        _request: QueryClientStatesRequest,
+        request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
-        todo!()
+        let pagination = request.pagination;
+        if pagination.is_none() {
+            return Err(Error::query("pagination is none".to_string()));
+        }
+        let pagination = pagination.unwrap();
+        let start_height = pagination.offset;
+        let limit = pagination.limit;
+        let client_states = self
+            .light_client
+            .get_finality_updates_from(start_height, limit)
+            .into_iter()
+            .map(|update| IdentifiedAnyClientState {
+                client_id: ClientId::new(ClientType::Eth, 0).unwrap(),
+                client_state: AnyClientState::Eth(EthClientState {
+                    chain_id: self.config.id.clone(),
+                    lightclient_update: update,
+                }),
+            })
+            .collect();
+        Ok(client_states)
     }
 
     fn query_client_state(
@@ -346,10 +368,23 @@ impl ChainEndpoint for EthChain {
 
     fn build_client_state(
         &self,
-        _slot: Height,
+        slot: Height,
         _settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
-        todo!()
+        if let Some(update) = self
+            .light_client
+            .get_finality_update(slot.revision_height())
+        {
+            let client_state = EthClientState {
+                chain_id: self.config.id.clone(),
+                lightclient_update: update,
+            };
+            Ok(client_state)
+        } else {
+            Err(Error::ics07(
+                ics07_error::Error::processed_height_not_found(Default::default(), slot),
+            ))
+        }
     }
 
     fn build_consensus_state(
@@ -393,13 +428,16 @@ impl ChainEndpoint for EthChain {
 }
 
 impl EthChain {
-    fn init_event_monitor(&self) -> Result<TxMonitorCmd, Error> {
+    fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
         crate::time!("eth_init_event_monitor");
 
+        let header_receiver = self.light_client.subscribe();
+        // TODO: configure URLs
         let (event_monitor, monitor_tx) = EthEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
-            String::from(""), // TODO: send string from chain config
+            String::from(""),
+            header_receiver,
             self.rt.clone(),
         )
         .map_err(Error::event_monitor)?;

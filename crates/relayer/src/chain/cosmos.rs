@@ -1829,7 +1829,10 @@ impl ChainEndpoint for CosmosSdkChain {
         height: ICSHeight,
         settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
-        let ClientSettings::Tendermint(settings) = settings;
+        let settings = match settings {
+            ClientSettings::Tendermint(settings) => settings,
+            ClientSettings::Eth => return Err(Error::build_client_state_failure()),
+        };
         let unbonding_period = self.unbonding_period()?;
         let trusting_period = settings
             .trusting_period

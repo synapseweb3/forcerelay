@@ -10,6 +10,7 @@ use crate::foreign_client::CreateOptions;
 #[derive(Clone, Debug)]
 pub enum ClientSettings {
     Tendermint(cosmos::client::Settings),
+    Eth,
 }
 
 impl ClientSettings {

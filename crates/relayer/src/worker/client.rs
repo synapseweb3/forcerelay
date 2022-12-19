@@ -1,13 +1,20 @@
 use core::convert::Infallible;
 use core::time::Duration;
 use crossbeam_channel::Receiver;
+
 use std::time::Instant;
-use tracing::{debug, span, trace, warn};
+use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
+use tracing::{debug, error, span, trace, warn};
+use uuid::Uuid;
 
 use ibc_relayer_types::events::IbcEvent;
 use retry::delay::Fibonacci;
 use retry::retry_with_index;
 
+use crate::chain::requests::{PageRequest, QueryClientStatesRequest};
+use crate::chain::tracking::{TrackedMsgs, TrackingId};
+use crate::config::ChainConfig;
+use crate::error::ErrorDetail::LightClientVerification;
 use crate::util::retry::clamp_total;
 use crate::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
 use crate::{
@@ -139,7 +146,86 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                         }
                     }
 
-                    WorkerCmd::NewBlock { .. } => {}
+                    WorkerCmd::NewBlock { height, .. } => {
+                        let dst_chain = client.dst_chain();
+                        let src_chain = client.src_chain();
+                        if !matches!(src_chain.config().unwrap(), ChainConfig::Eth(_))
+                            || !matches!(dst_chain.config().unwrap(), ChainConfig::Ckb(_))
+                        {
+                            error!("ignore header relay while src chain is not eth or dst chain is not ckb");
+                            return Ok(Next::Continue);
+                        }
+                        trace!("start to relayer header up to {}", height.revision_height());
+                        let client_state = src_chain
+                            .build_client_state(height, crate::chain::client::ClientSettings::Eth)
+                            .unwrap();
+
+                        let tracked_msgs = TrackedMsgs {
+                            msgs: vec![client_state.into()],
+                            tracking_id: TrackingId::Uuid(Uuid::default()),
+                        };
+                        // try sending header
+                        let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
+                        if ret.is_ok() {
+                            trace!("finish relay for ETH headers {}", height.revision_height(),);
+                            return Ok(Next::Continue);
+                        }
+                        // returned err indicates headers falling behind
+                        let err = ret.unwrap_err();
+                        let start_height = match err.detail() {
+                            LightClientVerification(e) => match &e.source {
+                                MissingLastBlockId(height) => height.height.into(),
+                                _ => u64::MAX,
+                            },
+                            _ => u64::MAX,
+                        };
+                        if start_height == u64::MAX {
+                            error!("receive unexpected error: {:?}", err);
+                            return Ok(Next::Continue);
+                        }
+                        let limit = height.revision_height() - start_height + 1;
+                        let request = QueryClientStatesRequest {
+                            pagination: Some(PageRequest {
+                                offset: start_height,
+                                limit,
+                                ..Default::default()
+                            }),
+                        };
+                        let client_states = src_chain.query_clients(request).unwrap();
+                        let len = client_states.len() as u64;
+                        trace!(
+                            "get ETH headers from {} to {}",
+                            start_height,
+                            start_height + len - 1
+                        );
+                        let tracked_msgs = TrackedMsgs {
+                            msgs: client_states
+                                .into_iter()
+                                .map(|s| s.client_state.into())
+                                .collect(),
+                            tracking_id: TrackingId::Uuid(Uuid::default()),
+                        };
+                        let ret = dst_chain.send_messages_and_wait_commit(tracked_msgs);
+                        match ret {
+                            Ok(_) => {
+                                trace!(
+                                    "ETH headers from {} to {} are relayed to CKB",
+                                    start_height,
+                                    start_height + len - 1
+                                );
+                                if len < limit {
+                                    trace!("warning: can't find enought ETH header to relay");
+                                }
+                            }
+                            Err(_) => {
+                                error!(
+                                    "encounter error when relaying ETH header: {:?}",
+                                    ret.unwrap_err()
+                                );
+                                // TODO: how to handle fails of sending header?
+                            }
+                        }
+                    }
                     WorkerCmd::ClearPendingPackets => {}
                 }
             }
