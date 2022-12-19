@@ -2,10 +2,7 @@ use std::str::FromStr;
 
 use serde::Serialize;
 
-use ibc_relayer::config::{
-    filter::{ChannelFilters, FilterPattern},
-    PacketFilter,
-};
+use ibc_relayer::config::filter::{ChannelFilters, FilterPattern, PacketFilter};
 use ibc_relayer_types::core::ics04_channel::channel::State;
 
 use ibc_test_framework::{
@@ -45,7 +42,7 @@ impl TestOverrides for IcaFilterTestAllow {
         config.mode.channels.enabled = true;
 
         for chain in &mut config.chains {
-            chain.packet_filter = self.packet_filter.clone();
+            chain.cosmos_mut().packet_filter = self.packet_filter.clone();
         }
     }
 
@@ -179,7 +176,7 @@ impl TestOverrides for IcaFilterTestDeny {
         config.mode.channels.enabled = true;
 
         for chain in &mut config.chains {
-            chain.packet_filter = PacketFilter::Deny(ChannelFilters::new(vec![(
+            chain.cosmos_mut().packet_filter = PacketFilter::Deny(ChannelFilters::new(vec![(
                 FilterPattern::Wildcard("ica*".parse().unwrap()),
                 FilterPattern::Wildcard("*".parse().unwrap()),
             )]));

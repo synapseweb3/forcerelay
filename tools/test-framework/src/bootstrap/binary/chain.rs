@@ -17,6 +17,7 @@ use std::fs;
 use std::path::Path;
 use tracing::{debug, info};
 
+use crate::bootstrap::binary::config::CosmosConfig;
 use crate::relayer::driver::RelayerDriver;
 use crate::types::binary::chains::ConnectedChains;
 use crate::types::binary::foreign_client::ForeignClientPair;
@@ -261,6 +262,7 @@ pub fn add_chain_config(config: &mut Config, running_node: &FullNode) -> Result<
    through external CLI.
 */
 pub fn save_relayer_config(config: &Config, config_path: &Path) -> Result<(), Error> {
+    let config = CosmosConfig::from(config.clone());
     let config_str = toml::to_string_pretty(&config)?;
 
     fs::write(config_path, &config_str)?;
