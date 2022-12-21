@@ -4,9 +4,9 @@
     trivial_casts,
     trivial_numeric_casts,
     unused_import_braces,
-    unused_qualifications,
+    unused_qualifications
 )]
-#![allow(clippy::too_many_arguments,rust_2018_idioms)]
+#![allow(clippy::too_many_arguments, rust_2018_idioms)]
 // TODO: disable unwraps:
 //  https://github.com/informalsystems/hermes/issues/987
 // #![cfg_attr(not(test), deny(clippy::unwrap_used))]
