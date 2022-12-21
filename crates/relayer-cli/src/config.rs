@@ -92,12 +92,14 @@ pub fn validate_config(config: &Config) -> Result<(), Diagnostic<Error>> {
             return Err(Diagnostic::Error(Error::duplicate_chains(c.id().clone())));
         }
 
-        let trust_threshold = c.cosmos().trust_threshold;
-        validate_trust_threshold(
-            c.id(),
-            TrustThreshold::new(trust_threshold.numerator(), trust_threshold.denominator())
-                .unwrap(),
-        )?;
+        if let ChainConfig::Cosmos(_) = c {
+            let trust_threshold = c.cosmos().trust_threshold;
+            validate_trust_threshold(
+                c.id(),
+                TrustThreshold::new(trust_threshold.numerator(), trust_threshold.denominator())
+                    .unwrap(),
+            )?;
+        }
 
         // Validate gas-related settings
         validate_gas_settings(c.id(), c)?;
@@ -163,14 +165,16 @@ fn validate_trust_threshold(
 
 fn validate_gas_settings(id: &ChainId, config: &ChainConfig) -> Result<(), Diagnostic<Error>> {
     // Check that the gas_adjustment option is not set
-    if let Some(gas_adjustment) = config.cosmos().gas_adjustment {
-        let gas_multiplier = gas_adjustment + 1.0;
+    if let ChainConfig::Cosmos(_) = config {
+        if let Some(gas_adjustment) = config.cosmos().gas_adjustment {
+            let gas_multiplier = gas_adjustment + 1.0;
 
-        return Err(Diagnostic::Error(Error::deprecated_gas_adjustment(
-            gas_adjustment,
-            gas_multiplier,
-            id.clone(),
-        )));
+            return Err(Diagnostic::Error(Error::deprecated_gas_adjustment(
+                gas_adjustment,
+                gas_multiplier,
+                id.clone(),
+            )));
+        }
     }
 
     Ok(())

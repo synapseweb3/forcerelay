@@ -147,7 +147,11 @@ fn subscribe(
 ) -> eyre::Result<(EventMonitor, Subscription)> {
     let (mut event_monitor, tx_cmd) = EventMonitor::new(
         chain_config.id().clone(),
-        chain_config.cosmos().websocket_addr.clone(),
+        match chain_config {
+            ChainConfig::Cosmos(_) => chain_config.cosmos().websocket_addr.clone(),
+            ChainConfig::Eth(_) => chain_config.eth().websocket_addr.clone(),
+            ChainConfig::Ckb(_) => "".parse().unwrap(),
+        },
         rt,
     )
     .map_err(|e| eyre!("could not initialize event monitor: {}", e))?;

@@ -235,7 +235,7 @@ impl ChainConfig {
         }
     }
 
-    pub fn eth(self) -> EthChainConfig {
+    pub fn eth(&self) -> &EthChainConfig {
         if let ChainConfig::Eth(e) = self {
             e
         } else {
