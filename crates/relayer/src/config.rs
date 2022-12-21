@@ -179,6 +179,7 @@ pub mod default {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
 pub enum ChainConfig {
     Cosmos(CosmosChainConfig),
     Eth(EthChainConfig),

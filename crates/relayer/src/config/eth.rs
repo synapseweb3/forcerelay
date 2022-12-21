@@ -11,12 +11,15 @@ use tendermint_rpc::Url;
 pub struct EthChainConfig {
     pub id: ChainId,
     pub genesis_time: u64,
+    #[serde(default)]
     pub genesis_root: H256,
     pub websocket_addr: Url,
+    #[serde(default)]
     pub initial_checkpoint: [u8; 32],
     pub key_name: String,
     pub rpc_addr: String,
     pub rpc_port: u16,
+    #[serde(default)]
     pub forks: Forks,
     pub max_checkpoint_age: u64,
 }
