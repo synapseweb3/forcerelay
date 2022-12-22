@@ -14,7 +14,7 @@ pub struct EthChainConfig {
     #[serde(default)]
     pub genesis_root: H256,
     pub websocket_addr: Url,
-    #[serde(default)]
+    #[serde(deserialize_with = "array_hex_deserialize")]
     pub initial_checkpoint: [u8; 32],
     pub key_name: String,
     pub rpc_addr: String,
@@ -22,6 +22,21 @@ pub struct EthChainConfig {
     #[serde(default)]
     pub forks: Forks,
     pub max_checkpoint_age: u64,
+}
+
+pub fn array_hex_deserialize<'de, D, const N: usize>(deserializer: D) -> Result<[u8; N], D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let val: String = serde::Deserialize::deserialize(deserializer)?;
+    let val = val.strip_prefix("0x").unwrap();
+    let v = hex::decode(val).unwrap();
+
+    let result = v.try_into().unwrap_or_else(|v: Vec<u8>| {
+        panic!("Expected a Vec of length {} but it was {}", N, v.len())
+    });
+
+    Ok(result)
 }
 
 impl EthChainConfig {
