@@ -82,13 +82,14 @@ impl ChainEndpoint for EthChain {
 
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: EthChainConfig = config.try_into()?;
-        let light_client = EthLightClient::from_config(&config, rt.clone())?;
+        let mut light_client = EthLightClient::from_config(&config, rt.clone())?;
         let keybase = KeyRing::new_secp256k1(
             crate::keyring::Store::Memory,
             "eth",
             &config.id,
         )
         .unwrap();
+        light_client.bootstrap()?;
         Ok(EthChain {
             rt,
             config,
