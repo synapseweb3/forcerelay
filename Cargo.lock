@@ -3098,6 +3098,7 @@ dependencies = [
  "bitcoin",
  "bs58",
  "bytes",
+ "ckb-hash",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",

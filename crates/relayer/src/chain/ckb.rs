@@ -1,4 +1,5 @@
-use ckb_types::core::TransactionBuilder;
+use ckb_jsonrpc_types::OutputsValidator;
+use ckb_sdk::NetworkType;
 use ibc_relayer_types::clients::ics07_ckb::{
     client_state::ClientState as CkbClientState,
     consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
@@ -57,22 +58,25 @@ use super::{
     },
 };
 
+mod assembler;
 mod rpc_client;
+mod signer;
+use assembler::TxAssembler;
 use rpc_client::RpcClient;
 
 #[derive(Default)]
 pub struct EthEndpoint {
     pub latest_slot: u64,
     pub header_upperbound: u8,
-    pub queue: Vec<EthUpdate>,
 }
 
 pub struct CkbChain {
     pub rt: Arc<TokioRuntime>,
-    pub rpc_client: RpcClient,
+    pub rpc_client: Arc<RpcClient>,
     pub config: CkbChainConfig,
     pub keybase: KeyRing<Secp256k1KeyPair>,
     pub eth_endpoint: EthEndpoint,
+    pub tx_assembler: TxAssembler,
 }
 
 impl CkbChain {
@@ -82,33 +86,49 @@ impl CkbChain {
 
     fn update_eth_client(
         &mut self,
-        header_update: Vec<EthUpdate>,
+        header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        if header_update.is_empty() {
+        if header_updates.is_empty()
+            || header_updates.len() > self.eth_endpoint.header_upperbound as usize
+        {
             return Err(Error::empty_upgraded_client_state());
         }
-        let start_slot = header_update[0].finalized_header.slot;
-        for i in 0..header_update.len() {
-            if header_update[i].finalized_header.slot != i as u64 + start_slot {
+        let start_slot = header_updates[0].finalized_header.slot;
+        for i in 0..header_updates.len() {
+            if header_updates[i].finalized_header.slot != i as u64 + start_slot {
                 return Err(Error::send_tx("uncontinuous header slot".to_owned()));
             }
         }
-        let mut expected_start_slot = self.eth_endpoint.latest_slot + 1;
-        if let Some(tip) = self.eth_endpoint.queue.last() {
-            expected_start_slot = tip.finalized_header.slot + 1;
+        if self.eth_endpoint.latest_slot > 0 {
+            let expected_start_slot = self.eth_endpoint.latest_slot + 1;
+            if start_slot != expected_start_slot {
+                let height = expected_start_slot.try_into().expect("slot to height");
+                return Err(Error::light_client_verification(
+                    self.id().to_string(),
+                    LightClientError::missing_last_block_id(height),
+                ));
+            }
         }
-        if start_slot != expected_start_slot {
-            let height = expected_start_slot.try_into().expect("slot to height");
-            return Err(Error::light_client_verification(
-                self.id().to_string(),
-                LightClientError::missing_last_block_id(height),
-            ));
-        }
-        // TODO
-        let _tx = header_update
-            .chunks(self.eth_endpoint.header_upperbound.into())
-            .map(|_updates| TransactionBuilder::default().build())
-            .collect::<Vec<_>>();
+        let (tx, inputs) =
+            self.rt
+                .block_on(self.tx_assembler.assemble_updates_into_transaction(
+                    &header_updates,
+                    &self.config.lightclient_contract_typeargs,
+                    &self.config.id.to_string(),
+                ))?;
+        let key: Secp256k1KeyPair = self
+            .keybase
+            .get_key(&self.config.key_name)
+            .map_err(Error::key_base)?;
+        let tx = signer::sign(tx, &inputs, vec![], key).map_err(Error::key_base)?;
+        self.rt
+            .block_on(
+                self.rpc_client
+                    .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
+            )
+            .map_err(|e| Error::rpc_response(e.to_string()))?;
+        // TODO: push header_updates into MMR store
+        self.eth_endpoint.latest_slot = header_updates.last().unwrap().finalized_header.slot;
         Ok(vec![])
     }
 }
@@ -126,16 +146,32 @@ impl ChainEndpoint for CkbChain {
 
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: CkbChainConfig = config.try_into()?;
-        let rpc_client = RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc);
+        let rpc_client = Arc::new(RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc));
         let keybase =
             KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
+
+        let chain_info = rt
+            .block_on(rpc_client.get_blockchain_info())
+            .map_err(|e| Error::rpc_response(e.to_string()))?;
+        let network = if chain_info.chain == "ckb" {
+            NetworkType::Mainnet
+        } else {
+            NetworkType::Testnet
+        };
+        let key: Secp256k1KeyPair = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
+        let tx_assembler = TxAssembler::new(rpc_client.clone(), &key.public_key, network);
+        let eth_endpoint = EthEndpoint {
+            latest_slot: 0,
+            header_upperbound: 15,
+        };
 
         Ok(CkbChain {
             rt,
             rpc_client,
             config,
             keybase,
-            eth_endpoint: Default::default(),
+            eth_endpoint,
+            tx_assembler,
         })
     }
 
