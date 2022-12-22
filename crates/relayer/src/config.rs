@@ -382,7 +382,13 @@ impl Config {
         channel_id: &ChannelId,
     ) -> bool {
         match self.find_chain(chain_id) {
-            Some(chain_config) => chain_config.packet_filter().is_allowed(port_id, channel_id),
+            Some(chain_config) => {
+                if !matches!(chain_config, ChainConfig::Cosmos(_)) {
+                    false
+                } else {
+                    chain_config.packet_filter().is_allowed(port_id, channel_id)
+                }
+            }
             None => false,
         }
     }

@@ -576,7 +576,9 @@ impl<'a, Chain: ChainHandle> ChainScanner<'a, Chain> {
         if !self.filtering_enabled() {
             return None;
         }
-
+        if !matches!(chain_config, ChainConfig::Cosmos(_)) {
+            return None
+        }
         match chain_config.packet_filter() {
             PacketFilter::Allow(ref filters) if filters.is_exact() => Some(filters),
             _ => None,
