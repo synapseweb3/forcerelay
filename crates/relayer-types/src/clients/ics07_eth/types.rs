@@ -126,6 +126,7 @@ pub struct Forks {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Fork {
     pub epoch: u64,
+    #[serde(deserialize_with = "fixed_vector_deserialize")]
     pub fork_version: FixedVector<u8, U4>,
 }
 
