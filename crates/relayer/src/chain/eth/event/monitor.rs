@@ -123,6 +123,7 @@ impl EthEventMonitor {
                 }
 
                 if let Ok(header) = self.header_receiver.try_recv() {
+                    info!("receive a new header: {:?}", header);
                     let height = Height::new(0, header.slot).unwrap();
                     let ibc_event_with_height = IbcEventWithHeight::new(
                         events::NewBlock::new(height.clone()).into(),
