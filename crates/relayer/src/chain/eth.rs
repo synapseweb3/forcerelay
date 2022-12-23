@@ -84,7 +84,7 @@ impl ChainEndpoint for EthChain {
         let config: EthChainConfig = config.try_into()?;
         let mut light_client = EthLightClient::from_config(&config, rt.clone())?;
         let keybase = KeyRing::new_secp256k1(
-            crate::keyring::Store::Memory,
+            Default::default(),
             "eth",
             &config.id,
         )
