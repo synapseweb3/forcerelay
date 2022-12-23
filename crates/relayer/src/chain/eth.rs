@@ -83,12 +83,7 @@ impl ChainEndpoint for EthChain {
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: EthChainConfig = config.try_into()?;
         let mut light_client = EthLightClient::from_config(&config, rt.clone())?;
-        let keybase = KeyRing::new_secp256k1(
-            Default::default(),
-            "eth",
-            &config.id,
-        )
-        .unwrap();
+        let keybase = KeyRing::new_secp256k1(Default::default(), "eth", &config.id).unwrap();
         light_client.bootstrap()?;
         Ok(EthChain {
             rt,
@@ -161,7 +156,10 @@ impl ChainEndpoint for EthChain {
         _key_name: Option<&str>,
         _denom: Option<&str>,
     ) -> Result<Balance, Error> {
-        todo!()
+        return Ok(Balance {
+            amount: "0.0".to_string(),
+            denom: "denom".to_string(),
+        });
     }
 
     fn query_all_balances(&self, _key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
