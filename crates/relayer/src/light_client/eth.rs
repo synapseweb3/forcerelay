@@ -567,7 +567,7 @@ impl LightClient {
         self.rt
             .block_on(self.rt.block_on(client.lock()).sync())
             .map_err(|_| Error::create_client(self.chain_id.to_string()))?;
-        tokio::spawn(async move {
+        self.rt.spawn(async move {
             loop {
                 let res = client.lock().await.advance().await;
                 if let Err(err) = res {
