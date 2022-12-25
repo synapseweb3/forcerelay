@@ -49,6 +49,8 @@ pub mod spawn;
 pub mod cmd;
 use cmd::SupervisorCmd;
 
+pub mod forcerelay;
+
 use self::{scan::ChainScanner, spawn::SpawnContext};
 
 type ArcBatch = Arc<monitor::Result<EventBatch>>;
