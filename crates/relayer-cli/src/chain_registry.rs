@@ -252,6 +252,9 @@ mod tests {
     async fn should_have_no_filter(test_chains: &[String]) -> Result<(), RegistryError> {
         let configs = get_configs(test_chains, None).await?;
         for config in configs {
+            if !matches!(config, ChainConfig::Cosmos(_)) {
+                continue;
+            }
             match config.packet_filter() {
                 PacketFilter::AllowAll => {}
                 _ => panic!("PacketFilter not allowed"),
@@ -273,6 +276,9 @@ mod tests {
         let configs = get_configs(test_chains, None).await?;
 
         for config in configs {
+            if !matches!(config, ChainConfig::Cosmos(_)) {
+                continue;
+            }
             match config.packet_filter() {
                 PacketFilter::Allow(channel_filter) => {
                     if config.id().as_str().contains("cosmoshub") {

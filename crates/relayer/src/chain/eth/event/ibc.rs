@@ -1760,4 +1760,25 @@ pub mod ibc {
         pub consensus_proof: ethers::core::types::Bytes,
         pub other_proof: ethers::core::types::Bytes,
     }
+
+    #[cfg(test)]
+    pub mod tests {
+        #[tokio::test]
+        async fn test_ethers_ws() {
+            use ethers::prelude::*;
+            use ethers::providers::Ws;
+            use std::time::Duration;
+
+            // let ws_endpoint = "wss://goerli.infura.io/ws/v3/eefd8ac2983a4de1b374d340b5611e1b";
+            let ws_endpoint = "wss://eth-mainnet.g.alchemy.com/v2/vx2dWhVQ6cMpf7vD-m3r1EUkNek3RKFG";
+            let ws = Ws::connect(ws_endpoint).await.unwrap();
+            println!("endpoint ready?: {}", ws.ready());
+            let provider = Provider::new(ws).interval(Duration::from_millis(2000));
+
+            let mut stream = provider.subscribe_blocks().await.unwrap().take(5);
+            while let Some(block) = stream.next().await {
+                println!("{:?}", block);
+            }
+        }
+    }
 }

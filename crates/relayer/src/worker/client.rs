@@ -157,7 +157,7 @@ pub fn detect_misbehavior_task<ChainA: ChainHandle, ChainB: ChainHandle>(
                         }
                         trace!("start to relayer header up to {}", height.revision_height());
                         let client_state = src_chain
-                            .build_client_state(height, crate::chain::client::ClientSettings::Eth)
+                            .build_client_state(height, crate::chain::client::ClientSettings::Other)
                             .unwrap();
 
                         let tracked_msgs = TrackedMsgs {

@@ -27,7 +27,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 use crate::chain::eth::event::monitor::EthEventMonitor;
 use crate::event::monitor::TxMonitorCmd;
-use crate::keyring::Secp256k1KeyPair;
+use crate::keyring::{KeyRing, Secp256k1KeyPair};
 use crate::light_client::LightClient;
 use crate::{
     account::Balance,
@@ -66,6 +66,7 @@ pub struct EthChain {
     pub config: EthChainConfig,
     pub light_client: EthLightClient,
     pub tx_monitor_cmd: Option<TxMonitorCmd>,
+    keybase: KeyRing<Secp256k1KeyPair>,
 }
 
 impl ChainEndpoint for EthChain {
@@ -82,11 +83,18 @@ impl ChainEndpoint for EthChain {
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: EthChainConfig = config.try_into()?;
         let light_client = EthLightClient::from_config(&config, rt.clone())?;
+        let keybase = KeyRing::new_secp256k1(
+            crate::keyring::Store::Memory,
+            "eth",
+            &config.id,
+        )
+        .unwrap();
         Ok(EthChain {
             rt,
             config,
             light_client,
             tx_monitor_cmd: None,
+            keybase,
         })
     }
 
@@ -98,12 +106,12 @@ impl ChainEndpoint for EthChain {
         Ok(HealthCheck::Healthy)
     }
 
-    fn keybase(&self) -> &crate::keyring::KeyRing<Self::SigningKeyPair> {
-        todo!()
+    fn keybase(&self) -> &KeyRing<Self::SigningKeyPair> {
+        &self.keybase
     }
 
-    fn keybase_mut(&mut self) -> &mut crate::keyring::KeyRing<Self::SigningKeyPair> {
-        todo!()
+    fn keybase_mut(&mut self) -> &mut KeyRing<Self::SigningKeyPair> {
+        &mut self.keybase
     }
 
     fn get_signer(&self) -> Result<Signer, Error> {
