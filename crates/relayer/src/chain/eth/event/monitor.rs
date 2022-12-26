@@ -122,7 +122,8 @@ impl EthEventMonitor {
                     }
                 }
 
-                if let Some(header) = self.header_receiver.recv().await {
+                if let Ok(header) = self.header_receiver.try_recv() {
+                    info!("receive a new header: {:?}", header);
                     let height = Height::new(0, header.slot).unwrap();
                     let ibc_event_with_height = IbcEventWithHeight::new(
                         events::NewBlock::new(height.clone()).into(),
@@ -144,11 +145,11 @@ impl EthEventMonitor {
                     match ret {
                         Ok((event, meta)) => {
                             self.process_event(event, meta).unwrap_or_else(|e| {
-                                error!("error while process event: {}", e);
+                                error!("error while process event: {:?}", e);
                             });
                         }
                         Err(err) => {
-                            error!("error when monitoring eth events, reason: {}", err);
+                            error!("error when monitoring eth events, reason: {:?}", err);
                             // TODO: reconnect
                         }
                     }

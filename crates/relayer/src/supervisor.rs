@@ -691,6 +691,7 @@ fn process_batch<Chain: ChainHandle>(
 
     // If there is a NewBlock event, forward this event first to any workers affected by it.
     if let Some(IbcEvent::NewBlock(new_block)) = collected.new_block {
+        info!("receive a IBcEvent::NewBlock: {:?}", new_block);
         workers.notify_new_block(&src_chain.id(), batch.height, new_block);
     }
 

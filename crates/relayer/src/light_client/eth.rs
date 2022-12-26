@@ -27,6 +27,7 @@ use reqwest_middleware::ClientBuilder;
 use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
+use tracing::info;
 
 use crate::config::eth::EthChainConfig;
 use crate::{
@@ -255,6 +256,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         };
 
         if self.enable_emitor && update_is_newer {
+            info!("emiting new header: {:?}", update.finalized_header);
             self.new_block_emitors.iter().for_each(|emitor| {
                 if let Err(e) = emitor.send(update.finalized_header.clone().unwrap()) {
                     println!("[eth_light_client] new_block emitor error: {}", e);
@@ -567,7 +569,7 @@ impl LightClient {
         self.rt
             .block_on(self.rt.block_on(client.lock()).sync())
             .map_err(|_| Error::create_client(self.chain_id.to_string()))?;
-        tokio::spawn(async move {
+        self.rt.spawn(async move {
             loop {
                 let res = client.lock().await.advance().await;
                 if let Err(err) = res {
