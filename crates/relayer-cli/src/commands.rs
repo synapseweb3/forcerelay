@@ -5,6 +5,7 @@ mod completions;
 mod config;
 mod create;
 mod fee;
+mod forcerelay;
 mod health;
 mod keys;
 mod listen;
@@ -18,9 +19,9 @@ mod version;
 
 use self::{
     clear::ClearCmds, completions::CompletionsCmd, config::ConfigCmd, create::CreateCmds,
-    fee::FeeCmd, health::HealthCheckCmd, keys::KeysCmd, listen::ListenCmd,
-    misbehaviour::MisbehaviourCmd, query::QueryCmd, start::StartCmd, tx::TxCmd, update::UpdateCmds,
-    upgrade::UpgradeCmds, version::VersionCmd,
+    fee::FeeCmd, forcerelay::ForcerelayCmd, health::HealthCheckCmd, keys::KeysCmd,
+    listen::ListenCmd, misbehaviour::MisbehaviourCmd, query::QueryCmd, start::StartCmd, tx::TxCmd,
+    update::UpdateCmds, upgrade::UpgradeCmds, version::VersionCmd,
 };
 
 use core::time::Duration;
@@ -97,6 +98,9 @@ pub enum CliCmd {
     /// Generate auto-complete scripts for different shells.
     #[clap(display_order = 1000)]
     Completions(CompletionsCmd),
+
+    /// todo
+    Forcerelay(ForcerelayCmd),
 }
 
 /// This trait allows you to define how application configuration is loaded.
