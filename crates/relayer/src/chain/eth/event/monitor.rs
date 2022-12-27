@@ -20,7 +20,7 @@ use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonit
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tendermint_rpc::Url;
 use tokio::runtime::Runtime as TokioRuntime;
-use tracing::{debug, error, instrument, info};
+use tracing::{debug, error, info, instrument};
 
 type Client = Provider<Ws>;
 
