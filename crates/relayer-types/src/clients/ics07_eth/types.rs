@@ -2,6 +2,7 @@ use crate::prelude::*;
 
 pub use bls::{AggregateSignature, PublicKey, PublicKeyBytes};
 pub use ethereum_types::H256;
+use serde::ser::SerializeSeq;
 use serde_derive::{Deserialize, Serialize};
 use ssz_types::typenum::Unsigned;
 pub use ssz_types::typenum::{U20, U256, U4, U48, U512, U96};
@@ -29,7 +30,7 @@ pub struct FinalityUpdate {
     pub finalized_header: Header,
     pub finality_branch: Vec<H256>,
     pub sync_aggregate: SyncAggregate,
-    #[serde(deserialize_with = "u64_deserialize")]
+    #[serde(serialize_with = "u64_serialize", deserialize_with = "u64_deserialize")]
     pub signature_slot: u64,
 }
 
@@ -45,16 +46,25 @@ pub struct GenericUpdate {
 
 #[derive(Clone, PartialEq, tree_hash_derive::TreeHash, Deserialize, Serialize, Default, Debug)]
 pub struct SyncCommittee {
-    #[serde(deserialize_with = "nested_fixed_vector_deserialize")]
+    #[serde(
+        serialize_with = "nested_fixed_vector_serialize",
+        deserialize_with = "nested_fixed_vector_deserialize"
+    )]
     pub pubkeys: FixedVector<BLSPubKey, U512>,
-    #[serde(deserialize_with = "fixed_vector_deserialize")]
+    #[serde(
+        serialize_with = "fixed_vector_serialize",
+        deserialize_with = "fixed_vector_deserialize"
+    )]
     pub aggregate_pubkey: BLSPubKey,
 }
 
 #[derive(Clone, PartialEq, Deserialize, Serialize, Default, Debug)]
 pub struct SyncAggregate {
     pub sync_committee_bits: BitVector<U512>,
-    #[serde(deserialize_with = "fixed_vector_deserialize")]
+    #[serde(
+        serialize_with = "fixed_vector_serialize",
+        deserialize_with = "fixed_vector_deserialize"
+    )]
     pub sync_committee_signature: SignatureBytes,
 }
 
@@ -66,7 +76,7 @@ pub struct Update {
     pub finalized_header: Header,
     pub finality_branch: Vec<H256>,
     pub sync_aggregate: SyncAggregate,
-    #[serde(deserialize_with = "u64_deserialize")]
+    #[serde(serialize_with = "u64_serialize", deserialize_with = "u64_deserialize")]
     pub signature_slot: u64,
 }
 
@@ -164,6 +174,14 @@ where
     Ok(val.parse().unwrap())
 }
 
+pub fn u64_serialize<S>(n: &u64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let s = n.to_string();
+    serializer.serialize_str(&s)
+}
+
 pub fn fixed_vector_deserialize<'de, D, N>(deserializer: D) -> Result<FixedVector<u8, N>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -174,6 +192,19 @@ where
     let v = hex::decode(val).unwrap();
     let result: FixedVector<u8, N> = FixedVector::from(v);
     Ok(result)
+}
+
+pub fn fixed_vector_serialize<S, N>(
+    value: &FixedVector<u8, N>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    N: Unsigned,
+    S: serde::Serializer,
+{
+    let v = value.to_vec();
+    let s = format!("0x{}", hex::encode(v));
+    serializer.serialize_str(&s)
 }
 
 pub fn nested_fixed_vector_deserialize<'de, D, N1, N2>(
@@ -196,4 +227,25 @@ where
         .collect::<Vec<_>>();
     let result: FixedVector<FixedVector<u8, N1>, N2> = FixedVector::from(val);
     Ok(result)
+}
+
+pub fn nested_fixed_vector_serialize<S, N1, N2>(
+    value: &FixedVector<FixedVector<u8, N1>, N2>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+    N1: Unsigned,
+    N2: Unsigned,
+{
+    let mut seq = serializer.serialize_seq(Some(value.len()))?;
+    let strs = value.iter().map(|v| {
+        let v = v.to_vec();
+        let s = format!("0x{}", hex::encode(v));
+        s
+    });
+    for s in strs {
+        seq.serialize_element(&s)?;
+    }
+    seq.end()
 }

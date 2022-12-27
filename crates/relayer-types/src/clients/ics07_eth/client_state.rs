@@ -79,3 +79,18 @@ impl From<ClientState> for Any {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_eth_client_state_serde() {
+        let client_state = ClientState {
+            chain_id: ChainId::new("eth".to_owned(), 0),
+            lightclient_update: Default::default(),
+        };
+        let any: Any = client_state.into();
+        let _: ClientState = any.try_into().expect("serde error");
+    }
+}

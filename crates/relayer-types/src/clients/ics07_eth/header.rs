@@ -11,13 +11,13 @@ use crate::prelude::*;
 
 pub const FINALITY_HEADER_TYPE_URL: &str = "/eth.finality.v1.update";
 
-use super::types::u64_deserialize;
+use super::types::{u64_deserialize, u64_serialize};
 
 #[derive(Clone, PartialEq, Deserialize, Serialize, TreeHash, Default, Debug)]
 pub struct Header {
-    #[serde(deserialize_with = "u64_deserialize")]
+    #[serde(serialize_with = "u64_serialize", deserialize_with = "u64_deserialize")]
     pub slot: u64,
-    #[serde(deserialize_with = "u64_deserialize")]
+    #[serde(serialize_with = "u64_serialize", deserialize_with = "u64_deserialize")]
     pub proposer_index: u64,
     pub parent_root: H256,
     pub state_root: H256,
