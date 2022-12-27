@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::clients::ics07_ckb::client_state::ClientState as CkbClientState;
-use ibc_relayer_types::clients::ics07_eth::client_state::ClientState as EthClientState;
+use ibc_relayer_types::clients::ics07_eth::client_state::{
+    ClientState as EthClientState, CLIENT_STATE_TYPE_URL as ETH_CLIENT_STATE_TYPE_URL,
+};
 use ibc_relayer_types::clients::ics07_tendermint::client_state::{
     ClientState as TmClientState, UpgradeOptions as TmUpgradeOptions,
     TENDERMINT_CLIENT_STATE_TYPE_URL,
@@ -164,7 +166,13 @@ impl From<AnyClientState> for Any {
                 value: Protobuf::<RawClientState>::encode_vec(&value)
                     .expect("encoding to `Any` from `AnyClientState::Tendermint`"),
             },
-            AnyClientState::Eth(_) => todo!(),
+            AnyClientState::Eth(value) => {
+                let json = serde_json::to_string(&value).expect("jsonify clientstate");
+                Any {
+                    type_url: ETH_CLIENT_STATE_TYPE_URL.to_owned(),
+                    value: json.into_bytes(),
+                }
+            }
             AnyClientState::Ckb(_) => todo!(),
             #[cfg(test)]
             AnyClientState::Mock(value) => Any {

@@ -15,7 +15,7 @@ use crate::core::ics02_client::{
 };
 use ibc_proto::protobuf::Protobuf;
 
-const CLIENT_STATE_TYPE_URL: &str = "/eth.client.v1.state";
+pub const CLIENT_STATE_TYPE_URL: &str = "/eth.client.v1.state";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ClientState {
