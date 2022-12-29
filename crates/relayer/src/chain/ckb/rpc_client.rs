@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use ckb_jsonrpc_types::{
-    BlockNumber, BlockView, CellWithStatus, HeaderView, JsonBytes, OutPoint, OutputsValidator,
-    Transaction, TransactionWithStatusResponse, Uint32,
+    BlockNumber, BlockView, CellWithStatus, ChainInfo, HeaderView, JsonBytes, OutPoint,
+    OutputsValidator, Transaction, TransactionWithStatusResponse, Uint32,
 };
 use ckb_sdk::rpc::ckb_indexer::{Cell, Order, Pagination, SearchKey};
 use ckb_types::H256;
@@ -80,6 +80,10 @@ impl RpcClient {
             indexer_uri: indexer_uri.clone(),
             id: Arc::new(AtomicU64::new(0)),
         }
+    }
+
+    pub fn get_blockchain_info(&self) -> RPC<ChainInfo> {
+        jsonrpc!("get_blockchain_info", Target::CKB, self, ChainInfo).boxed()
     }
 
     pub fn get_block_by_number(&self, number: BlockNumber) -> RPC<BlockView> {
