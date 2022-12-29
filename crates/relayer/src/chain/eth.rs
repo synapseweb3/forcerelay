@@ -443,7 +443,7 @@ impl EthChain {
         let (event_monitor, monitor_tx) = EthEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
-            String::from(""),
+            self.config.contract_address.clone(),
             header_receiver,
             self.rt.clone(),
         )

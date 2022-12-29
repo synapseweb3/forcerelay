@@ -748,6 +748,7 @@ mod tests {
             rpc_port: Default::default(),
             initial_checkpoint: Default::default(),
             key_name: Default::default(),
+            contract_address: Default::default(),
         };
         let checkpoint =
             hex::decode("1e591af1e90f2db918b2a132991c7c2ee9a4ab26da496bd6e71e4f0bd65ea870")
