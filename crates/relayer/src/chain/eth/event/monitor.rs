@@ -47,7 +47,7 @@ impl EthEventMonitor {
     pub fn new(
         chain_id: ChainId,
         node_addr: Url,
-        address: String,
+        address: Address,
         header_receiver: UnboundedReceiver<EthHeader>,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, TxMonitorCmd)> {
@@ -57,10 +57,6 @@ impl EthEventMonitor {
         let client = rt
             .block_on(Provider::<Ws>::connect(node_addr))
             .map_err(|_| Error::client_creation_failed(chain_id.clone(), ws_addr))?;
-
-        let address = address
-            .parse::<Address>()
-            .map_err(|e| Error::others(e.to_string()))?;
 
         let start_block_number = rt
             .block_on(client.get_block_number())
