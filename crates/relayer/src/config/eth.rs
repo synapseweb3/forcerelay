@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use ethers::types::Address;
 use ibc_relayer_types::{
     clients::ics07_eth::types::{FixedVector, Fork, Forks, H256, U4},
     core::ics24_host::identifier::ChainId,
@@ -21,8 +20,6 @@ pub struct EthChainConfig {
     pub rpc_port: u16,
     pub forks: Forks,
     pub max_checkpoint_age: u64,
-    #[serde(deserialize_with = "eth_address_deserialize")]
-    pub contract_address: Address,
 }
 
 pub fn array_hex_deserialize<'de, D, const N: usize>(deserializer: D) -> Result<[u8; N], D::Error>
@@ -38,14 +35,6 @@ where
     });
 
     Ok(result)
-}
-
-pub fn eth_address_deserialize<'de, D>(deserializer: D) -> Result<Address, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let address: String = serde::Deserialize::deserialize(deserializer)?;
-    address.parse::<Address>().map_err(serde::de::Error::custom)
 }
 
 impl EthChainConfig {
@@ -95,7 +84,6 @@ impl EthChainConfig {
             max_checkpoint_age: 1_209_600,
             initial_checkpoint: Default::default(),
             key_name: Default::default(),
-            contract_address: Default::default(),
         }
     }
 }
