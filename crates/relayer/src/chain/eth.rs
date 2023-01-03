@@ -440,14 +440,9 @@ impl EthChain {
 
         let header_receiver = self.light_client.subscribe();
         // TODO: configure URLs
-        let (event_monitor, monitor_tx) = EthEventMonitor::new(
-            self.config.id.clone(),
-            self.config.websocket_addr.clone(),
-            self.config.contract_address.clone(),
-            header_receiver,
-            self.rt.clone(),
-        )
-        .map_err(Error::event_monitor)?;
+        let (event_monitor, monitor_tx) =
+            EthEventMonitor::new(self.config.id.clone(), header_receiver, self.rt.clone())
+                .map_err(Error::event_monitor)?;
 
         thread::spawn(move || event_monitor.run());
 

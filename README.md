@@ -48,7 +48,6 @@ port = 3001
 id = 'ibc-eth-0'
 genesis_time = 1606824023
 genesis_root = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
-contract_address = "0x4fabb145d64652a948d72533023f6e7a623c7c53"
 websocket_addr = 'wss://eth-mainnet.g.alchemy.com/v2/00000000000000000000000000000000'
 initial_checkpoint = "0x428ce0b5f5bbed1fc2b3feb5d4152ae0fe98a80b1bfa8de36681868e81e9222a"
 key_name = 'wallet'
