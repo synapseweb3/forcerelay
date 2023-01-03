@@ -103,7 +103,7 @@ impl From<&Update> for GenericUpdate {
         GenericUpdate {
             attested_header: update.attested_header.clone(),
             sync_aggregate: update.sync_aggregate.clone(),
-            signature_slot: update.signature_slot.clone(),
+            signature_slot: update.signature_slot,
             next_sync_committee: Some(update.next_sync_committee.clone()),
             next_sync_committee_branch: Some(update.next_sync_committee_branch.clone()),
             finalized_header: Some(update.finalized_header.clone()),
@@ -117,7 +117,7 @@ impl From<&FinalityUpdate> for GenericUpdate {
         GenericUpdate {
             attested_header: value.attested_header.clone(),
             sync_aggregate: value.sync_aggregate.clone(),
-            signature_slot: value.signature_slot.clone(),
+            signature_slot: value.signature_slot,
             next_sync_committee: None,
             next_sync_committee_branch: None,
             finalized_header: Some(value.finalized_header.clone()),
