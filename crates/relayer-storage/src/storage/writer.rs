@@ -18,7 +18,7 @@ where
             .cache
             .base_beacon_header_slot
             .write()
-            .map_err(|err| Error::storage(err))?;
+            .map_err(Error::storage)?;
         self.put(keys::BASE_BEACON_HEADER_SLOT, value.as_slice())?;
         *writer = Some(slot);
         Ok(())

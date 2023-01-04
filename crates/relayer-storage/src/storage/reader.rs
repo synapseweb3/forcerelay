@@ -17,7 +17,7 @@ where
             .cache
             .base_beacon_header_slot
             .read()
-            .map_err(|err| Error::storage(err))?;
+            .map_err(Error::storage)?;
         if let Some(slot) = slot_opt {
             Ok(Some(slot))
         } else {
@@ -30,7 +30,7 @@ where
                     .cache
                     .base_beacon_header_slot
                     .write()
-                    .map_err(|err| Error::storage(err))? = Some(slot);
+                    .map_err(Error::storage)? = Some(slot);
             }
             Ok(slot_opt)
         }
