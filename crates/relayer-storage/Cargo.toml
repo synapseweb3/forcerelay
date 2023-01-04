@@ -1,0 +1,18 @@
+[package]
+name       = "ibc-relayer-storage"
+version    = "0.1.0"
+edition    = "2021"
+license    = "Apache-2.0"
+readme     = "README.md"
+keywords   = ["blockchain", "consensus", "ibc", "ethereum", "ckb", "tendermint"]
+homepage   = "https://github.com/synapseweb3"
+repository = "https://github.com/synapseweb3/relayer"
+authors    = ["Boyu Yang <yangby@cryptape.com>"]
+rust-version = "1.65"
+description  = "The storage part of SynapseWeb3 IBC Relayer"
+
+[dependencies]
+thiserror = "1.0.37"
+rocksdb = { package = "ckb-rocksdb", version ="=0.19.0", default-features = false, features = ["snappy"] }
+eth2_types = { git = "https://github.com/yangby-cryptape/lighthouse", rev = "62dc610", package = "types" }
+eth_light_client_in_ckb-verification = { git = "https://github.com/yangby-cryptape/eth-light-client-in-ckb", rev = "fa03b54", package = "eth_light_client_in_ckb-verification" }

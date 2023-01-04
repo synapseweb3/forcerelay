@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use ckb_types::H256;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use serde_derive::{Deserialize, Serialize};
@@ -10,4 +12,5 @@ pub struct ChainConfig {
     pub ckb_indexer_rpc: Url,
     pub lightclient_contract_typeargs: H256,
     pub key_name: String,
+    pub data_dir: PathBuf,
 }

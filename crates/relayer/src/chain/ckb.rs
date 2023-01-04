@@ -1,12 +1,16 @@
 use ckb_jsonrpc_types::OutputsValidator;
 use ckb_sdk::NetworkType;
+use eth2_types::MainnetEthSpec;
+use eth_light_client_in_ckb_verification::types::core::Header as EthLcHeader;
+use ibc_relayer_storage::{error::Error as StorageError, prelude::*, Storage};
 use ibc_relayer_types::clients::ics07_ckb::{
     client_state::ClientState as CkbClientState,
     consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
     light_block::LightBlock as CkbLightBlock,
 };
 use ibc_relayer_types::clients::ics07_eth::{
-    client_state::ClientState as EthClient, types::Update as EthUpdate,
+    client_state::ClientState as EthClient,
+    types::{Header as EthHeader, Update as EthUpdate},
 };
 use ibc_relayer_types::{
     core::{
@@ -77,6 +81,8 @@ pub struct CkbChain {
     pub keybase: KeyRing<Secp256k1KeyPair>,
     pub eth_endpoint: EthEndpoint,
     pub tx_assembler: TxAssembler,
+    // TODO the spec of Ethereum should be selectable.
+    pub storage: Storage<MainnetEthSpec>,
 }
 
 impl CkbChain {
@@ -94,6 +100,15 @@ impl CkbChain {
             return Err(Error::empty_upgraded_client_state());
         }
         let start_slot = header_updates[0].finalized_header.slot;
+        if let Some(stored_tip_slot) = self.storage.get_tip_beacon_header_slot()? {
+            if start_slot != stored_tip_slot + 1 {
+                let height = (stored_tip_slot + 1).try_into().unwrap();
+                return Err(Error::light_client_verification(
+                    self.id().to_string(),
+                    LightClientError::missing_last_block_id(height),
+                ));
+            }
+        }
         for i in 0..header_updates.len() {
             if header_updates[i].finalized_header.slot != i as u64 + start_slot {
                 return Err(Error::send_tx("uncontinuous header slot".to_owned()));
@@ -127,8 +142,46 @@ impl CkbChain {
                     .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
             )
             .map_err(|e| Error::rpc_response(e.to_string()))?;
-        // TODO: push header_updates into MMR store
         self.eth_endpoint.latest_slot = header_updates.last().unwrap().finalized_header.slot;
+
+        let mut headers_iter = header_updates.into_iter().map(|update| {
+            let EthHeader {
+                slot,
+                proposer_index,
+                parent_root,
+                state_root,
+                body_root,
+            } = update.finalized_header;
+            let header = EthLcHeader {
+                slot,
+                proposer_index,
+                parent_root,
+                state_root,
+                body_root,
+            };
+            header.calc_cache()
+        });
+
+        let mut last_slot = if self.storage.is_initialized()? {
+            start_slot - 1
+        } else {
+            let first = headers_iter.next().expect("checked");
+            self.storage
+                .initialize_with(first.inner.slot, first.digest())?;
+            self.storage.put_tip_beacon_header_slot(first.inner.slot)?;
+            first.inner.slot
+        };
+
+        let mut mmr = self.storage.chain_root_mmr(last_slot)?;
+
+        for header in headers_iter {
+            last_slot = header.inner.slot;
+            mmr.push(header.digest()).map_err(StorageError::from)?;
+        }
+        mmr.commit().map_err(StorageError::from)?;
+
+        self.storage.put_tip_beacon_header_slot(last_slot)?;
+
         Ok(vec![])
     }
 }
@@ -149,6 +202,7 @@ impl ChainEndpoint for CkbChain {
         let rpc_client = Arc::new(RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc));
         let keybase =
             KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
+        let storage = Storage::new(&config.data_dir)?;
 
         let chain_info = rt
             .block_on(rpc_client.get_blockchain_info())
@@ -172,6 +226,7 @@ impl ChainEndpoint for CkbChain {
             keybase,
             eth_endpoint,
             tx_assembler,
+            storage,
         })
     }
 
