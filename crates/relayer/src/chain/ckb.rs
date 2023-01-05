@@ -67,23 +67,17 @@ use super::{
 };
 
 mod assembler;
+mod helper;
 mod rpc_client;
 mod signer;
 use assembler::TxAssembler;
 use rpc_client::RpcClient;
-
-#[derive(Default)]
-pub struct EthEndpoint {
-    pub latest_slot: u64,
-    pub header_upperbound: u8,
-}
 
 pub struct CkbChain {
     pub rt: Arc<TokioRuntime>,
     pub rpc_client: Arc<RpcClient>,
     pub config: CkbChainConfig,
     pub keybase: KeyRing<Secp256k1KeyPair>,
-    pub eth_endpoint: EthEndpoint,
     pub tx_assembler: TxAssembler,
     // TODO the spec of Ethereum should be selectable.
     pub storage: Storage<MainnetEthSpec>,
@@ -98,9 +92,7 @@ impl CkbChain {
         &mut self,
         header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        if header_updates.is_empty()
-            || header_updates.len() > self.eth_endpoint.header_upperbound as usize
-        {
+        if header_updates.is_empty() {
             return Err(Error::empty_upgraded_client_state());
         }
         let start_slot = header_updates[0].finalized_header.slot;
@@ -109,27 +101,31 @@ impl CkbChain {
                 return Err(Error::send_tx("uncontinuous header slot".to_owned()));
             }
         }
-        if self.eth_endpoint.latest_slot > 0 {
-            let expected_start_slot = self.eth_endpoint.latest_slot + 1;
-            if start_slot != expected_start_slot {
-                let height = expected_start_slot.try_into().expect("slot to height");
-                return Err(Error::light_client_verification(
-                    self.id().to_string(),
-                    LightClientError::missing_last_block_id(height),
-                ));
-            }
-        }
+
+        // check the tip in storage and the tip in the client cell are the same.
         if let Some(stored_tip_slot) = self.storage.get_tip_beacon_header_slot()? {
             if start_slot != stored_tip_slot + 1 {
-                let height = (stored_tip_slot + 1).try_into().expect("slot to big");
+                let height = (stored_tip_slot + 1).try_into().expect("slot too big");
                 return Err(Error::light_client_verification(
                     self.id().to_string(),
                     LightClientError::missing_last_block_id(height),
                 ));
             }
         }
-
-        // TODO check the tip in storage and the tip in the client cell are the same.
+        let onchain_packed_client = self.rt.block_on(self.tx_assembler.fetch_packed_client(
+            &self.config.lightclient_contract_typeargs,
+            &self.config.id.to_string(),
+        ))?;
+        if let Some(client) = onchain_packed_client {
+            let onchain_tip_slot: u64 = client.maximal_slot().unpack();
+            if start_slot != onchain_tip_slot + 1 {
+                let height = (onchain_tip_slot + 1).try_into().expect("slot too big");
+                return Err(Error::light_client_verification(
+                    self.id().to_string(),
+                    LightClientError::missing_last_block_id(height),
+                ));
+            }
+        }
 
         let finalized_headers = header_updates
             .iter()
@@ -257,7 +253,6 @@ impl CkbChain {
                     .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
             )
             .map_err(|e| Error::rpc_response(e.to_string()))?;
-        self.eth_endpoint.latest_slot = maximal_slot;
 
         Ok(vec![])
     }
@@ -291,17 +286,12 @@ impl ChainEndpoint for CkbChain {
         };
         let key: Secp256k1KeyPair = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
         let tx_assembler = TxAssembler::new(rpc_client.clone(), &key.public_key, network);
-        let eth_endpoint = EthEndpoint {
-            latest_slot: 0,
-            header_upperbound: 15,
-        };
 
         Ok(CkbChain {
             rt,
             rpc_client,
             config,
             keybase,
-            eth_endpoint,
             tx_assembler,
             storage,
         })
