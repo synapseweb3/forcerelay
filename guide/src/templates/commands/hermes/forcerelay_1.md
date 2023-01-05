@@ -1,0 +1,1 @@
+[[#BINARY hermes]][[#GLOBALOPTIONS]] forcerelay --ethereum-chain-id [[#ETH_CHAIN]] --ckb-chain-id [[#CKB_CHAIN]]
