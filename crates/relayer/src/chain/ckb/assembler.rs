@@ -1,17 +1,17 @@
 #![allow(dead_code)]
 
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ckb_sdk::rpc::ckb_indexer::SearchKey;
-use ckb_sdk::traits::{CellQueryOptions, LiveCell, PrimaryScriptType};
+use ckb_sdk::traits::PrimaryScriptType;
 use ckb_sdk::{Address, AddressPayload, NetworkType};
-use ckb_types::core::{DepType, ScriptHashType, TransactionView};
+use ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
 use ckb_types::{packed, prelude::*, H256};
 use eth_light_client_in_ckb_verification::types::packed::{
-    Client as PackedClient, ProofUpdate as PackedProofUpdate,
+    Client as PackedClient, ClientReader as PackedClientReader, ProofUpdate as PackedProofUpdate,
 };
 use secp256k1::PublicKey;
 use std::sync::Arc;
 
+use super::helper::{CellSearcher, TxCompleter};
 use super::rpc_client::RpcClient;
 use crate::error::Error;
 
@@ -27,6 +27,32 @@ impl TxAssembler {
         Self { ckb_rpc, address }
     }
 
+    pub async fn fetch_packed_client(
+        &self,
+        contract_typeid_args: &H256,
+        client_id: &String,
+    ) -> Result<Option<PackedClient>, Error> {
+        let contract_typescript = packed::Script::new_builder()
+            .code_hash(TYPE_ID_CODE_HASH.0.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(contract_typeid_args.as_bytes().to_vec().pack())
+            .build();
+        let type_hash = contract_typescript.calc_script_hash();
+        let lightclient_cell_opt = CellSearcher::new(&self.ckb_rpc)
+            .search_cell_by_typescript(&type_hash, &client_id.as_bytes().to_vec())
+            .await?;
+        match lightclient_cell_opt {
+            Some(cell) => {
+                if let Err(err) = PackedClientReader::verify(&cell.output_data, false) {
+                    Err(Error::rpc_response(format!("client format error: {}", err)))
+                } else {
+                    Ok(Some(PackedClient::new_unchecked(cell.output_data)))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
     pub async fn assemble_updates_into_transaction(
         &self,
         packed_client: PackedClient,
@@ -39,8 +65,11 @@ impl TxAssembler {
             .hash_type(ScriptHashType::Type.into())
             .args(contract_typeid_args.as_bytes().to_vec().pack())
             .build();
+        let searcher = CellSearcher::new(&self.ckb_rpc);
         let contract_cell = {
-            let contract = search_cell(&self.ckb_rpc, &contract_typescript).await?;
+            let contract = searcher
+                .search_cell(&contract_typescript, PrimaryScriptType::Type)
+                .await?;
             match contract {
                 Some(cell) => cell,
                 None => {
@@ -57,24 +86,25 @@ impl TxAssembler {
             .build();
 
         let type_hash = contract_typescript.calc_script_hash();
-        let lightclient_cell_opt =
-            search_cell_by_typescript(&self.ckb_rpc, &type_hash, &client_id.as_bytes().to_vec())
-                .await?;
+        let lightclient_cell_opt = searcher
+            .search_cell_by_typescript(&type_hash, &client_id.as_bytes().to_vec())
+            .await?;
 
-        let (input_cell, output_cell) = if let Some(lightclient_cell) = lightclient_cell_opt {
-            let input_cell = packed::CellInput::new(lightclient_cell.out_point, 0);
-            let output_cell = packed::CellOutput::new_builder()
-                // TODO minus the fee
-                .capacity(lightclient_cell.output.capacity())
-                // TODO set the lock script for client cell
-                //.lock(lock)
-                .type_(Some(contract_typescript).pack())
-                .build();
-            (input_cell, output_cell)
-        } else {
-            // TODO If there is no client cell, an input cell to supply capacity is still be required.
-            todo!()
-        };
+        let output_data = packed_client.as_slice().pack();
+        let output_cell = packed::CellOutput::new_builder()
+            // TODO set the mock lock script for client cell
+            //.lock(lock)
+            .type_(Some(contract_typescript).pack())
+            .build_exact_capacity(Capacity::bytes(output_data.len()).unwrap())
+            .expect("build ibc contract output");
+        let mut inputs_cell_as_output = vec![];
+        let mut inputs_cell = vec![];
+        let mut inputs_capacity: u64 = 0;
+        if let Some(lightclient_cell) = lightclient_cell_opt {
+            inputs_cell.push(packed::CellInput::new(lightclient_cell.out_point, 0));
+            inputs_capacity += Unpack::<u64>::unpack(&lightclient_cell.output.capacity());
+            inputs_cell_as_output.push(lightclient_cell.output);
+        }
 
         let witness = {
             let input_type_args = packed::BytesOpt::new_builder()
@@ -86,40 +116,18 @@ impl TxAssembler {
             witness_args.as_bytes()
         };
         let tx = TransactionView::new_advanced_builder()
-            // TODO a cell dep for the lock script
-            .cell_dep(contract_cell_dep)
-            .input(input_cell)
+            .inputs(inputs_cell)
             .output(output_cell)
-            .output_data(packed_client.as_slice().pack())
+            .output_data(output_data)
             .witness(witness.pack())
+            .cell_dep(contract_cell_dep)
             .build();
+        let fee_rate = 1000;
+        let (tx, mut new_inputs) = TxCompleter::new(&searcher)
+            .complete_tx_with_secp256k1_change(tx, &self.address, inputs_capacity, fee_rate)
+            .await?;
 
-        Ok((tx, vec![]))
+        inputs_cell_as_output.append(&mut new_inputs);
+        Ok((tx, inputs_cell_as_output))
     }
-}
-
-async fn search_cell(
-    rpc: &RpcClient,
-    typescript: &packed::Script,
-) -> Result<Option<LiveCell>, Error> {
-    let search: SearchKey =
-        CellQueryOptions::new(typescript.clone(), PrimaryScriptType::Type).into();
-    let result = rpc
-        .fetch_live_cells(search, 1, None)
-        .await
-        .map_err(|e| Error::rpc_response(e.to_string()))?;
-    Ok(result.objects.first().cloned().map(Into::into))
-}
-
-async fn search_cell_by_typescript(
-    rpc: &RpcClient,
-    code_hash: &packed::Byte32,
-    type_args: &Vec<u8>,
-) -> Result<Option<LiveCell>, Error> {
-    let typescript = packed::Script::new_builder()
-        .code_hash(code_hash.clone())
-        .hash_type(ScriptHashType::Type.into())
-        .args(type_args.pack())
-        .build();
-    search_cell(rpc, &typescript).await
 }
