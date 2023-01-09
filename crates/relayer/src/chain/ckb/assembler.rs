@@ -75,7 +75,7 @@ impl TxAssembler {
                 None => {
                     return Err(Error::rpc_response(format!(
                         "contract not found: {}",
-                        hex::encode(&contract_typeid_args)
+                        hex::encode(contract_typeid_args)
                     )));
                 }
             }

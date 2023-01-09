@@ -22,7 +22,7 @@ enum Target {
     Indexer,
 }
 
-type RPC<T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send + 'static>>;
+type Rpc<T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send + 'static>>;
 
 macro_rules! jsonrpc {
     ($method:expr, $id:expr, $self:ident, $return:ty$(, $params:ident$(,)?)*) => {{
@@ -82,23 +82,23 @@ impl RpcClient {
         }
     }
 
-    pub fn get_blockchain_info(&self) -> RPC<ChainInfo> {
+    pub fn get_blockchain_info(&self) -> Rpc<ChainInfo> {
         jsonrpc!("get_blockchain_info", Target::CKB, self, ChainInfo).boxed()
     }
 
-    pub fn get_block_by_number(&self, number: BlockNumber) -> RPC<BlockView> {
+    pub fn get_block_by_number(&self, number: BlockNumber) -> Rpc<BlockView> {
         jsonrpc!("get_block_by_number", Target::CKB, self, BlockView, number).boxed()
     }
 
-    pub fn get_block(&self, hash: &H256) -> RPC<BlockView> {
+    pub fn get_block(&self, hash: &H256) -> Rpc<BlockView> {
         jsonrpc!("get_block", Target::CKB, self, BlockView, hash).boxed()
     }
 
-    pub fn get_tip_header(&self) -> RPC<HeaderView> {
+    pub fn get_tip_header(&self) -> Rpc<HeaderView> {
         jsonrpc!("get_tip_header", Target::CKB, self, HeaderView).boxed()
     }
 
-    pub fn get_transaction(&self, hash: &H256) -> RPC<Option<TransactionWithStatusResponse>> {
+    pub fn get_transaction(&self, hash: &H256) -> Rpc<Option<TransactionWithStatusResponse>> {
         jsonrpc!(
             "get_transaction",
             Target::CKB,
@@ -109,7 +109,7 @@ impl RpcClient {
         .boxed()
     }
 
-    pub fn get_live_cell(&self, out_point: &OutPoint, with_data: bool) -> RPC<CellWithStatus> {
+    pub fn get_live_cell(&self, out_point: &OutPoint, with_data: bool) -> Rpc<CellWithStatus> {
         jsonrpc!(
             "get_live_cell",
             Target::CKB,
@@ -125,7 +125,7 @@ impl RpcClient {
         &self,
         tx: &Transaction,
         outputs_validator: Option<OutputsValidator>,
-    ) -> RPC<H256> {
+    ) -> Rpc<H256> {
         jsonrpc!(
             "send_transaction",
             Target::CKB,
@@ -140,7 +140,7 @@ impl RpcClient {
     pub fn get_txs_by_hashes(
         &self,
         hashes: Vec<H256>,
-    ) -> RPC<Vec<Option<TransactionWithStatusResponse>>> {
+    ) -> Rpc<Vec<Option<TransactionWithStatusResponse>>> {
         let mut list = Vec::with_capacity(hashes.len());
         let mut res = Vec::with_capacity(hashes.len());
         for hash in hashes {
@@ -163,7 +163,7 @@ impl RpcClient {
         search_key: SearchKey,
         limit: u32,
         cursor: Option<JsonBytes>,
-    ) -> RPC<Pagination<Cell>> {
+    ) -> Rpc<Pagination<Cell>> {
         let order = Order::Asc;
         let limit = Uint32::from(limit);
 

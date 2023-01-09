@@ -156,10 +156,10 @@ impl ChainEndpoint for EthChain {
         _key_name: Option<&str>,
         _denom: Option<&str>,
     ) -> Result<Balance, Error> {
-        return Ok(Balance {
+        Ok(Balance {
             amount: "0.0".to_string(),
             denom: "denom".to_string(),
-        });
+        })
     }
 
     fn query_all_balances(&self, _key_name: Option<&str>) -> Result<Vec<Balance>, Error> {

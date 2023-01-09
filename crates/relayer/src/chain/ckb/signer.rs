@@ -18,6 +18,7 @@ pub fn sign<S: SigningKeyPair + Clone>(
     extra_witnesses: Vec<WitnessArgs>,
     signer: S,
 ) -> Result<TransactionView, Error> {
+    #[allow(clippy::mutable_key_type)]
     let mut last_lockhashes: HashMap<Byte32, (WitnessArgs, usize, Vec<packed::Bytes>)> =
         HashMap::new();
     let mut signed_witnesses = inputs
@@ -90,7 +91,7 @@ fn sign_input(
     for group_witness in group_witnesses {
         let witness_len = group_witness.raw_data().len() as u64;
         blake2b.update(&witness_len.to_le_bytes());
-        blake2b.update(&group_witness.raw_data().to_vec());
+        blake2b.update(&group_witness.raw_data());
     }
     for extra_witness in extra_witnesses {
         let witness_len = extra_witness.as_bytes().len() as u64;

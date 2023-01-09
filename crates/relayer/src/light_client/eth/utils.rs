@@ -11,7 +11,7 @@ use tree_hash_derive::TreeHash;
 pub fn is_current_committee_proof_valid(
     attested_header: &Header,
     current_committee: &mut SyncCommittee,
-    current_committee_branch: &mut Vec<H256>,
+    current_committee_branch: &mut [H256],
 ) -> bool {
     is_proof_valid(
         attested_header,
@@ -30,7 +30,7 @@ pub fn calc_sync_period(slot: u64) -> u64 {
 pub fn is_finality_proof_valid(
     attested_header: &Header,
     finality_header: &mut Header,
-    finality_branch: &Vec<H256>,
+    finality_branch: &[H256],
 ) -> bool {
     is_proof_valid(attested_header, finality_header, finality_branch, 6, 41)
 }
@@ -38,7 +38,7 @@ pub fn is_finality_proof_valid(
 pub fn is_next_committee_proof_valid(
     attested_header: &Header,
     next_committee: &mut SyncCommittee,
-    next_committee_branch: &Vec<H256>,
+    next_committee_branch: &[H256],
 ) -> bool {
     is_proof_valid(
         attested_header,
@@ -52,7 +52,7 @@ pub fn is_next_committee_proof_valid(
 pub fn is_proof_valid<L: TreeHash>(
     attested_header: &Header,
     leaf_object: &mut L,
-    branch: &Vec<H256>,
+    branch: &[H256],
     depth: usize,
     index: usize,
 ) -> bool {
@@ -79,11 +79,11 @@ pub fn is_valid_merkle_branch<'a>(
             None => return false,
         };
         if (index / 2usize.pow(i as u32)) % 2 != 0 {
-            hasher.update(&next_hash);
-            hasher.update(&value);
+            hasher.update(next_hash);
+            hasher.update(value);
         } else {
-            hasher.update(&value);
-            hasher.update(&next_hash);
+            hasher.update(value);
+            hasher.update(next_hash);
         }
         let mut v = [0u8; 32];
         v.copy_from_slice(&hasher.finalize_reset());
@@ -135,10 +135,7 @@ pub fn is_aggregate_valid(sig: &SignatureBytes, msg: H256, pks: &[&PublicKey]) -
     let valid = AggregateSignature::deserialize(sig.as_ref())
         .ok()
         .map(|signature| signature.eth_fast_aggregate_verify(msg, pks));
-    match valid {
-        Some(b) => b,
-        None => false,
-    }
+    valid.unwrap_or(false)
 }
 
 #[derive(Debug, Default, TreeHash)]

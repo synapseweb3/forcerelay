@@ -84,14 +84,12 @@ impl EthEventMonitor {
         if let Ok(header) = self.header_receiver.try_recv() {
             info!("receive a new header: {:?}", header);
             let height = Height::new(0, header.slot).unwrap();
-            let ibc_event_with_height = IbcEventWithHeight::new(
-                events::NewBlock::new(height.clone()).into(),
-                height.clone(),
-            );
+            let ibc_event_with_height =
+                IbcEventWithHeight::new(events::NewBlock::new(height).into(), height);
             let batch = EventBatch {
                 chain_id: self.chain_id.clone(),
                 tracking_id: TrackingId::new_uuid(),
-                height: height.clone(),
+                height,
                 events: vec![ibc_event_with_height],
             };
             self.process_batch(batch);

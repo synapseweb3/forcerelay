@@ -13,7 +13,7 @@ pub const FINALITY_HEADER_TYPE_URL: &str = "/eth.finality.v1.update";
 
 use super::types::{u64_deserialize, u64_serialize};
 
-#[derive(Clone, PartialEq, Deserialize, Serialize, TreeHash, Default, Debug)]
+#[derive(Clone, PartialEq, Eq, Deserialize, Serialize, TreeHash, Default, Debug)]
 pub struct Header {
     #[serde(serialize_with = "u64_serialize", deserialize_with = "u64_deserialize")]
     pub slot: u64,

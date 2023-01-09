@@ -144,11 +144,8 @@ impl Configurable<Config> for CliCmd {
         let web = "https://hermes.informal.systems";
         let suffix = format!("{} {} ({})", CliCmd::name(), clap::crate_version!(), web);
         for ccfg in config.chains.iter_mut() {
-            match ccfg {
-                ibc_relayer::config::ChainConfig::Cosmos(_) => {
-                    ccfg.cosmos_mut().memo_prefix.apply_suffix(&suffix);
-                }
-                _ => {}
+            if let ibc_relayer::config::ChainConfig::Cosmos(_) = ccfg {
+                ccfg.cosmos_mut().memo_prefix.apply_suffix(&suffix);
             }
         }
 
@@ -156,11 +153,8 @@ impl Configurable<Config> for CliCmd {
         // for a prolonged period of time.
         if !matches!(self, CliCmd::Start(_)) {
             for c in config.chains.iter_mut() {
-                match c {
-                    ibc_relayer::config::ChainConfig::Cosmos(_) => {
-                        c.cosmos_mut().rpc_timeout = Duration::from_secs(120);
-                    }
-                    _ => {}
+                if let ibc_relayer::config::ChainConfig::Cosmos(_) = c {
+                    c.cosmos_mut().rpc_timeout = Duration::from_secs(120);
                 }
             }
         }

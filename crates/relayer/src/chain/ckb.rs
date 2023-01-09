@@ -96,8 +96,8 @@ impl CkbChain {
             return Err(Error::empty_upgraded_client_state());
         }
         let start_slot = header_updates[0].finalized_header.slot;
-        for i in 0..header_updates.len() {
-            if header_updates[i].finalized_header.slot != i as u64 + start_slot {
+        for (i, item) in header_updates.iter().enumerate() {
+            if item.finalized_header.slot != i as u64 + start_slot {
                 return Err(Error::send_tx("uncontinuous header slot".to_owned()));
             }
         }
@@ -154,7 +154,7 @@ impl CkbChain {
             .unwrap_or(start_slot);
         let last_finalized_header = &finalized_headers[finalized_headers.len() - 1];
         let maximal_slot = last_finalized_header.inner.slot;
-        let tip_header_root = last_finalized_header.root.clone();
+        let tip_header_root = last_finalized_header.root;
 
         // Saves all header digests into storage for MMR.
         {
@@ -331,9 +331,7 @@ impl ChainEndpoint for CkbChain {
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         match tracked_msgs.tracking_id {
-            TrackingId::Static(NonCosmos::ETH_CREATE_CLIENT) => {
-                return self.create_eth_client();
-            }
+            TrackingId::Static(NonCosmos::ETH_CREATE_CLIENT) => self.create_eth_client(),
             TrackingId::Static(NonCosmos::ETH_UPDATE_CLIENT) => {
                 let updates = tracked_msgs
                     .msgs
@@ -344,7 +342,7 @@ impl ChainEndpoint for CkbChain {
                     .into_iter()
                     .map(|client| client.lightclient_update)
                     .collect();
-                return self.update_eth_client(updates);
+                self.update_eth_client(updates)
             }
             _ => Err(Error::send_tx("unknown msg".to_owned())),
         }

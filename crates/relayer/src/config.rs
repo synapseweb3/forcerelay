@@ -1,5 +1,4 @@
 //! Relayer configuration
-
 pub mod ckb;
 pub mod cosmos;
 pub mod error;
@@ -178,6 +177,7 @@ pub mod default {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum ChainConfig {
