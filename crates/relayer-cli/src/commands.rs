@@ -99,7 +99,7 @@ pub enum CliCmd {
     #[clap(display_order = 1000)]
     Completions(CompletionsCmd),
 
-    /// todo
+    /// Relay ETH headers to CKB and maintain them in CKB contract
     Forcerelay(ForcerelayCmd),
 }
 
