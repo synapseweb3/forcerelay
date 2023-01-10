@@ -3,7 +3,7 @@ use ckb_sdk::NetworkType;
 use eth2_types::MainnetEthSpec;
 use eth_light_client_in_ckb_verification::types::{
     core::{Client as EthLcClient, Header as EthLcHeader},
-    packed,
+    packed::{self, Client as PackedClient, ProofUpdate as PackedProofUpdate},
     prelude::*,
 };
 use ibc_relayer_storage::{error::Error as StorageError, prelude::*, Storage};
@@ -92,6 +92,36 @@ impl CkbChain {
         &mut self,
         header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        let (packed_client, packed_proof_update) =
+            self.get_verified_packed_client_and_proof_update(header_updates)?;
+
+        let (tx, inputs) =
+            self.rt
+                .block_on(self.tx_assembler.assemble_updates_into_transaction(
+                    packed_client,
+                    packed_proof_update,
+                    &self.config.lightclient_contract_typeargs,
+                    &self.config.id.to_string(),
+                ))?;
+        let key: Secp256k1KeyPair = self
+            .keybase
+            .get_key(&self.config.key_name)
+            .map_err(Error::key_base)?;
+        let tx = signer::sign(tx, &inputs, vec![], key).map_err(Error::key_base)?;
+        self.rt
+            .block_on(
+                self.rpc_client
+                    .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
+            )
+            .map_err(|e| Error::rpc_response(e.to_string()))?;
+
+        Ok(vec![])
+    }
+
+    pub(self) fn get_verified_packed_client_and_proof_update(
+        &self,
+        header_updates: Vec<EthUpdate>,
+    ) -> Result<(PackedClient, PackedProofUpdate), Error> {
         if header_updates.is_empty() {
             return Err(Error::empty_upgraded_client_state());
         }
@@ -102,7 +132,8 @@ impl CkbChain {
             }
         }
 
-        // check the tip in storage and the tip in the client cell are the same.
+        let mut is_creation = true;
+        // Check the tip in storage and the tip in the client cell are the same.
         if let Some(stored_tip_slot) = self.storage.get_tip_beacon_header_slot()? {
             if start_slot != stored_tip_slot + 1 {
                 let height = (stored_tip_slot + 1).try_into().expect("slot too big");
@@ -111,6 +142,7 @@ impl CkbChain {
                     LightClientError::missing_last_block_id(height),
                 ));
             }
+            is_creation = false;
         }
         let onchain_packed_client = self.rt.block_on(self.tx_assembler.fetch_packed_client(
             &self.config.lightclient_contract_typeargs,
@@ -206,13 +238,12 @@ impl CkbChain {
         };
 
         // Build the packed client.
-        let packed_client = EthLcClient {
+        let client = EthLcClient {
             minimal_slot,
             maximal_slot,
             tip_header_root,
             headers_mmr_root: packed_headers_mmr_root.unpack(),
-        }
-        .pack();
+        };
 
         // Build the packed proof update.
         let packed_proof_update = {
@@ -234,27 +265,17 @@ impl CkbChain {
                 .build()
         };
 
-        let (tx, inputs) =
-            self.rt
-                .block_on(self.tx_assembler.assemble_updates_into_transaction(
-                    packed_client,
-                    packed_proof_update,
-                    &self.config.lightclient_contract_typeargs,
-                    &self.config.id.to_string(),
-                ))?;
-        let key: Secp256k1KeyPair = self
-            .keybase
-            .get_key(&self.config.key_name)
-            .map_err(Error::key_base)?;
-        let tx = signer::sign(tx, &inputs, vec![], key).map_err(Error::key_base)?;
-        self.rt
-            .block_on(
-                self.rpc_client
-                    .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
-            )
-            .map_err(|e| Error::rpc_response(e.to_string()))?;
+        // Invoke verification from core::Client on packed_proof_update
+        if is_creation {
+            EthLcClient::new_from_packed_proof_update(packed_proof_update.as_reader())
+                .map_err(|_| Error::send_tx("failed to create header".to_owned()))?;
+        } else {
+            client
+                .try_apply_packed_proof_update(packed_proof_update.as_reader())
+                .map_err(|_| Error::send_tx("failed to update header".to_owned()))?;
+        }
 
-        Ok(vec![])
+        Ok((client.pack(), packed_proof_update))
     }
 }
 
