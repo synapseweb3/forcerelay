@@ -54,6 +54,7 @@ impl AnyUpgradeOptions {
 
 impl UpgradeOptions for AnyUpgradeOptions {}
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AnyClientState {

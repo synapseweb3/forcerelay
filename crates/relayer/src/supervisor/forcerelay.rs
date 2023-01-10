@@ -123,5 +123,5 @@ fn send_messages<Chain: ChainHandle>(
             .collect(),
         tracking_id: TrackingId::Static(NonCosmosTrackingId::ETH_UPDATE_CLIENT),
     };
-    return chain.send_messages_and_wait_commit(tracked_msgs);
+    chain.send_messages_and_wait_commit(tracked_msgs)
 }

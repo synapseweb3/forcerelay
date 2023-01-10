@@ -68,7 +68,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         ConsensusClient {
             rpc: R::new(rpc),
             store: LightClientStore::default(),
-            initial_checkpoint: checkpoint_block_root.clone(),
+            initial_checkpoint: *checkpoint_block_root,
             last_checkpoint: None,
             config,
             new_block_emitors: vec![],
@@ -410,10 +410,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             Ok(is_aggregate_valid(signature, signing_root, &pks))
         })();
 
-        match res {
-            Ok(b) => b,
-            Err(_) => false,
-        }
+        res.unwrap_or(false)
     }
 
     fn compute_committee_sign_root(&self, header: H256, slot: u64) -> Result<H256> {
@@ -662,7 +659,7 @@ fn get_participating_keys(
         if bit {
             let pk = committee.pubkeys.index(i);
             let pk = PublicKey::deserialize(pk).unwrap();
-            pks.push(pk.clone());
+            pks.push(pk);
         }
     });
     Ok(pks)
@@ -796,7 +793,7 @@ mod tests {
         let mut update = updates[0].clone();
         update.finalized_header = Header::default();
 
-        let err = client.verify_update(&mut update).err().unwrap();
+        let err = client.verify_update(&update).err().unwrap();
         assert_eq!(
             err.to_string(),
             ConsensusError::InvalidFinalityProof.to_string()
@@ -846,7 +843,7 @@ mod tests {
         let mut update = updates[0].clone();
         update.sync_aggregate.sync_committee_signature = FixedVector::default();
 
-        let err = client.verify_update(&mut update).err().unwrap();
+        let err = client.verify_update(&update).err().unwrap();
         assert_eq!(
             err.to_string(),
             ConsensusError::InvalidSignature.to_string()

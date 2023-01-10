@@ -120,7 +120,7 @@ where
     }
 
     pub fn handle<Handle: ChainHandle>(&self) -> Handle {
-        let chain_id = ChainEndpoint::id(&self.chain).clone();
+        let chain_id = ChainEndpoint::id(&self.chain);
         let sender = self.request_sender.clone();
 
         Handle::new(chain_id, sender)
@@ -411,7 +411,7 @@ where
     }
 
     fn get_config(&self, reply_to: ReplyTo<ChainConfig>) -> Result<(), Error> {
-        let result = Ok(self.chain.config().clone());
+        let result = Ok(self.chain.config());
         reply_to.send(result).map_err(Error::send)
     }
 

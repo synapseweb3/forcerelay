@@ -113,7 +113,7 @@ pub trait ChainEndpoint: Sized {
         // Get the key from key seed file
         let key_pair = self
             .keybase()
-            .get_key(&self.config().key_name())
+            .get_key(self.config().key_name())
             .map_err(|e| Error::key_not_found(self.config().key_name().to_string(), e))?;
 
         Ok(key_pair)

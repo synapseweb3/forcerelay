@@ -1976,13 +1976,13 @@ fn do_health_check(chain: &CosmosSdkChain) -> Result<(), Error> {
     })?;
 
     if chain.historical_entries()? == 0 {
-        return Err(Error::no_historical_entries(chain_id.clone()));
+        return Err(Error::no_historical_entries(chain_id));
     }
 
     let status = chain.chain_status()?;
 
     if status.node_info.other.tx_index != TxIndexStatus::On {
-        return Err(Error::tx_indexing_disabled(chain_id.clone()));
+        return Err(Error::tx_indexing_disabled(chain_id));
     }
 
     if status.node_info.network.as_str() != chain_id.as_str() {
@@ -2000,7 +2000,7 @@ fn do_health_check(chain: &CosmosSdkChain) -> Result<(), Error> {
 
     for price in node_min_gas_prices {
         match relayer_gas_price.partial_cmp(&price) {
-            Some(Ordering::Less) => return Err(Error::gas_price_too_low(chain_id.clone())),
+            Some(Ordering::Less) => return Err(Error::gas_price_too_low(chain_id)),
             Some(_) => {
                 found_matching_denom = true;
                 break;
@@ -2021,7 +2021,7 @@ fn do_health_check(chain: &CosmosSdkChain) -> Result<(), Error> {
 
     if let Err(diagnostic) = compatibility::run_diagnostic(&version_specs) {
         return Err(Error::sdk_module_version(
-            chain_id.clone(),
+            chain_id,
             grpc_address,
             diagnostic.to_string(),
         ));

@@ -284,7 +284,7 @@ pub fn list_keys(config: &ChainConfig) -> Result<Vec<(String, AnySigningKeyPair)
     let keys = match config.r#type() {
         ChainType::CosmosSdk => {
             let keyring =
-                KeyRing::new_secp256k1(Store::Test, &config.cosmos().account_prefix, &config.id())?;
+                KeyRing::new_secp256k1(Store::Test, &config.cosmos().account_prefix, config.id())?;
             keyring
                 .keys()?
                 .into_iter()

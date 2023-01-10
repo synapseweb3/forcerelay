@@ -36,7 +36,7 @@ pub struct ForcerelayCmd {
 impl Runnable for ForcerelayCmd {
     fn run(&self) {
         let config = (*app_config()).clone();
-        let registry = SharedRegistry::<CachingChainHandle>::new(config.clone());
+        let registry = SharedRegistry::<CachingChainHandle>::new(config);
         let eth = registry.get_or_spawn(&self.eth_chain).unwrap_or_else(|e| {
             Output::error(format!("Forcerelay failed to start ethereum: {}", e)).exit()
         });
