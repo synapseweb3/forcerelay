@@ -140,6 +140,10 @@ define_error! {
             [ TraceError<bs58::decode::Error> ]
             |_| { "bs58 decode error" },
 
+        Secp256k1
+            { message: String }
+            |e| { format!("secp256k1 error: {}", e.message) },
+
         UnsupportedAddressType
           {
               address_type: AddressType,
@@ -148,5 +152,11 @@ define_error! {
           |e| {
               format!("Unsupported address type {} for key type {}", e.address_type, e.key_type)
           }
+    }
+}
+
+impl From<secp256k1::Error> for Error {
+    fn from(err: secp256k1::Error) -> Error {
+        Error::secp256k1(err.to_string())
     }
 }

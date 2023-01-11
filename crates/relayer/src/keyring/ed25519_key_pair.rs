@@ -52,7 +52,7 @@ impl TryFrom<&AddressType> for Ed25519AddressType {
 
     fn try_from(address_type: &AddressType) -> Result<Self, Self::Error> {
         match address_type {
-            AddressType::Cosmos | AddressType::Ethermint { .. } => Err(
+            AddressType::Cosmos | AddressType::Ethermint { .. } | AddressType::Ckb { .. } => Err(
                 Error::unsupported_address_type(address_type.clone(), Ed25519KeyPair::KEY_TYPE),
             ),
         }

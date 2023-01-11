@@ -573,6 +573,7 @@ impl Default for RestConfig {
 pub enum AddressType {
     Cosmos,
     Ethermint { pk_type: String },
+    Ckb { is_mainnet: bool },
 }
 
 impl Default for AddressType {
@@ -586,6 +587,7 @@ impl Display for AddressType {
         match self {
             AddressType::Cosmos => write!(f, "cosmos"),
             AddressType::Ethermint { .. } => write!(f, "ethermint"),
+            AddressType::Ckb { .. } => write!(f, "ckb"),
         }
     }
 }

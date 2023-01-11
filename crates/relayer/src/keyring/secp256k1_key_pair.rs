@@ -5,6 +5,7 @@ use bitcoin::{
     network::constants::Network,
     util::bip32::{ChildNumber, DerivationPath, ExtendedPrivKey, ExtendedPubKey},
 };
+use ckb_hash::blake2b_256;
 use digest::Digest;
 use generic_array::{typenum::U32, GenericArray};
 use hdpath::StandardHDPath;
@@ -65,6 +66,7 @@ fn standard_path_to_derivation_path(path: &StandardHDPath) -> DerivationPath {
 pub enum Secp256k1AddressType {
     Cosmos,
     Ethermint,
+    Ckb,
 }
 
 impl Secp256k1AddressType {
@@ -91,6 +93,7 @@ impl TryFrom<&AddressType> for Secp256k1AddressType {
                 Ok(Self::Ethermint)
             }
             AddressType::Cosmos | AddressType::Ethermint { pk_type: _ } => Ok(Self::Cosmos),
+            AddressType::Ckb { .. } => Ok(Self::Ckb),
         }
     }
 }
@@ -111,6 +114,12 @@ pub fn get_address(public_key: &PublicKey, address_type: Secp256k1AddressType) -
         }
         Secp256k1AddressType::Cosmos => {
             Ripemd160::digest(Sha256::digest(public_key.serialize())).into()
+        }
+        Secp256k1AddressType::Ckb => {
+            let hashed_key = blake2b_256(&public_key.serialize()[..]);
+            let mut address = [0u8; 20];
+            address[..].copy_from_slice(&hashed_key[0..20]);
+            address
         }
     }
 }
@@ -297,19 +306,39 @@ impl SigningKeyPair for Secp256k1KeyPair {
     // - https://github.com/evmos/ethermint/blob/main/crypto/ethsecp256k1/ethsecp256k1.go
     // - informalsystems/hermes#2863.
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
-        let hashed_message: GenericArray<u8, U32> = match self.address_type {
-            Secp256k1AddressType::Ethermint => keccak256_hash(message).into(),
-            Secp256k1AddressType::Cosmos => Sha256::digest(message),
+        let message = match self.address_type {
+            Secp256k1AddressType::Ethermint | Secp256k1AddressType::Cosmos => {
+                let hashed_message: GenericArray<u8, U32> = match self.address_type {
+                    Secp256k1AddressType::Ethermint => keccak256_hash(message).into(),
+                    Secp256k1AddressType::Cosmos => Sha256::digest(message),
+                    _ => unreachable!("checked"),
+                };
+
+                // SAFETY: hashed_message is 32 bytes, as expected in `Message::from_slice`,
+                // so `unwrap` is safe.
+                Message::from_slice(&hashed_message).unwrap()
+            }
+            Secp256k1AddressType::Ckb => Message::from_slice(message)?,
         };
 
-        // SAFETY: hashed_message is 32 bytes, as expected in `Message::from_slice`,
-        // so `unwrap` is safe.
-        let message = Message::from_slice(&hashed_message).unwrap();
-
-        Ok(Secp256k1::signing_only()
-            .sign_ecdsa(&message, &self.private_key)
-            .serialize_compact()
-            .to_vec())
+        let signature = match self.address_type {
+            Secp256k1AddressType::Ethermint | Secp256k1AddressType::Cosmos => {
+                Secp256k1::signing_only()
+                    .sign_ecdsa(&message, &self.private_key)
+                    .serialize_compact()
+                    .to_vec()
+            }
+            Secp256k1AddressType::Ckb => {
+                let (recov_id, data) = Secp256k1::signing_only()
+                    .sign_ecdsa_recoverable(&message, &self.private_key)
+                    .serialize_compact();
+                let mut signature_bytes = [0u8; 65];
+                signature_bytes[0..64].copy_from_slice(&data[0..64]);
+                signature_bytes[64] = recov_id.to_i32() as u8;
+                signature_bytes.to_vec()
+            }
+        };
+        Ok(signature)
     }
 
     fn as_any(&self) -> &dyn Any {
