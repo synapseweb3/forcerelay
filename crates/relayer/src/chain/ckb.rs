@@ -1,5 +1,5 @@
 use ckb_jsonrpc_types::OutputsValidator;
-use ckb_sdk::NetworkType;
+use ckb_sdk::{Address, AddressPayload, NetworkType};
 use eth2_types::MainnetEthSpec;
 use eth_light_client_in_ckb_verification::types::{
     core::{Client as EthLcClient, Header as EthLcHeader},
@@ -67,10 +67,21 @@ use super::{
 };
 
 mod assembler;
+mod communication;
 mod helper;
 mod rpc_client;
 mod signer;
+
+pub mod prelude {
+    pub use super::{
+        assembler::TxAssembler,
+        communication::{CkbReader, CkbWriter, Response},
+        helper::{CellSearcher, TxCompleter},
+    };
+}
+
 use assembler::TxAssembler;
+use prelude::{CkbReader as _, CkbWriter as _};
 use rpc_client::RpcClient;
 
 pub struct CkbChain {
@@ -78,7 +89,7 @@ pub struct CkbChain {
     pub rpc_client: Arc<RpcClient>,
     pub config: CkbChainConfig,
     pub keybase: KeyRing<Secp256k1KeyPair>,
-    pub tx_assembler: TxAssembler,
+    pub tx_assembler_address: Address,
     // TODO the spec of Ethereum should be selectable.
     pub storage: Storage<MainnetEthSpec>,
 }
@@ -95,14 +106,15 @@ impl CkbChain {
         let (packed_client, packed_proof_update) =
             self.get_verified_packed_client_and_proof_update(header_updates)?;
 
-        let (tx, inputs) =
-            self.rt
-                .block_on(self.tx_assembler.assemble_updates_into_transaction(
-                    packed_client,
-                    packed_proof_update,
-                    &self.config.lightclient_contract_typeargs,
-                    &self.config.id.to_string(),
-                ))?;
+        let (tx, inputs) = self
+            .rt
+            .block_on(self.rpc_client.assemble_updates_into_transaction(
+                &self.tx_assembler_address,
+                packed_client,
+                packed_proof_update,
+                &self.config.lightclient_contract_typeargs,
+                &self.config.id.to_string(),
+            ))?;
         let key: Secp256k1KeyPair = self
             .keybase
             .get_key(&self.config.key_name)
@@ -144,7 +156,7 @@ impl CkbChain {
             }
             is_creation = false;
         }
-        let onchain_packed_client = self.rt.block_on(self.tx_assembler.fetch_packed_client(
+        let onchain_packed_client = self.rt.block_on(self.rpc_client.fetch_packed_client(
             &self.config.lightclient_contract_typeargs,
             &self.config.id.to_string(),
         ))?;
@@ -306,14 +318,15 @@ impl ChainEndpoint for CkbChain {
             NetworkType::Testnet
         };
         let key: Secp256k1KeyPair = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
-        let tx_assembler = TxAssembler::new(rpc_client.clone(), &key.public_key, network);
+        let address_payload = AddressPayload::from_pubkey(&key.public_key);
+        let tx_assembler_address = Address::new(network, address_payload, true);
 
         Ok(CkbChain {
             rt,
             rpc_client,
             config,
             keybase,
-            tx_assembler,
+            tx_assembler_address,
             storage,
         })
     }
