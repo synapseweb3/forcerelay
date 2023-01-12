@@ -96,6 +96,13 @@ impl Update {
             next_sync_committee_branch,
         }
     }
+
+    pub fn from_finalized_header(header: Header) -> Self {
+        Self {
+            finalized_header: header,
+            ..Default::default()
+        }
+    }
 }
 
 impl From<&Update> for GenericUpdate {
