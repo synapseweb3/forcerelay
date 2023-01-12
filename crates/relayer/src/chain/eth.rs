@@ -191,7 +191,7 @@ impl ChainEndpoint for EthChain {
         let limit = pagination.limit;
         let client_states = self
             .light_client
-            .get_finality_updates_from(start_height, limit)
+            .get_finality_updates_from(start_height, limit)?
             .into_iter()
             .map(|update| IdentifiedAnyClientState {
                 client_id: ClientId::new(ClientType::Eth, 0).unwrap(),
@@ -380,7 +380,7 @@ impl ChainEndpoint for EthChain {
     ) -> Result<Self::ClientState, Error> {
         if let Some(update) = self
             .light_client
-            .get_finality_update(slot.revision_height())
+            .get_finality_update(slot.revision_height())?
         {
             let client_state = EthClientState {
                 chain_id: self.config.id.clone(),

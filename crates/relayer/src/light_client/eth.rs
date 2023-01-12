@@ -125,11 +125,24 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             .insert(update.finalized_header.slot, update);
     }
 
-    pub fn get_finality_update(&self, finality_update_slot: u64) -> Option<Update> {
-        self.store
+    pub async fn get_finality_update(
+        &mut self,
+        finality_update_slot: u64,
+    ) -> Result<Option<Update>> {
+        let mut update = self
+            .store
             .finality_updates
             .get(&finality_update_slot)
-            .cloned()
+            .cloned();
+        if update.is_none() && finality_update_slot < self.store.finalized_header.slot {
+            let finalized_header = self.rpc.get_header(finality_update_slot).await?;
+            let new_update = Update::from_finalized_header(finalized_header);
+            self.store
+                .finality_updates
+                .insert(finality_update_slot, new_update.clone());
+            update = Some(new_update);
+        }
+        Ok(update)
     }
 
     async fn bootstrap(&mut self) -> Result<()> {
@@ -453,6 +466,7 @@ pub trait ConsensusRpc {
     async fn get_bootstrap(&self, block_root: &[u8]) -> Result<Bootstrap>;
     async fn get_updates(&self, period: u64, count: u8) -> Result<Vec<Update>>;
     async fn get_finality_update(&self) -> Result<FinalityUpdate>;
+    async fn get_header(&self, slot: u64) -> Result<Header>;
 }
 
 #[derive(Default)]
@@ -534,6 +548,19 @@ impl ConsensusRpc for NimbusRpc {
 
         Ok(res.data)
     }
+
+    async fn get_header(&self, slot: u64) -> Result<Header> {
+        let req = format!("{}/eth/v1/beacon/headers/{}", self.rpc, slot);
+        let res = self
+            .client
+            .get(req)
+            .send()
+            .await?
+            .json::<HeaderResponse>()
+            .await?;
+
+        Ok(res.data)
+    }
 }
 
 pub struct LightClient {
@@ -580,18 +607,27 @@ impl LightClient {
         Ok(())
     }
 
-    pub fn get_finality_update(&self, finality_slot: u64) -> Option<Update> {
-        self.rt
-            .block_on(self.consensus_client.lock())
-            .get_finality_update(finality_slot)
+    pub fn get_finality_update(&self, finality_slot: u64) -> Result<Option<Update>, Error> {
+        let update = self
+            .rt
+            .block_on(
+                self.rt
+                    .block_on(self.consensus_client.lock())
+                    .get_finality_update(finality_slot),
+            )
+            .map_err(|e| Error::rpc_response(e.to_string()))?;
+        Ok(update)
     }
 
-    pub fn get_finality_updates_from(&self, mut finality_slot: u64, limit: u64) -> Vec<Update> {
-        let client = self.rt.block_on(self.consensus_client.lock());
+    pub fn get_finality_updates_from(
+        &self,
+        mut finality_slot: u64,
+        limit: u64,
+    ) -> Result<Vec<Update>, Error> {
         let mut updates = vec![];
         let is_limit = limit != 0;
         let mut count = 0;
-        while let Some(update) = client.get_finality_update(finality_slot) {
+        while let Some(update) = self.get_finality_update(finality_slot)? {
             updates.push(update);
             finality_slot += 1;
             count += 1;
@@ -599,7 +635,7 @@ impl LightClient {
                 break;
             }
         }
-        updates
+        Ok(updates)
     }
 }
 
@@ -682,6 +718,11 @@ struct UpdateData {
     data: Update,
 }
 
+#[derive(serde::Deserialize, Debug)]
+struct HeaderResponse {
+    data: Header,
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs::read_to_string;
@@ -729,6 +770,10 @@ mod tests {
         async fn get_finality_update(&self) -> Result<FinalityUpdate> {
             let finality = read_to_string(self.testdata.join("finality.json"))?;
             Ok(serde_json::from_str(&finality)?)
+        }
+
+        async fn get_header(&self, _slot: u64) -> Result<Header> {
+            Ok(Header::default())
         }
     }
 
