@@ -563,7 +563,11 @@ define_error! {
             { key_type: KeyType }
             |e| {
                 format!("Invalid key type {} for the current chain", e.key_type)
-            }
+            },
+
+        OtherError
+            { error: String }
+            |e| { e.error.clone() }
     }
 }
 
@@ -586,6 +590,10 @@ impl Error {
             ),
             _ => false,
         }
+    }
+
+    pub fn other<T: ToString>(error: T) -> Error {
+        Error::other_error(error.to_string())
     }
 }
 

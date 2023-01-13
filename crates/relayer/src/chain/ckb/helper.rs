@@ -60,6 +60,11 @@ pub trait CellSearcher: CkbReader {
                 .await
                 .map_err(|e| Error::rpc_response(e.to_string()))?;
 
+            if result.objects.is_empty() {
+                let errmsg = "no enough inputs";
+                return Err(Error::send_tx(errmsg.to_string()).into());
+            }
+
             let mut live_cells = result
                 .objects
                 .into_iter()

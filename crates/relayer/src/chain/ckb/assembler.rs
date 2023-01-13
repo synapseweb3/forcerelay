@@ -1,11 +1,13 @@
 #![allow(dead_code)]
 
 use async_trait::async_trait;
-use ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ckb_sdk::traits::PrimaryScriptType;
-use ckb_sdk::Address;
-use ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
-use ckb_types::{packed, prelude::*, H256};
+use ckb_sdk::{constants::TYPE_ID_CODE_HASH, traits::PrimaryScriptType, Address};
+use ckb_types::{
+    core::{Capacity, DepType, ScriptHashType, TransactionView},
+    packed,
+    prelude::*,
+    H256,
+};
 use eth_light_client_in_ckb_verification::types::packed::{
     Client as PackedClient, ClientReader as PackedClientReader, ProofUpdate as PackedProofUpdate,
 };
