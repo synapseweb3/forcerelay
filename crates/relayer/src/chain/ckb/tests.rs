@@ -149,7 +149,7 @@ fn test_update_eth_client() {
 
     let updates_part_1 = {
         let filepath = format!("{}/{}", TESTDATA_DIR, "headers-part-1.json");
-        let headers_str = read_to_string(&filepath).unwrap();
+        let headers_str = read_to_string(filepath).unwrap();
         let headers: Vec<EthHeader> = serde_json::from_str(&headers_str).unwrap();
         headers
             .into_iter()
@@ -223,7 +223,7 @@ fn test_update_eth_client() {
         let type_hash = contract_type_script.calc_script_hash();
         let client_as_type_args = chain.id().to_string().as_bytes().to_vec();
         let contract = packed::Script::new_builder()
-            .code_hash(type_hash.clone())
+            .code_hash(type_hash)
             .hash_type(ScriptHashType::Type.into())
             .args(client_as_type_args.pack())
             .build();
@@ -236,7 +236,7 @@ fn test_update_eth_client() {
 
     let updates_part_2 = {
         let filepath = format!("{}/{}", TESTDATA_DIR, "headers-part-2.json");
-        let headers_str = read_to_string(&filepath).unwrap();
+        let headers_str = read_to_string(filepath).unwrap();
         let headers: Vec<EthHeader> = serde_json::from_str(&headers_str).unwrap();
         headers
             .into_iter()

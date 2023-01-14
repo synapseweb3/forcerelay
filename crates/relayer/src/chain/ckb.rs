@@ -314,7 +314,7 @@ impl CkbChain {
 
     pub fn network(&self) -> Result<NetworkType, Error> {
         let cached_network_opt: Option<NetworkType> =
-            self.cached_network.read().map_err(Error::other)?.clone();
+            *self.cached_network.read().map_err(Error::other)?;
         let network = if let Some(network) = cached_network_opt {
             network
         } else {
@@ -329,7 +329,7 @@ impl CkbChain {
                     NetworkType::Testnet
                 }
             };
-            *self.cached_network.write().map_err(Error::other)? = Some(network.clone());
+            *self.cached_network.write().map_err(Error::other)? = Some(network);
             network
         };
         Ok(network)

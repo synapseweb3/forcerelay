@@ -49,7 +49,7 @@ impl RpcClient {
             .cells
             .entry(key_string)
             .and_modify(|v| v.push(cell.clone()))
-            .or_insert(vec![cell]);
+            .or_insert_with(|| vec![cell]);
     }
 
     pub fn clear_cells(&self) {

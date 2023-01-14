@@ -62,7 +62,7 @@ pub trait CellSearcher: CkbReader {
 
             if result.objects.is_empty() {
                 let errmsg = "no enough inputs";
-                return Err(Error::send_tx(errmsg.to_string()).into());
+                return Err(Error::send_tx(errmsg.to_string()));
             }
 
             let mut live_cells = result
