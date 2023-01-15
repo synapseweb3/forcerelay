@@ -1,36 +1,35 @@
-use ckb_sdk::rpc::ckb_indexer::SearchKey;
-use ckb_sdk::traits::{CellQueryOptions, LiveCell, PrimaryScriptType};
-use ckb_sdk::{Address, NetworkType};
-use ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
-use ckb_types::{bytes::Bytes, h256, packed, prelude::*};
+use async_trait::async_trait;
+use ckb_sdk::{
+    rpc::ckb_indexer::SearchKey,
+    traits::{CellQueryOptions, LiveCell, PrimaryScriptType},
+    Address, NetworkType,
+};
+use ckb_types::{
+    bytes::Bytes,
+    core::{Capacity, DepType, ScriptHashType, TransactionView},
+    h256, packed,
+    prelude::*,
+};
 
-use super::rpc_client::RpcClient;
+use super::{prelude::CkbReader, rpc_client::RpcClient};
 use crate::error::Error;
 
-pub struct CellSearcher<'r> {
-    rpc: &'r RpcClient,
-}
-
-impl<'r> CellSearcher<'r> {
-    pub fn new(rpc: &'r RpcClient) -> Self {
-        Self { rpc }
-    }
-
-    pub async fn search_cell(
+#[async_trait]
+pub trait CellSearcher: CkbReader {
+    async fn search_cell(
         &self,
         script: &packed::Script,
         script_type: PrimaryScriptType,
     ) -> Result<Option<LiveCell>, Error> {
         let search: SearchKey = CellQueryOptions::new(script.clone(), script_type).into();
         let result = self
-            .rpc
             .fetch_live_cells(search, 1, None)
             .await
             .map_err(|e| Error::rpc_response(e.to_string()))?;
         Ok(result.objects.first().cloned().map(Into::into))
     }
 
-    pub async fn search_cell_by_typescript(
+    async fn search_cell_by_typescript(
         &self,
         code_hash: &packed::Byte32,
         type_args: &Vec<u8>,
@@ -43,7 +42,7 @@ impl<'r> CellSearcher<'r> {
         self.search_cell(&typescript, PrimaryScriptType::Type).await
     }
 
-    pub async fn search_cells_by_address_and_capacity(
+    async fn search_cells_by_address_and_capacity(
         &self,
         address: &Address,
         need_capacity: u64,
@@ -57,10 +56,14 @@ impl<'r> CellSearcher<'r> {
             let search: SearchKey =
                 CellQueryOptions::new(lockscript.clone(), PrimaryScriptType::Lock).into();
             let result = self
-                .rpc
                 .fetch_live_cells(search, 5, next)
                 .await
                 .map_err(|e| Error::rpc_response(e.to_string()))?;
+
+            if result.objects.is_empty() {
+                let errmsg = "no enough inputs";
+                return Err(Error::send_tx(errmsg.to_string()));
+            }
 
             let mut live_cells = result
                 .objects
@@ -82,16 +85,9 @@ impl<'r> CellSearcher<'r> {
     }
 }
 
-pub struct TxCompleter<'t> {
-    cell_searcher: &'t CellSearcher<'t>,
-}
-
-impl<'t> TxCompleter<'t> {
-    pub fn new(cell_searcher: &'t CellSearcher) -> Self {
-        Self { cell_searcher }
-    }
-
-    pub async fn complete_tx_with_secp256k1_change(
+#[async_trait]
+pub trait TxCompleter: CellSearcher {
+    async fn complete_tx_with_secp256k1_change(
         &self,
         mut tx: TransactionView,
         address: &Address,
@@ -116,7 +112,6 @@ impl<'t> TxCompleter<'t> {
         if outputs_capacity > inputs_capacity {
             let need_capacity = outputs_capacity - inputs_capacity;
             let live_cells = self
-                .cell_searcher
                 .search_cells_by_address_and_capacity(
                     address,
                     need_capacity,
@@ -149,6 +144,9 @@ impl<'t> TxCompleter<'t> {
         Ok((tx, inputs_cell_as_output))
     }
 }
+
+impl CellSearcher for RpcClient {}
+impl TxCompleter for RpcClient {}
 
 fn get_secp256k1_celldep(network_type: NetworkType) -> packed::CellDep {
     let celldep = packed::CellDep::new_builder()

@@ -1,10 +1,13 @@
 use ckb_jsonrpc_types::OutputsValidator;
-use ckb_sdk::NetworkType;
+use ckb_sdk::{Address, AddressPayload, NetworkType};
 use eth2_types::MainnetEthSpec;
-use eth_light_client_in_ckb_verification::types::{
-    core::{Client as EthLcClient, Header as EthLcHeader},
-    packed::{self, Client as PackedClient, ProofUpdate as PackedProofUpdate},
-    prelude::*,
+use eth_light_client_in_ckb_verification::{
+    mmr,
+    types::{
+        core::{Client as EthLcClient, Header as EthLcHeader},
+        packed::{self, Client as PackedClient, ProofUpdate as PackedProofUpdate},
+        prelude::*,
+    },
 };
 use ibc_relayer_storage::{error::Error as StorageError, prelude::*, Storage};
 use ibc_relayer_types::clients::ics07_ckb::{
@@ -31,12 +34,14 @@ use ibc_relayer_types::{
     Height,
 };
 use semver::Version;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tendermint_light_client::errors::Error as LightClientError;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime as TokioRuntime;
 
-use crate::keyring::{KeyRing, Secp256k1KeyPair};
+#[cfg(test)]
+use crate::keyring::Store;
+
 use crate::{
     account::Balance,
     chain::cosmos::encode::key_pair_to_signer,
@@ -48,6 +53,7 @@ use crate::{
     denom::DenomTrace,
     error::Error,
     event::IbcEventWithHeight,
+    keyring::{KeyRing, Secp256k1KeyPair},
     misbehaviour::MisbehaviourEvidence,
 };
 
@@ -67,20 +73,47 @@ use super::{
 };
 
 mod assembler;
+mod communication;
 mod helper;
-mod rpc_client;
 mod signer;
+
+#[cfg(test)]
+mod mock_rpc_client;
+#[cfg(not(test))]
+mod rpc_client;
+#[cfg(test)]
+use mock_rpc_client as rpc_client;
+
+#[cfg(test)]
+mod tests;
+
+pub mod prelude {
+    pub use super::{
+        assembler::TxAssembler,
+        communication::{CkbReader, CkbWriter, Response},
+        helper::{CellSearcher, TxCompleter},
+    };
+}
+
 use assembler::TxAssembler;
+
+use prelude::{CkbReader as _, CkbWriter as _};
+
 use rpc_client::RpcClient;
+
+// Ref: https://github.com/satoshilabs/slips/pull/621
+pub const HD_PATH: &str = "m/44'/309'/0'/0/0";
 
 pub struct CkbChain {
     pub rt: Arc<TokioRuntime>,
     pub rpc_client: Arc<RpcClient>,
     pub config: CkbChainConfig,
     pub keybase: KeyRing<Secp256k1KeyPair>,
-    pub tx_assembler: TxAssembler,
     // TODO the spec of Ethereum should be selectable.
     pub storage: Storage<MainnetEthSpec>,
+
+    pub cached_network: RwLock<Option<NetworkType>>,
+    pub cached_tx_assembler_address: RwLock<Option<Address>>,
 }
 
 impl CkbChain {
@@ -88,21 +121,23 @@ impl CkbChain {
         Ok(vec![])
     }
 
-    fn update_eth_client(
+    pub(crate) fn update_eth_client(
         &mut self,
         header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let (packed_client, packed_proof_update) =
             self.get_verified_packed_client_and_proof_update(header_updates)?;
 
-        let (tx, inputs) =
-            self.rt
-                .block_on(self.tx_assembler.assemble_updates_into_transaction(
-                    packed_client,
-                    packed_proof_update,
-                    &self.config.lightclient_contract_typeargs,
-                    &self.config.id.to_string(),
-                ))?;
+        let tx_assembler_address = self.tx_assembler_address()?;
+        let (tx, inputs) = self
+            .rt
+            .block_on(self.rpc_client.assemble_updates_into_transaction(
+                &tx_assembler_address,
+                packed_client,
+                packed_proof_update,
+                &self.config.lightclient_contract_typeargs,
+                &self.config.id.to_string(),
+            ))?;
         let key: Secp256k1KeyPair = self
             .keybase
             .get_key(&self.config.key_name)
@@ -144,11 +179,18 @@ impl CkbChain {
             }
             is_creation = false;
         }
-        let onchain_packed_client = self.rt.block_on(self.tx_assembler.fetch_packed_client(
+        let onchain_packed_client_opt = self.rt.block_on(self.rpc_client.fetch_packed_client(
             &self.config.lightclient_contract_typeargs,
             &self.config.id.to_string(),
         ))?;
-        if let Some(client) = onchain_packed_client {
+
+        if is_creation != onchain_packed_client_opt.is_none() {
+            return Err(Error::send_tx(
+                "storage and the chain state is not same".to_owned(),
+            ));
+        }
+
+        if let Some(ref client) = onchain_packed_client_opt {
             let onchain_tip_slot: u64 = client.maximal_slot().unpack();
             if start_slot != onchain_tip_slot + 1 {
                 let height = (onchain_tip_slot + 1).try_into().expect("slot too big");
@@ -186,7 +228,6 @@ impl CkbChain {
             .unwrap_or(start_slot);
         let last_finalized_header = &finalized_headers[finalized_headers.len() - 1];
         let maximal_slot = last_finalized_header.inner.slot;
-        let tip_header_root = last_finalized_header.root;
 
         // Saves all header digests into storage for MMR.
         {
@@ -217,7 +258,7 @@ impl CkbChain {
         let (packed_headers_mmr_root, packed_headers_mmr_proof) = {
             let positions = (start_slot..=maximal_slot)
                 .into_iter()
-                .map(|slot| slot - minimal_slot)
+                .map(|slot| mmr::lib::leaf_index_to_pos(slot - minimal_slot))
                 .collect::<Vec<_>>();
 
             let mmr = self.storage.chain_root_mmr(maximal_slot)?;
@@ -235,14 +276,6 @@ impl CkbChain {
                 .build();
 
             (headers_mmr_root, headers_mmr_proof)
-        };
-
-        // Build the packed client.
-        let client = EthLcClient {
-            minimal_slot,
-            maximal_slot,
-            tip_header_root,
-            headers_mmr_root: packed_headers_mmr_root.unpack(),
         };
 
         // Build the packed proof update.
@@ -266,16 +299,65 @@ impl CkbChain {
         };
 
         // Invoke verification from core::Client on packed_proof_update
-        if is_creation {
-            EthLcClient::new_from_packed_proof_update(packed_proof_update.as_reader())
-                .map_err(|_| Error::send_tx("failed to create header".to_owned()))?;
-        } else {
+        let client = if let Some(client) = onchain_packed_client_opt {
             client
+                .unpack()
                 .try_apply_packed_proof_update(packed_proof_update.as_reader())
-                .map_err(|_| Error::send_tx("failed to update header".to_owned()))?;
-        }
+                .map_err(|_| Error::send_tx("failed to update header".to_owned()))?
+        } else {
+            EthLcClient::new_from_packed_proof_update(packed_proof_update.as_reader())
+                .map_err(|_| Error::send_tx("failed to create header".to_owned()))?
+        };
 
         Ok((client.pack(), packed_proof_update))
+    }
+
+    pub fn network(&self) -> Result<NetworkType, Error> {
+        let cached_network_opt: Option<NetworkType> =
+            *self.cached_network.read().map_err(Error::other)?;
+        let network = if let Some(network) = cached_network_opt {
+            network
+        } else {
+            let network = {
+                let chain_info = self
+                    .rt
+                    .block_on(self.rpc_client.get_blockchain_info())
+                    .map_err(|e| Error::rpc_response(e.to_string()))?;
+                if chain_info.chain == "ckb" {
+                    NetworkType::Mainnet
+                } else {
+                    NetworkType::Testnet
+                }
+            };
+            *self.cached_network.write().map_err(Error::other)? = Some(network);
+            network
+        };
+        Ok(network)
+    }
+
+    pub fn tx_assembler_address(&self) -> Result<Address, Error> {
+        let cached_address = self
+            .cached_tx_assembler_address
+            .read()
+            .map_err(Error::other)?
+            .clone();
+        let address = if let Some(address) = cached_address {
+            address
+        } else {
+            let network = self.network()?;
+            let key: Secp256k1KeyPair = self
+                .keybase
+                .get_key(&self.config.key_name)
+                .map_err(Error::key_base)?;
+            let address_payload = AddressPayload::from_pubkey(&key.public_key);
+            let address = Address::new(network, address_payload, true);
+            *self
+                .cached_tx_assembler_address
+                .write()
+                .map_err(Error::other)? = Some(address.clone());
+            address
+        };
+        Ok(address)
     }
 }
 
@@ -293,28 +375,26 @@ impl ChainEndpoint for CkbChain {
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: CkbChainConfig = config.try_into()?;
         let rpc_client = Arc::new(RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc));
-        let keybase =
-            KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
         let storage = Storage::new(&config.data_dir)?;
 
-        let chain_info = rt
-            .block_on(rpc_client.get_blockchain_info())
-            .map_err(|e| Error::rpc_response(e.to_string()))?;
-        let network = if chain_info.chain == "ckb" {
-            NetworkType::Mainnet
-        } else {
-            NetworkType::Testnet
-        };
-        let key: Secp256k1KeyPair = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
-        let tx_assembler = TxAssembler::new(rpc_client.clone(), &key.public_key, network);
+        #[cfg(test)]
+        let keybase = KeyRing::new(Store::Memory, "ckb", &config.id).map_err(Error::key_base)?;
+
+        #[cfg(not(test))]
+        let keybase =
+            KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
+
+        let cached_network = RwLock::new(None);
+        let cached_tx_assembler_address = RwLock::new(None);
 
         Ok(CkbChain {
             rt,
             rpc_client,
             config,
             keybase,
-            tx_assembler,
             storage,
+            cached_network,
+            cached_tx_assembler_address,
         })
     }
 

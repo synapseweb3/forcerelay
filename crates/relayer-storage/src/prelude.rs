@@ -43,7 +43,7 @@ pub trait StorageAsMMRStore<S: EthSpec>:
     /// Returns the chain root MMR for a provided slot.
     fn chain_root_mmr(&self, curr: Slot) -> Result<ClientRootMMR<Self>> {
         if let Some(base) = self.get_base_beacon_header_slot()? {
-            let index = curr + 1 - base;
+            let index = curr - base;
             let mmr_size = mmr::lib::leaf_index_to_mmr_size(index);
             let mmr = ClientRootMMR::new(mmr_size, self.clone());
             Ok(mmr)

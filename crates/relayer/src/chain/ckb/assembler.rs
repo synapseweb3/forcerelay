@@ -1,33 +1,26 @@
 #![allow(dead_code)]
 
-use ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ckb_sdk::traits::PrimaryScriptType;
-use ckb_sdk::{Address, AddressPayload, NetworkType};
-use ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
-use ckb_types::{packed, prelude::*, H256};
+use async_trait::async_trait;
+use ckb_sdk::{constants::TYPE_ID_CODE_HASH, traits::PrimaryScriptType, Address};
+use ckb_types::{
+    core::{Capacity, DepType, ScriptHashType, TransactionView},
+    packed,
+    prelude::*,
+    H256,
+};
 use eth_light_client_in_ckb_verification::types::packed::{
     Client as PackedClient, ClientReader as PackedClientReader, ProofUpdate as PackedProofUpdate,
 };
-use secp256k1::PublicKey;
-use std::sync::Arc;
 
-use super::helper::{CellSearcher, TxCompleter};
-use super::rpc_client::RpcClient;
+use super::{
+    prelude::{CellSearcher, TxCompleter},
+    rpc_client::RpcClient,
+};
 use crate::error::Error;
 
-pub struct TxAssembler {
-    ckb_rpc: Arc<RpcClient>,
-    address: Address,
-}
-
-impl TxAssembler {
-    pub fn new(ckb_rpc: Arc<RpcClient>, pubkey: &PublicKey, network: NetworkType) -> Self {
-        let address_payload = AddressPayload::from_pubkey(pubkey);
-        let address = Address::new(network, address_payload, true);
-        Self { ckb_rpc, address }
-    }
-
-    pub async fn fetch_packed_client(
+#[async_trait]
+pub trait TxAssembler: CellSearcher + TxCompleter {
+    async fn fetch_packed_client(
         &self,
         contract_typeid_args: &H256,
         client_id: &String,
@@ -38,7 +31,7 @@ impl TxAssembler {
             .args(contract_typeid_args.as_bytes().to_vec().pack())
             .build();
         let type_hash = contract_typescript.calc_script_hash();
-        let lightclient_cell_opt = CellSearcher::new(&self.ckb_rpc)
+        let lightclient_cell_opt = self
             .search_cell_by_typescript(&type_hash, &client_id.as_bytes().to_vec())
             .await?;
         match lightclient_cell_opt {
@@ -53,8 +46,9 @@ impl TxAssembler {
         }
     }
 
-    pub async fn assemble_updates_into_transaction(
+    async fn assemble_updates_into_transaction(
         &self,
+        address: &Address,
         packed_client: PackedClient,
         packed_proof_update: PackedProofUpdate,
         contract_typeid_args: &H256,
@@ -65,9 +59,8 @@ impl TxAssembler {
             .hash_type(ScriptHashType::Type.into())
             .args(contract_typeid_args.as_bytes().to_vec().pack())
             .build();
-        let searcher = CellSearcher::new(&self.ckb_rpc);
         let contract_cell = {
-            let contract = searcher
+            let contract = self
                 .search_cell(&contract_typescript, PrimaryScriptType::Type)
                 .await?;
             match contract {
@@ -86,7 +79,7 @@ impl TxAssembler {
             .build();
 
         let type_hash = contract_typescript.calc_script_hash();
-        let lightclient_cell_opt = searcher
+        let lightclient_cell_opt = self
             .search_cell_by_typescript(&type_hash, &client_id.as_bytes().to_vec())
             .await?;
 
@@ -123,11 +116,13 @@ impl TxAssembler {
             .cell_dep(contract_cell_dep)
             .build();
         let fee_rate = 1000;
-        let (tx, mut new_inputs) = TxCompleter::new(&searcher)
-            .complete_tx_with_secp256k1_change(tx, &self.address, inputs_capacity, fee_rate)
+        let (tx, mut new_inputs) = self
+            .complete_tx_with_secp256k1_change(tx, address, inputs_capacity, fee_rate)
             .await?;
 
         inputs_cell_as_output.append(&mut new_inputs);
         Ok((tx, inputs_cell_as_output))
     }
 }
+
+impl TxAssembler for RpcClient {}

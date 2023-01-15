@@ -1,0 +1,226 @@
+[
+  {
+    "slot": "5246088",
+    "proposer_index": "186692",
+    "parent_root": "0x22d39daad3a5ea03019d1344f23e2feb6d1354e2013e4221021089519fb8aa5f",
+    "state_root": "0xe8e6c881ec15ad67fa897d4e8bd2afbbbb2f7ad97e2453c1dc53bc74cfd41568",
+    "body_root": "0x9ef8a7c1a36530b36285b012909ff73dd04bd978fe6a0c00d71c8b76bbef6322"
+  },
+  {
+    "slot": "5246089",
+    "proposer_index": "166336",
+    "parent_root": "0x3102d15215a1e1a33b9a530f8393e4dba5c33652bceaf7d7d23340aa1706e29e",
+    "state_root": "0x147e7a97b300760d92c6a099a50c5646bd7e0746ea83eced6d740db55ce1b214",
+    "body_root": "0x49acfc5cef9af5bee80162ea9523848ff7e87518d3e2f77aac50f2149cf5a161"
+  },
+  {
+    "slot": "5246090",
+    "proposer_index": "292106",
+    "parent_root": "0x68bb203c2f538985df01064b5e9e4c9a7e59be48e3a79d2c42be3f4c7a918dd1",
+    "state_root": "0xd51be637271766418d1d314652863c4e5ca04b75c6f3e746005205ae00d4d4fb",
+    "body_root": "0x2b18762dcc125b0aa4479250af4d0f71ec477f3deb28b84c7064b09de56cb3a6"
+  },
+  {
+    "slot": "5246091",
+    "proposer_index": "249427",
+    "parent_root": "0xddd78ebc651108c9305db7b33ab22a51da267c2e16092d96ba10e9d06fa6351b",
+    "state_root": "0x0d8ad09c473360d782f072db7113cd4d1204315a0e0706408724b15ef5e6ff5f",
+    "body_root": "0x0f6c1dec3f6c02e2082ef58c402a6c8333c76202e1230d441da3b394a0adc0e0"
+  },
+  {
+    "slot": "5246092",
+    "proposer_index": "55196",
+    "parent_root": "0x18896c62e9d7b1d8788441f52c1e7184c592c0ed85c80f045c3d1f24f5dadb8d",
+    "state_root": "0x94295a73f7f14019ab85f808dfaf388a0f2cc97141f5ada21548d5104cea0c5e",
+    "body_root": "0x6048fa10e2a8551d9d8fc60d2b035a797488c8f0a0d52a02f5fd2620fe1445a2"
+  },
+  {
+    "slot": "5246093",
+    "proposer_index": "180825",
+    "parent_root": "0x2b6357086c1b177a3e423af6755c2cd867e5db06e641e7d7df5fbff770caa47a",
+    "state_root": "0x303f48a245c78edee2f611a9a336fb5f76c1e12853eff1d62506d97eabc5f7d9",
+    "body_root": "0x1059672665abe22b40ffd396c2c30fddd6565250d01d9b1cd01847221848d1ac"
+  },
+  {
+    "slot": "5246094",
+    "proposer_index": "195557",
+    "parent_root": "0x98d0b34998033604ea66621c2c3417c41559449631b3d7c1fb0af3abafa3be54",
+    "state_root": "0x7bad463d9d3b06c0a12acbe2df4b95119ef6b18a867a5d2b45c9cd1f075960e9",
+    "body_root": "0x08706776c5c48ea8e661130d0e5b8132af71db59ddfe2b72777876fdb27a6700"
+  },
+  {
+    "slot": "5246095",
+    "proposer_index": "273628",
+    "parent_root": "0x33895de9276b8ab442e9ef0d517bf638c54306eb9a42a6d1133b7c38c66b7ad9",
+    "state_root": "0x768e4402dcffe8fde16e010d08aba952afed419aeab924020658dc7a77f1eae6",
+    "body_root": "0x30757e063ed32002eec877b80f9bf9a290b774fbc5a1b41995661c997393d611"
+  },
+  {
+    "slot": "5246096",
+    "proposer_index": "114542",
+    "parent_root": "0x89e3370c6375cb697cd836992334cad0beff5783e367e67d35fba74191ca1456",
+    "state_root": "0xe399f36af501baa85c8d9204402c3cf66624939c305e1546cc1b694cfae240bd",
+    "body_root": "0xd5b84b1004ab5055806e7a5e719c87f462c776941eccdf91209267f8df82c7c4"
+  },
+  {
+    "slot": "5246097",
+    "proposer_index": "130179",
+    "parent_root": "0xddd6f3947dead39b91c607ef8bcb39642a84220148efbbc93681297d575ce500",
+    "state_root": "0xb7e60b04e13e41e5ab21558ac431035ccbd6250dba1f9117561f61ccff963648",
+    "body_root": "0x80b5fc0dd1fe44875cb7f13889f4a741299afd3f668a6b96c733dfafddba5b9e"
+  },
+  {
+    "slot": "5246098",
+    "proposer_index": "70253",
+    "parent_root": "0xd18887aea51b1f8f2bab10e6da02b5d362126d6ba98972809d5dbdb0a926d426",
+    "state_root": "0xd0428d89df2a190f3445c388f21bb6a5a650be69f1a68e8f20f37668d23939e0",
+    "body_root": "0xe804dc7170160bf35e99b98564fece270ad9f29a9cd49e97ae5248f462b0df95"
+  },
+  {
+    "slot": "5246099",
+    "proposer_index": "291748",
+    "parent_root": "0xb68292c3bb467dbf035cd7e10e125265fe6db442f0ee92d4714c8149d131cb37",
+    "state_root": "0xc06bd595731b393117bc625a01425c061df2ce2c9530f2995d3ea39ef51ef894",
+    "body_root": "0xfebf73a837bb0bf1860f696521dc6aa1cf8486792d5a0ac20781edb547e15ff8"
+  },
+  {
+    "slot": "5246100",
+    "proposer_index": "285844",
+    "parent_root": "0x5308e39c1334df3f8eb3c44b1f132c6846097c3566827534607e6c92216d12de",
+    "state_root": "0x08d57836fc8de291c3679e44fd8cb6dea527372a9adce9a0e5d1ad6604df26a7",
+    "body_root": "0x26d20b39dabece899ec315918516cb32a4b81b7361f27bc1f1ff5f48d712a52b"
+  },
+  {
+    "slot": "5246101",
+    "proposer_index": "139916",
+    "parent_root": "0x276df69c9e42f1f8a48a00af5e105bea36983be0772aa459e93020aeb99b302e",
+    "state_root": "0x7e2e8693f6eaa72790256b871820ba39273cd31799e6ed3487aa202cd11418cf",
+    "body_root": "0xadd7e7c76fb59f8d4f9c2ff42408e8be3403ec71610258e0a3ef5f95714432f8"
+  },
+  {
+    "slot": "5246102",
+    "proposer_index": "273840",
+    "parent_root": "0x473018c6b004b732b78c06da3aabb4de1e9c6cce06f269cade1c0208366925b2",
+    "state_root": "0x2ce830cd2afb93c30763df0b6bf11c38a8d47c126559ea8ded8dfb4aecb23c80",
+    "body_root": "0x239868683bc6411c8c862b73fe4b8b29786c8acad2637197323f9bcd10431855"
+  },
+  {
+    "slot": "5246103",
+    "proposer_index": "75629",
+    "parent_root": "0x4d0e677a7fa2ce8f45f3a8545ae79d6cdce2cc448bc6e927680e2a911b1e3832",
+    "state_root": "0xa4cff848f67d925e10b1224f39df245197aeda02e99a497d0886c8f0da77073c",
+    "body_root": "0x5a4504eca3e62d586036781625d782e45b5da2eb81253a579b5bcda0b41e3c6c"
+  },
+  {
+    "slot": "5246104",
+    "proposer_index": "263656",
+    "parent_root": "0x9c1e7f00983d6f6d59fb6d9c98641c58af1c0db9d3ead3561b7349e83d7ca805",
+    "state_root": "0x3049bfb386ed211a354401a64115447428c32dd8f4f533d1212163a1de7f6f74",
+    "body_root": "0xc83b6b5ab3ef6ce5c249692a5916ca288bc42202814a28485974e0bd4b8b4405"
+  },
+  {
+    "slot": "5246105",
+    "proposer_index": "292382",
+    "parent_root": "0xb412d81e200d2cbebb268eb3ba9331554996f95fb7204aa2d91eeaafa1e86105",
+    "state_root": "0x636722292a7de0d79b20c510bb5386df1930d92c5ad46de060395cc5bb303a13",
+    "body_root": "0xf11a5af6366c03de981f5668c0f02812e5ddf91e2f618ce93d91beed2849f27f"
+  },
+  {
+    "slot": "5246106",
+    "proposer_index": "227942",
+    "parent_root": "0x5f1a5c79af3a1a71a1ef74c6d0e51b976dd0030b1d48f03067fd7b7a8873df0a",
+    "state_root": "0x84a79f22a7d7760746fe37abce3c3a5292647aaa47b57d5e2d61a1cf4070069b",
+    "body_root": "0x1ff993c0b647fab477ff839eec38f043d94d6c790cd2d988ad69f496786369b5"
+  },
+  {
+    "slot": "5246107",
+    "proposer_index": "199085",
+    "parent_root": "0x18093e62a67d0817a0096b4fd6f86e43219931f42be4fe369e76d3c4043fbe81",
+    "state_root": "0xcfa519a2ae73e8d1aa12595f01a79e07b613b7d214b1f55e4b594ffbdb0473cb",
+    "body_root": "0x42a2558d617adcbf9fd06d6dffd45d8e71684119067439bba97f1e6f6cc51eac"
+  },
+  {
+    "slot": "5246108",
+    "proposer_index": "207314",
+    "parent_root": "0xfe6abf99dd978f073fa8a0b1efadc3d4955aa05bf9e3501a854271c16c404c46",
+    "state_root": "0x36243f9c665e315c7b053dbd023ac477e42635a049d9ce3f4026801c1f9cb01b",
+    "body_root": "0x9847deb862ec48b09e479c17fe7eca146266a6a34983292119cd55c7bd25ab04"
+  },
+  {
+    "slot": "5246109",
+    "proposer_index": "178636",
+    "parent_root": "0xf10394ecfbd1aebabacd215bd211fa2d4d70006fb2b72474e2a1cc501100dd79",
+    "state_root": "0x423b940b2f3d5843c3b8bc8d5d249a112c4786037a2aeba369fd75f75631e6c9",
+    "body_root": "0xf5678403d8f8646f10d05d144461b4d73d4460b2cb023c64b7c436e53f77d58a"
+  },
+  {
+    "slot": "5246110",
+    "proposer_index": "172304",
+    "parent_root": "0x8734033674a2772b06f4c91542eaee67481625b0ef27b1e0767c3129f2ec2c30",
+    "state_root": "0xea5ef694f0e907d6bfac4c404dfa89b91d42b08e4d1ec70e92479e3730bff158",
+    "body_root": "0x47c21132bb89a0d6da695b30fc8dfb887c8e9da631e7e9f1fb0a18c4c4a00056"
+  },
+  {
+    "slot": "5246111",
+    "proposer_index": "444322",
+    "parent_root": "0x35fef0881f9bb3a8ee5288e07eead6628da6ba86c8813d7cc297f384d149c1f9",
+    "state_root": "0x557e9da513af0e09f55e6659122271b718d7504880f6428e96ee1ded42ece7a4",
+    "body_root": "0xc34aac6cdb9cf3f7dd3b3234da692996df97a1aeba444966127e69e3d12f59b5"
+  },
+  {
+    "slot": "5246112",
+    "proposer_index": "261456",
+    "parent_root": "0x7165112f2230d2a8056bae91de80739a70fb4146bf5be2d1ae43ed5b06e143e1",
+    "state_root": "0xcbd6dd698ea5a133c37a3474905304a77ecc0befc2b10c3a8522c2dbd6607172",
+    "body_root": "0x60e2fb9081e4ae06928e1ff9b98426aaef89ff0834e4166e3fe372dfbcad3f5f"
+  },
+  {
+    "slot": "5246113",
+    "proposer_index": "289978",
+    "parent_root": "0xfc15f54b8c16b5ecf8cabdb5cc7afce35f927e98fdf084ddd1b4852f093b2a5b",
+    "state_root": "0x6e6d282ef41d368d51e55321aa7d93b2665fc296da812d94a47b1e8db3e13734",
+    "body_root": "0xb399c29ad58f7a680f44add351fe8a03ec49f0542118c0209042d6dc1c67bb0f"
+  },
+  {
+    "slot": "5246114",
+    "proposer_index": "391668",
+    "parent_root": "0x44a3f62796bd2f82bb09e06a7fe5c8dd765b7d6c2ad07ff1fac23f3354463412",
+    "state_root": "0x21c746dc31bd1015acf2cf8e6d8fd91ccbb4fb7aa97532014ded5fa3706dcc10",
+    "body_root": "0xc571b2243f051700caaf27a9b9db5794d6ef480c9e0907780b1333a7440bcf85"
+  },
+  {
+    "slot": "5246115",
+    "proposer_index": "34398",
+    "parent_root": "0xc701b4707a1ea65ce686d56ef33ae2d2d38176642ae23b40de21247d39bf3fbf",
+    "state_root": "0x42b8e01a780fb0274f9721899891fb5a0f6c6383cff7c295f24e062565b0e674",
+    "body_root": "0xbde3caa6041ffd92648df31bb2c4f6d01a2744e3e13f956bbf7d3a2cb70e3766"
+  },
+  {
+    "slot": "5246116",
+    "proposer_index": "296681",
+    "parent_root": "0xfd6ef1d02353a525f4a00c5eded2fd2aa0477bf6b2666755ed4e742270a6c345",
+    "state_root": "0x00db75b17133aba56f9d7825495eff3ba21c24975ad7787b7e1ec1b3f38a301c",
+    "body_root": "0xe39f7b23fa9e47278156e22109d9edb4dbabc0a9625a5b8016aabf80590c52f1"
+  },
+  {
+    "slot": "5246117",
+    "proposer_index": "464502",
+    "parent_root": "0x90ccc140564f5a7d2d8e5f0bbbf4c18f01ba97723e043d2d4d856d5eeb6d92c4",
+    "state_root": "0x87529e6cff116fcfee3144b8d57a01e6b82d97ad10f13192550a45f4ebf1150b",
+    "body_root": "0x9f65df027610eba890fe47c69e7a8c3fc9647ea0afbb9be4719390ff99ad47d2"
+  },
+  {
+    "slot": "5246118",
+    "proposer_index": "7372",
+    "parent_root": "0x3f79dbe8e658c178a98553c6b6f49811c96381dadd55ea6f356f0fe2d2378d48",
+    "state_root": "0xc3ffb0e7495f03cf75e777b2113252011656f4011e34cc5cd8b6648fc1b0abd6",
+    "body_root": "0x893d590313b8df6d8d07b3dac7896c97f214e1f944315b0639840c5376d8f157"
+  },
+  {
+    "slot": "5246119",
+    "proposer_index": "408589",
+    "parent_root": "0xb6e07d9edeb801e7464daf1fe3e5a1744897afd5579d607862774aab8406e1f6",
+    "state_root": "0x51e60503ed3eca3736293b0f97560407227c4ef71d8b4fcdacd52d5d500d6a05",
+    "body_root": "0x530029262ac3a77e2227d75bc9140b9da10880930977b62570f68752d4a628c0"
+  }
+]
