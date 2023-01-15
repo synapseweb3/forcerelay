@@ -135,6 +135,7 @@ impl CkbChain {
                 &tx_assembler_address,
                 packed_client,
                 packed_proof_update,
+                &self.config.lightclient_lock_typeargs,
                 &self.config.lightclient_contract_typeargs,
                 &self.config.id.to_string(),
             ))?;

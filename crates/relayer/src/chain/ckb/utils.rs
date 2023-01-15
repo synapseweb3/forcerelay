@@ -187,7 +187,7 @@ mod tests {
         let headers: Vec<EthHeader> = serde_json::from_str(&headers_json)?;
         Ok(headers
             .into_iter()
-            .map(|h| EthUpdate::from_finalized_header(h))
+            .map(EthUpdate::from_finalized_header)
             .collect::<Vec<_>>())
     }
 
