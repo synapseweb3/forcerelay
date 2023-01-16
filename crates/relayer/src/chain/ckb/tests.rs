@@ -77,6 +77,7 @@ fn test_update_eth_client() {
             ckb_rpc: Url::from_str("http://ckb_rpc").unwrap(),
             ckb_indexer_rpc: Url::from_str("http://ckb_indexer_rpc").unwrap(),
             lightclient_contract_typeargs: h256!("0x123"),
+            lightclient_lock_typeargs: h256!("0x123"),
             key_name: "ckb-chain-test".to_string(),
             data_dir: tmp_dir.path().to_path_buf(),
         };
