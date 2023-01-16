@@ -18,8 +18,8 @@ pub struct EthChainConfig {
     pub key_name: String,
     pub rpc_addr: String,
     pub rpc_port: u16,
-    pub forks: Forks,
     pub max_checkpoint_age: u64,
+    pub forks: Forks,
 }
 
 pub fn array_hex_deserialize<'de, D, const N: usize>(deserializer: D) -> Result<[u8; N], D::Error>

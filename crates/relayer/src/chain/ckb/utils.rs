@@ -180,7 +180,7 @@ mod tests {
     use eyre::Result;
     use ibc_relayer_storage::Storage;
     use std::fs;
-    use std::path::Path;
+    use tempfile::TempDir;
 
     fn load_updates_from_file(path: &str) -> Result<Vec<EthUpdate>> {
         let headers_json = fs::read_to_string(path)?;
@@ -193,10 +193,7 @@ mod tests {
 
     #[test]
     fn test_get_verified_packed_client_and_proof_update() {
-        let path = Path::new("test_storage");
-        if path.is_dir() {
-            fs::remove_dir_all(path).unwrap();
-        }
+        let path = TempDir::new().unwrap();
         let storage: Storage<MainnetEthSpec> = Storage::new(path).unwrap();
         let chain_id = "chain_id".to_string();
 

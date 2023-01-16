@@ -27,6 +27,3 @@ mc.log
 
 # Ignore OSX .DS_Store file
 .DS_Store
-
-# Ignore generated rocksdb storage folder
-test_storage/

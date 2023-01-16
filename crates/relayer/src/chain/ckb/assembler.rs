@@ -115,8 +115,9 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             .search_cell_by_typescript(&contract_typehash, &client_id.as_bytes().to_vec())
             .await?;
         // Build Lightclient Lockscript and Typescript
+        let pubkey_hash = address.payload().args();
         let lightclient_lock =
-            make_lightclient_script(mock_lockscript.calc_script_hash(), Vec::new());
+            make_lightclient_script(mock_lockscript.calc_script_hash(), pubkey_hash.to_vec());
         let lightclient_type =
             make_lightclient_script(contract_typehash, client_id.clone().into_bytes());
         // Assemble Lightclient output cell
