@@ -556,10 +556,11 @@ impl ConsensusRpc for NimbusRpc {
             .get(req)
             .send()
             .await?
-            .json::<HeaderResponse>()
-            .await?;
+            .json::<HeaderResponse::Response>()
+            .await
+            .map_err(|e| eyre::eyre!(format!("{} (slot {})", e, slot)))?;
 
-        Ok(res.data)
+        Ok(res.data.header.message)
     }
 }
 
@@ -592,7 +593,7 @@ impl LightClient {
         let client = self.consensus_client.clone();
         self.rt
             .block_on(self.rt.block_on(client.lock()).sync())
-            .map_err(|_| Error::create_client(self.chain_id.to_string()))?;
+            .map_err(|e| Error::rpc_response(format!("chain {}: {}", self.chain_id, e)))?;
         self.rt.spawn(async move {
             loop {
                 let res = client.lock().await.advance().await;
@@ -718,9 +719,28 @@ struct UpdateData {
     data: Update,
 }
 
-#[derive(serde::Deserialize, Debug)]
-struct HeaderResponse {
-    data: Header,
+#[allow(non_snake_case)]
+mod HeaderResponse {
+    use ibc_relayer_types::clients::ics07_eth::header::Header;
+
+    #[derive(serde::Deserialize, Debug)]
+    pub struct Message {
+        pub message: Header,
+        pub signature: String,
+    }
+
+    #[derive(serde::Deserialize, Debug)]
+    pub struct Data {
+        pub root: String,
+        pub canonical: bool,
+        pub header: Message,
+    }
+
+    #[derive(serde::Deserialize, Debug)]
+    pub struct Response {
+        pub execution_optimistic: bool,
+        pub data: Data,
+    }
 }
 
 #[cfg(test)]
@@ -737,6 +757,7 @@ mod tests {
     use super::ConsensusClient;
     use super::ConsensusRpc;
     use super::FinalityUpdate;
+    use super::HeaderResponse;
     use super::Result;
     use super::Update;
 
@@ -773,7 +794,9 @@ mod tests {
         }
 
         async fn get_header(&self, _slot: u64) -> Result<Header> {
-            Ok(Header::default())
+            let header = read_to_string(self.testdata.join("header.json"))?;
+            let response: HeaderResponse::Response = serde_json::from_str(&header)?;
+            Ok(response.data.header.message)
         }
     }
 
@@ -921,5 +944,14 @@ mod tests {
         client.sync().await.unwrap();
 
         assert_eq!(client.store.finalized_header.slot, 3818112);
+    }
+
+    #[tokio::test]
+    async fn test_get_header() {
+        let mut client = get_client(true).await;
+        let update = client.get_finality_update(3781055).await.unwrap();
+
+        assert!(update.is_some());
+        assert_eq!(update.unwrap().finalized_header.slot, 5595002);
     }
 }

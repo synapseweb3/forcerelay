@@ -68,7 +68,7 @@ websocket_addr = 'wss://eth-mainnet.g.alchemy.com/v2/bP31lpybtbwJkUWRp850Qds3LV8
 initial_checkpoint = "0xe4d168932628537930f29f3022dc3b2cd51e77b25b86ea635c7449c41cfd0779"
 # key_name = 'connections'
 key_name = 'relayer_eth_wallet'
-rpc_addr = 'https://www.lightclientdata.org/'
+rpc_addr = 'https://www.lightclientdata.org'
 rpc_port = 8545
 max_checkpoint_age = 9209600
 [chains.forks]

@@ -1,4 +1,4 @@
-use ckb_jsonrpc_types::OutputsValidator;
+use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTx};
 use ckb_sdk::{Address, AddressPayload, NetworkType};
 use eth2_types::MainnetEthSpec;
 use ibc_relayer_storage::Storage;
@@ -149,7 +149,13 @@ impl CkbChain {
                 self.rpc_client
                     .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
             )
-            .map_err(|e| Error::rpc_response(e.to_string()))?;
+            .map_err(|e| {
+                Error::rpc_response(format!(
+                    "{}\n==[json transaction is below]==\n{}",
+                    e,
+                    serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
+                ))
+            })?;
 
         Ok(vec![])
     }

@@ -281,19 +281,19 @@ impl KeyRing<Ed25519KeyPair> {
 }
 
 pub fn list_keys(config: &ChainConfig) -> Result<Vec<(String, AnySigningKeyPair)>, Error> {
-    let keys = match config.r#type() {
-        ChainType::CosmosSdk => {
-            let keyring =
-                KeyRing::new_secp256k1(Store::Test, &config.cosmos().account_prefix, config.id())?;
-            keyring
-                .keys()?
-                .into_iter()
-                .map(|(key_name, keys)| (key_name, keys.into()))
-                .collect()
-        }
-        ChainType::Eth => todo!(),
-        ChainType::Axon => todo!(),
-        ChainType::Ckb => todo!(),
+    let account_prefix = match config.r#type() {
+        ChainType::CosmosSdk => &config.cosmos().account_prefix,
+        ChainType::Eth => "eth",
+        ChainType::Axon => "axon",
+        ChainType::Ckb => "ckb",
+    };
+    let keys = {
+        let keyring = KeyRing::new_secp256k1(Store::Test, account_prefix, config.id())?;
+        keyring
+            .keys()?
+            .into_iter()
+            .map(|(key_name, keys)| (key_name, keys.into()))
+            .collect()
     };
     Ok(keys)
 }
