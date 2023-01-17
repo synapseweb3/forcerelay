@@ -238,6 +238,11 @@ impl Secp256k1KeyPair {
             account,
         })
     }
+
+    #[cfg(test)]
+    pub fn raw_private_key(&self) -> [u8; secp256k1::constants::SECRET_KEY_SIZE] {
+        self.private_key.secret_bytes()
+    }
 }
 
 impl SigningKeyPair for Secp256k1KeyPair {
