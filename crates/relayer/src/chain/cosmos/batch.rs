@@ -635,4 +635,14 @@ mod tests {
             vec![],
         );
     }
+
+    #[ignore]
+    #[test]
+    fn test_print_hex_format_of_private_key() {
+        let (_, key_pair, _) = test_fixture();
+        println!(
+            "hex of private_key: {}",
+            hex::encode(key_pair.raw_private_key())
+        );
+    }
 }

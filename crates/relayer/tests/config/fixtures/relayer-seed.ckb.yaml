@@ -1,0 +1,7 @@
+address:
+  mainnet: ckb1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqgj0eptc8fszjfzgcrr2ggq0mfa7y9unrqqhspjd
+  testnet: ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqgj0eptc8fszjfzgcrr2ggq0mfa7y9unrqw9mwc4
+address(deprecated):
+  mainnet: ckb1qyqpyljzhswnq9yjy3sxx5ssqlknmugtexxqfa839t
+  testnet: ckt1qyqpyljzhswnq9yjy3sxx5ssqlknmugtexxq5cewfh
+lock_arg: 0x127e42bc1d301492246063521007ed3df10bc98c
