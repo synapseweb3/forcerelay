@@ -15,4 +15,4 @@ description  = "The storage part of SynapseWeb3 IBC Relayer"
 thiserror = "1.0.37"
 rocksdb = { package = "ckb-rocksdb", version ="=0.19.0", default-features = false, features = ["snappy"] }
 eth2_types = { git = "https://github.com/yangby-cryptape/lighthouse", rev = "62dc610", package = "types" }
-eth_light_client_in_ckb-verification = { git = "https://github.com/yangby-cryptape/eth-light-client-in-ckb", rev = "42056c5", package = "eth_light_client_in_ckb-verification" }
+eth_light_client_in_ckb-verification = { git = "https://github.com/yangby-cryptape/eth-light-client-in-ckb", rev = "76a7e5c", package = "eth_light_client_in_ckb-verification" }
