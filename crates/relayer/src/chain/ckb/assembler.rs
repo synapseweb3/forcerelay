@@ -154,7 +154,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             .cell_dep(contract_cell_dep)
             .cell_dep(mock_lock_celldep)
             .build();
-        let fee_rate = 1000;
+        let fee_rate = 3000;
         let (tx, mut new_inputs) = self
             .complete_tx_with_secp256k1_change(tx, address, inputs_capacity, fee_rate)
             .await?;

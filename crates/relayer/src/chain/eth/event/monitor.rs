@@ -14,14 +14,14 @@ use crate::chain::tracking::TrackingId;
 use crate::event::monitor::{EventBatch, MonitorCmd, Next, Result, TxMonitorCmd};
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tokio::runtime::Runtime as TokioRuntime;
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, warn};
 
 // #[derive(Clone, Debug)]
 pub struct EthEventMonitor {
     rt: Arc<TokioRuntime>,
     chain_id: ChainId,
     rx_cmd: channel::Receiver<MonitorCmd>,
-    header_receiver: UnboundedReceiver<EthHeader>,
+    header_receiver: UnboundedReceiver<Vec<EthHeader>>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
 }
 
@@ -35,7 +35,7 @@ impl EthEventMonitor {
     )]
     pub fn new(
         chain_id: ChainId,
-        header_receiver: UnboundedReceiver<EthHeader>,
+        header_receiver: UnboundedReceiver<Vec<EthHeader>>,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
@@ -81,18 +81,28 @@ impl EthEventMonitor {
             }
         }
 
-        if let Ok(header) = self.header_receiver.try_recv() {
-            info!("receive a new header: {:?}", header);
-            let height = Height::new(0, header.slot).unwrap();
-            let ibc_event_with_height =
-                IbcEventWithHeight::new(events::NewBlock::new(height).into(), height);
-            let batch = EventBatch {
-                chain_id: self.chain_id.clone(),
-                tracking_id: TrackingId::new_uuid(),
-                height,
-                events: vec![ibc_event_with_height],
-            };
-            self.process_batch(batch);
+        if let Ok(headers) = self.header_receiver.try_recv() {
+            if !headers.is_empty() {
+                let start_slot = headers.first().unwrap().slot;
+                let end_slot = headers.last().unwrap().slot;
+                info!("receive new headers from {} to {}", start_slot, end_slot);
+                let events = headers
+                    .into_iter()
+                    .map(|header| {
+                        let height = Height::new(0, header.slot).unwrap();
+                        IbcEventWithHeight::new(events::NewBlock::new(height).into(), height)
+                    })
+                    .collect();
+                let batch = EventBatch {
+                    chain_id: self.chain_id.clone(),
+                    tracking_id: TrackingId::new_uuid(),
+                    height: Height::new(0, end_slot).unwrap(),
+                    events,
+                };
+                self.process_batch(batch);
+            } else {
+                warn!("receive empty headers");
+            }
         }
         Next::Continue
     }
