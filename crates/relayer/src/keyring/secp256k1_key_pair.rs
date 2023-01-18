@@ -6,6 +6,7 @@ use bitcoin::{
     util::bip32::{ChildNumber, DerivationPath, ExtendedPrivKey, ExtendedPubKey},
 };
 use ckb_hash::blake2b_256;
+use ckb_sdk::{AddressPayload, NetworkType};
 use digest::Digest;
 use generic_array::{typenum::U32, GenericArray};
 use hdpath::StandardHDPath;
@@ -237,6 +238,19 @@ impl Secp256k1KeyPair {
             address_type,
             account,
         })
+    }
+
+    pub fn into_ckb_keypair(self, network: NetworkType) -> Self {
+        if let Secp256k1AddressType::Ckb = self.address_type {
+            return self;
+        }
+        let payload = AddressPayload::from_pubkey(&self.public_key);
+        Self {
+            address: get_address(&self.public_key, Secp256k1AddressType::Ckb),
+            address_type: Secp256k1AddressType::Ckb,
+            account: payload.display_with_network(network, false),
+            ..self
+        }
     }
 
     #[cfg(test)]
