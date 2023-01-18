@@ -20,6 +20,9 @@ pub trait StorageWriter<S: EthSpec>: Send + Sync + Sized {
     fn put_base_beacon_header_slot(&self, slot: Slot) -> Result<()>;
     fn put_tip_beacon_header_slot(&self, slot: Slot) -> Result<()>;
 
+    fn delete_base_beacon_header_slot(&self) -> Result<()>;
+    fn delete_tip_beacon_header_slot(&self) -> Result<()>;
+
     fn put_beacon_header_digest(&self, position: u64, digest: &packed::HeaderDigest) -> Result<()>;
 }
 
@@ -30,6 +33,16 @@ pub trait StorageAsMMRStore<S: EthSpec>:
     fn is_initialized(&self) -> Result<bool> {
         self.get_base_beacon_header_slot()
             .map(|inner| inner.is_some())
+    }
+
+    fn rollback_to(&self, slot_opt: Option<Slot>) -> Result<()> {
+        if let Some(slot) = slot_opt {
+            self.put_tip_beacon_header_slot(slot)?;
+        } else {
+            self.delete_base_beacon_header_slot()?;
+            self.delete_tip_beacon_header_slot()?;
+        }
+        Ok(())
     }
 
     fn initialize_with(&self, slot: Slot, digest: packed::HeaderDigest) -> Result<()> {

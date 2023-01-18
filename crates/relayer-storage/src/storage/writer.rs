@@ -29,6 +29,21 @@ where
         self.put(keys::TIP_BEACON_HEADER_SLOT, value.as_slice())
     }
 
+    fn delete_base_beacon_header_slot(&self) -> Result<()> {
+        let mut writer = self
+            .cache
+            .base_beacon_header_slot
+            .write()
+            .map_err(Error::storage)?;
+        self.delete(keys::BASE_BEACON_HEADER_SLOT)?;
+        *writer = None;
+        Ok(())
+    }
+
+    fn delete_tip_beacon_header_slot(&self) -> Result<()> {
+        self.delete(keys::TIP_BEACON_HEADER_SLOT)
+    }
+
     fn put_beacon_header_digest(&self, position: u64, digest: &packed::HeaderDigest) -> Result<()> {
         let key: packed::Uint64 = position.pack();
         self.put_cf(
