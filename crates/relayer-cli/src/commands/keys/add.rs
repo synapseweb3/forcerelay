@@ -198,25 +198,24 @@ pub fn add_key(
     hd_path: &StandardHDPath,
     overwrite: bool,
 ) -> eyre::Result<AnySigningKeyPair> {
-    let key_pair = match config.r#type() {
-        ChainType::CosmosSdk => {
-            let mut keyring =
-                KeyRing::new_secp256k1(Store::Test, &config.cosmos().account_prefix, config.id())?;
-
-            check_key_exists(&keyring, key_name, overwrite);
-
-            let key_contents =
-                fs::read_to_string(file).map_err(|_| eyre!("error reading the key file"))?;
-            let key_pair = Secp256k1KeyPair::from_seed_file(&key_contents, hd_path)?;
-
-            keyring.add_key(key_name, key_pair.clone())?;
-            key_pair.into()
-        }
-        ChainType::Eth => todo!(),
-        ChainType::Axon => todo!(),
-        ChainType::Ckb => todo!(),
+    let account_prefix = match config.r#type() {
+        ChainType::CosmosSdk => &config.cosmos().account_prefix,
+        ChainType::Eth => "eth",
+        ChainType::Axon => "axon",
+        ChainType::Ckb => "ckb",
     };
+    let key_pair = {
+        let mut keyring = KeyRing::new_secp256k1(Store::Test, account_prefix, config.id())?;
 
+        check_key_exists(&keyring, key_name, overwrite);
+
+        let key_contents =
+            fs::read_to_string(file).map_err(|_| eyre!("error reading the key file"))?;
+        let key_pair = Secp256k1KeyPair::from_seed_file(&key_contents, hd_path)?;
+
+        keyring.add_key(key_name, key_pair.clone())?;
+        key_pair.into()
+    };
     Ok(key_pair)
 }
 
@@ -230,28 +229,27 @@ pub fn restore_key(
     let mnemonic_content =
         fs::read_to_string(mnemonic).map_err(|_| eyre!("error reading the mnemonic file"))?;
 
-    let key_pair = match config.r#type() {
-        ChainType::CosmosSdk => {
-            let mut keyring =
-                KeyRing::new_secp256k1(Store::Test, &config.cosmos().account_prefix, config.id())?;
-
-            check_key_exists(&keyring, key_name, overwrite);
-
-            let key_pair = Secp256k1KeyPair::from_mnemonic(
-                &mnemonic_content,
-                hdpath,
-                &config.cosmos().address_type,
-                keyring.account_prefix(),
-            )?;
-
-            keyring.add_key(key_name, key_pair.clone())?;
-            key_pair.into()
-        }
-        ChainType::Eth => todo!(),
-        ChainType::Axon => todo!(),
-        ChainType::Ckb => todo!(),
+    let account_prefix = match config.r#type() {
+        ChainType::CosmosSdk => &config.cosmos().account_prefix,
+        ChainType::Eth => "eth",
+        ChainType::Axon => "axon",
+        ChainType::Ckb => "ckb",
     };
+    let key_pair = {
+        let mut keyring = KeyRing::new_secp256k1(Store::Test, account_prefix, config.id())?;
 
+        check_key_exists(&keyring, key_name, overwrite);
+
+        let key_pair = Secp256k1KeyPair::from_mnemonic(
+            &mnemonic_content,
+            hdpath,
+            &config.cosmos().address_type,
+            keyring.account_prefix(),
+        )?;
+
+        keyring.add_key(key_name, key_pair.clone())?;
+        key_pair.into()
+    };
     Ok(key_pair)
 }
 

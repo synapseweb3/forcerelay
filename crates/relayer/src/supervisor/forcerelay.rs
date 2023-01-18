@@ -32,10 +32,18 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         if let IbcEvent::NewBlock(new_block) = event.event {
             let height = new_block.height;
 
-            info!("start to relayer header up to {}", height.revision_height());
-            let client_state = src_chain
-                .build_client_state(height, crate::chain::client::ClientSettings::Other)
-                .unwrap();
+            info!("start to relay header up to {}", height.revision_height());
+            let client_state = {
+                let client_state = src_chain
+                    .build_client_state(height, crate::chain::client::ClientSettings::Other);
+                match client_state {
+                    Ok(value) => value,
+                    Err(err) => {
+                        error!("src_chain.build_client_state: {}", err);
+                        return;
+                    }
+                }
+            };
 
             let tracked_msgs = TrackedMsgs {
                 msgs: vec![client_state.into()],
@@ -64,9 +72,12 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
             let target_height = height.revision_height();
             let mut retry_number = 0;
             while start_height < target_height {
-                if retry_number != 0 {
-                    info!("{} time retry from height {}", retry_number, start_height);
-                }
+                info!(
+                    "{} time retry from height {} to height {}",
+                    retry_number + 1,
+                    start_height,
+                    target_height
+                );
                 let limit = std::cmp::min(MAX_HEADERS_IN_BATCH, target_height - start_height + 1);
                 let request = QueryClientStatesRequest {
                     pagination: Some(PageRequest {
@@ -75,7 +86,16 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
                         ..Default::default()
                     }),
                 };
-                let client_states = src_chain.query_clients(request).unwrap();
+                let client_states = {
+                    let client_states = src_chain.query_clients(request);
+                    match client_states {
+                        Ok(value) => value,
+                        Err(err) => {
+                            error!("src_chain.query_clients: {}", err);
+                            return;
+                        }
+                    }
+                };
                 let len = client_states.len() as u64;
                 let end_height = start_height + len - 1;
                 info!("get ETH headers from {} to {}", start_height, end_height);
@@ -96,7 +116,7 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
                         start_height = end_height + 1;
                     }
                     Err(e) => {
-                        error!("encounter error when relaying ETH header: {:?}", e);
+                        error!("encounter error when relaying ETH header: {}", e);
                         retry_number += 1;
                     }
                 }
