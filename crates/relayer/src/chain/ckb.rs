@@ -142,9 +142,11 @@ impl CkbChain {
         let key: Secp256k1KeyPair = self
             .keybase
             .get_key(&self.config.key_name)
-            .map_err(Error::key_base)?;
+            .map_err(Error::key_base)?
+            .into_ckb_keypair(self.network()?);
         let tx = signer::sign(tx, &inputs, vec![], key).map_err(Error::key_base)?;
-        self.rt
+        let hash = self
+            .rt
             .block_on(
                 self.rpc_client
                     .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
@@ -159,6 +161,7 @@ impl CkbChain {
                     serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
                 ))
             })?;
+        tracing::info!("ckb send_transaction success: {}", hex::encode(hash));
 
         Ok(vec![])
     }
