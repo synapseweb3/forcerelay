@@ -17,8 +17,8 @@ pub enum ClientType {
 
 impl ClientType {
     const TENDERMINT_STR: &'static str = "07-tendermint";
-    const ETH_STR: &'static str = "07-eth";
-    const CKB_STR: &'static str = "07-ckb";
+    const ETH_STR: &'static str = "07-ethereum";
+    const CKB_STR: &'static str = "07-ckb0";
 
     #[cfg_attr(not(test), allow(dead_code))]
     const MOCK_STR: &'static str = "9999-mock";
