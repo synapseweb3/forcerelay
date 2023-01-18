@@ -8,6 +8,7 @@ use eth_light_client_in_ckb_verification::types::{
 use ibc_relayer_storage::{
     error::Error as StorageError,
     prelude::{StorageAsMMRStore, StorageReader, StorageWriter},
+    Slot,
 };
 use ibc_relayer_types::clients::ics07_eth::types::{Header as EthHeader, Update as EthUpdate};
 use tendermint_light_client::errors::Error as LightClientError;
@@ -19,11 +20,13 @@ pub fn get_verified_packed_client_and_proof_update<S, E>(
     header_updates: Vec<EthUpdate>,
     storage: &S,
     onchain_packed_client_opt: Option<PackedClient>,
-) -> Result<(PackedClient, PackedProofUpdate), Error>
+) -> Result<(Option<Slot>, PackedClient, PackedProofUpdate), Error>
 where
     S: StorageReader<E> + StorageWriter<E> + StorageAsMMRStore<E>,
     E: EthSpec,
 {
+    let mut prev_tip_slot = None;
+
     if header_updates.is_empty() {
         return Err(Error::empty_upgraded_client_state());
     }
@@ -62,6 +65,7 @@ where
                 LightClientError::missing_last_block_id(height),
             ));
         }
+        prev_tip_slot = Some(onchain_tip_slot);
     }
 
     let finalized_headers = header_updates
@@ -168,7 +172,7 @@ where
             .map_err(|_| Error::send_tx("failed to create header".to_owned()))?
     };
 
-    Ok((client.pack(), packed_proof_update))
+    Ok((prev_tip_slot, client.pack(), packed_proof_update))
 }
 
 #[cfg(test)]
@@ -201,7 +205,7 @@ mod tests {
         let updates_part_1 =
             load_updates_from_file("src/testdata/test_update_eth_client/headers-part-1.json")
                 .expect("part_1");
-        let (packed_client, _) =
+        let (_, packed_client, _) =
             get_verified_packed_client_and_proof_update(&chain_id, updates_part_1, &storage, None)
                 .expect("verify part_1");
 

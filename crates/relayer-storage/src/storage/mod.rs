@@ -2,7 +2,8 @@ use std::{marker::PhantomData, path::Path, sync::Arc};
 
 use rocksdb::{
     prelude::{
-        GetColumnFamilys as _, GetPinned as _, GetPinnedCF as _, OpenCF as _, Put as _, PutCF as _,
+        Delete as _, GetColumnFamilys as _, GetPinned as _, GetPinnedCF as _, OpenCF as _,
+        Put as _, PutCF as _,
     },
     ColumnFamily, ColumnFamilyDescriptor, DBPinnableSlice, Options, DB,
 };
@@ -64,6 +65,10 @@ impl<S> Storage<S> {
         self.db
             .put(key.as_ref(), value.as_ref())
             .map_err(Into::into)
+    }
+
+    pub(crate) fn delete<K: AsRef<[u8]>>(&self, key: K) -> Result<()> {
+        self.db.delete(key.as_ref()).map_err(Into::into)
     }
 
     pub(crate) fn get_cf<K: AsRef<[u8]>>(

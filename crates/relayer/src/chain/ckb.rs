@@ -1,7 +1,7 @@
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTx};
 use ckb_sdk::{Address, AddressPayload, NetworkType};
 use eth2_types::MainnetEthSpec;
-use ibc_relayer_storage::Storage;
+use ibc_relayer_storage::{prelude::StorageAsMMRStore as _, Storage};
 use ibc_relayer_types::clients::ics07_ckb::{
     client_state::ClientState as CkbClientState,
     consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
@@ -120,7 +120,7 @@ impl CkbChain {
             &self.config.lightclient_contract_typeargs,
             &self.config.id.to_string(),
         ))?;
-        let (packed_client, packed_proof_update) =
+        let (prev_slot_opt, packed_client, packed_proof_update) =
             utils::get_verified_packed_client_and_proof_update(
                 &self.id().to_string(),
                 header_updates,
@@ -150,6 +150,9 @@ impl CkbChain {
                     .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
             )
             .map_err(|e| {
+                if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
+                    return err.into();
+                }
                 Error::rpc_response(format!(
                     "{}\n==[json transaction is below]==\n{}",
                     e,
