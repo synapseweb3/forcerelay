@@ -1,18 +1,16 @@
 use ibc_relayer_types::events::IbcEvent;
-use std::{thread, time::Duration};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::chain::handle::ChainHandle;
 use crate::chain::requests::{PageRequest, QueryClientStatesRequest};
 use crate::chain::tracking::{NonCosmosTrackingId, TrackedMsgs, TrackingId};
 use crate::client_state::IdentifiedAnyClientState;
 use crate::config::ChainConfig;
-use crate::error::ErrorDetail::LightClientVerification;
+use crate::error::{Error, ErrorDetail::LightClientVerification};
 use crate::event::monitor::EventBatch;
 use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
 
-const MAX_HEADERS_IN_BATCH: u64 = 32;
-const MAX_RETRY_SLEEP_INTERVAL: Duration = Duration::from_secs(12);
+const MAX_HEADERS_IN_BATCH: u64 = 128;
 const MAX_RETRY_NUMBER: u8 = 5;
 pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     eth_chain: &ChainA,
@@ -79,25 +77,15 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     }
 
     // returned err indicates headers falling behind
-    let error = result.unwrap_err();
-    let mut start_height = match error.detail() {
-        LightClientVerification(e) => match &e.source {
-            MissingLastBlockId(height) => {
-                warn!(
-                    "header {} is beyond onchain or native tip header {}, start to chase",
-                    start_slot, height.height
-                );
-                height.height.into()
-            }
-            _ => {
-                error!("receive unexpected error: {:?}", error);
-                return;
-            }
-        },
-        _ => {
-            error!("receive unexpected error: {:?}", error);
-            return;
+    let mut start_height = match extract_missing_slot_from_error(&result.unwrap_err()) {
+        Some(slot) => {
+            warn!(
+                "upcoming header {} is beyond native header {}, start chasing",
+                start_slot, slot
+            );
+            slot
         }
+        None => return,
     };
 
     // start to chase lost headers
@@ -105,14 +93,9 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     let mut retry_number = 0;
     while start_height < target_height {
         if retry_number > 0 {
-            info!(
+            debug!(
                 "{} time retry from height {} to height {}",
                 retry_number, start_height, target_height
-            );
-        } else {
-            info!(
-                "continue to chase headers from {} to {}",
-                start_height, target_height
             );
         }
         let limit = std::cmp::min(MAX_HEADERS_IN_BATCH, target_height - start_height + 1);
@@ -137,7 +120,7 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         let end_height = start_height + clients_len - 1;
         if clients_len < limit {
             warn!(
-                "can't find enough headers to relay, expect {} but only fetch {}",
+                "cannot find enough headers to relay, expect {} but get {}",
                 limit, clients_len
             );
         }
@@ -147,21 +130,19 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         );
         match send_messages(dst_chain, client_states) {
             Ok(_) => {
-                info!(
-                    "headers from {} to {} are relayed to CKB",
-                    start_height, end_height
+                debug!(
+                    "headers from {} to {} are relayed to ckb, keep chasing to {}",
+                    start_height, end_height, target_height
                 );
                 retry_number = 0;
                 start_height = end_height + 1;
             }
-            Err(e) => {
-                error!("encounter error and wait retry: {}", e);
-                retry_number += 1;
-                if let LightClientVerification(e) = e.detail() {
-                    if let MissingLastBlockId(_) = e.source {
-                        thread::sleep(MAX_RETRY_SLEEP_INTERVAL);
-                    }
+            Err(error) => {
+                if let Some(slot) = extract_missing_slot_from_error(&error) {
+                    warn!("start_height needs to adjust, retry again: {}", error);
+                    start_height = slot;
                 }
+                retry_number += 1;
             }
         }
         if retry_number >= MAX_RETRY_NUMBER {
@@ -177,7 +158,7 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
 fn send_messages<Chain: ChainHandle>(
     chain: &Chain,
     client_states: Vec<IdentifiedAnyClientState>,
-) -> Result<Vec<crate::event::IbcEventWithHeight>, crate::error::Error> {
+) -> Result<Vec<crate::event::IbcEventWithHeight>, Error> {
     let tracked_msgs = TrackedMsgs {
         msgs: client_states
             .into_iter()
@@ -186,4 +167,14 @@ fn send_messages<Chain: ChainHandle>(
         tracking_id: TrackingId::Static(NonCosmosTrackingId::ETH_UPDATE_CLIENT),
     };
     chain.send_messages_and_wait_commit(tracked_msgs)
+}
+
+fn extract_missing_slot_from_error(error: &Error) -> Option<u64> {
+    if let LightClientVerification(verify_error) = error.detail() {
+        if let MissingLastBlockId(height) = &verify_error.source {
+            return Some(height.height.into());
+        }
+    }
+    error!("unexpected error: {}", error);
+    None
 }
