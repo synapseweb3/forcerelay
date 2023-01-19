@@ -37,7 +37,7 @@ where
         }
     }
 
-    let mut is_creation = true;
+    // let mut is_mmr_empty = true;
     // Check the tip in storage and the tip in the client cell are the same.
     if let Some(stored_tip_slot) = storage.get_tip_beacon_header_slot()? {
         if start_slot != stored_tip_slot + 1 {
@@ -47,14 +47,14 @@ where
                 LightClientError::missing_last_block_id(height),
             ));
         }
-        is_creation = false;
+        // is_mmr_empty = false;
     }
 
-    if is_creation != onchain_packed_client_opt.is_none() {
-        return Err(Error::send_tx(
-            "storage and the chain state is not same".to_owned(),
-        ));
-    }
+    // if is_mmr_empty != onchain_packed_client_opt.is_none() {
+    //     return Err(Error::send_tx(
+    //         "storage and the chain state is not same".to_owned(),
+    //     ));
+    // }
 
     if let Some(ref client) = onchain_packed_client_opt {
         let onchain_tip_slot: u64 = client.maximal_slot().unpack();

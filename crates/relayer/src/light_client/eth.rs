@@ -1,7 +1,7 @@
 mod utils;
 
 use std::cmp;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ops::Index;
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
@@ -55,7 +55,7 @@ pub struct ConsensusClient<R: ConsensusRpc> {
     initial_checkpoint: [u8; 32],      // Vec<u8>
     last_checkpoint: Option<[u8; 32]>, // Vec<u8>
     config: Arc<EthChainConfig>,
-    new_block_emitors: Vec<UnboundedSender<Header>>,
+    new_block_emitors: Vec<UnboundedSender<Vec<Header>>>,
     enable_emitor: bool,
 }
 
@@ -76,7 +76,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         }
     }
 
-    pub fn subscribe(&mut self) -> UnboundedReceiver<Header> {
+    pub fn subscribe(&mut self) -> UnboundedReceiver<Vec<Header>> {
         let (sender, receiver) = unbounded_channel();
         self.new_block_emitors.push(sender);
         receiver
@@ -101,28 +101,45 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         let finality_update = self.rpc.get_finality_update().await?;
         self.verify_finality_update(&finality_update)?;
         self.apply_finality_update(&finality_update);
-        self.store_finality_update(finality_update);
+        self.store_finality_update(&finality_update, false).await?;
         self.enable_emitor = true;
 
         Ok(())
     }
 
-    fn store_finality_update(&mut self, finality_update: FinalityUpdate) {
+    async fn store_finality_update(
+        &mut self,
+        finality_update: &FinalityUpdate,
+        keep_continuos: bool,
+    ) -> Result<()> {
         if self.store.next_sync_committee.is_none() {
             println!(
                 "[eth_light_client] skip finality_update store of slot {}",
                 finality_update.finalized_header.slot
             );
-            return;
+            return Ok(());
+        }
+        if keep_continuos {
+            if let Some((_, last_update)) = self.store.finality_updates.last_key_value() {
+                let start_slot = last_update.finalized_header.slot;
+                let end_slot = finality_update.finalized_header.slot;
+                for slot in start_slot..end_slot {
+                    let update = self.get_finality_update(slot).await?;
+                    if let Some(update) = update {
+                        self.store.finality_updates.insert(slot, update);
+                    }
+                }
+            }
         }
         let update = Update::from_finality_update(
-            finality_update,
+            finality_update.clone(),
             self.store.next_sync_committee.clone().unwrap(),
             self.store.next_sync_committee_branch.clone().unwrap(),
         );
         self.store
             .finality_updates
             .insert(update.finalized_header.slot, update);
+        Ok(())
     }
 
     pub async fn get_finality_update(
@@ -181,7 +198,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             next_sync_committee_branch: None,
             previous_max_active_participants: 0,
             current_max_active_participants: 0,
-            finality_updates: HashMap::new(),
+            finality_updates: BTreeMap::new(),
         };
 
         Ok(())
@@ -204,6 +221,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
     }
 
     pub async fn advance(&mut self) -> Result<()> {
+        let previous_stored_fianlized_slot = self.store.finalized_header.slot;
         let finality_update = self.rpc.get_finality_update().await?;
         self.verify_finality_update(&finality_update)?;
         self.apply_finality_update(&finality_update);
@@ -222,7 +240,27 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
                 }
             }
         }
-        self.store_finality_update(finality_update);
+
+        self.store_finality_update(&finality_update, true).await?;
+        if self.enable_emitor
+            && finality_update.finalized_header.slot > previous_stored_fianlized_slot
+        {
+            let start_slot = previous_stored_fianlized_slot;
+            let end_slot = finality_update.finalized_header.slot;
+            let mut fianlized_headers = vec![];
+            for slot in start_slot..=end_slot {
+                let update = self.get_finality_update(slot).await?;
+                if let Some(update) = update {
+                    fianlized_headers.push(update.finalized_header);
+                }
+            }
+            info!("emiting new headers from {} to {}", start_slot, end_slot);
+            self.new_block_emitors.iter().for_each(|emitor| {
+                if let Err(e) = emitor.send(fianlized_headers.clone()) {
+                    println!("[eth_light_client] new_block emitor error: {}", e);
+                }
+            });
+        }
 
         Ok(())
     }
@@ -267,15 +305,6 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
 
             has_majority && good_update
         };
-
-        if self.enable_emitor && update_is_newer {
-            info!("emiting new header: {:?}", update.finalized_header);
-            self.new_block_emitors.iter().for_each(|emitor| {
-                if let Err(e) = emitor.send(update.finalized_header.clone().unwrap()) {
-                    println!("[eth_light_client] new_block emitor error: {}", e);
-                }
-            });
-        }
 
         if should_apply_update {
             let store_period = calc_sync_period(self.store.finalized_header.slot);
@@ -477,7 +506,7 @@ pub struct LightClientStore {
     pub next_sync_committee_branch: Option<Vec<H256>>,
     pub previous_max_active_participants: u64,
     pub current_max_active_participants: u64,
-    pub finality_updates: HashMap<u64, Update>,
+    pub finality_updates: BTreeMap<u64, Update>,
 }
 
 pub struct NimbusRpc {
@@ -585,7 +614,7 @@ impl LightClient {
         Ok(light_client)
     }
 
-    pub fn subscribe(&mut self) -> UnboundedReceiver<Header> {
+    pub fn subscribe(&mut self) -> UnboundedReceiver<Vec<Header>> {
         self.rt.block_on(self.consensus_client.lock()).subscribe()
     }
 

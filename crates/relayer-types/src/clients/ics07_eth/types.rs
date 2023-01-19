@@ -24,7 +24,7 @@ pub struct Bootstrap {
     pub current_sync_committee_branch: Vec<H256>,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub struct FinalityUpdate {
     pub attested_header: Header,
     pub finalized_header: Header,
