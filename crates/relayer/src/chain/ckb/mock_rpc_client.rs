@@ -2,8 +2,9 @@
 #![allow(unused_variables)]
 
 use ckb_jsonrpc_types::{
-    BlockNumber, BlockView, CellWithStatus, ChainInfo, HeaderView, JsonBytes, OutPoint,
-    OutputsValidator, Transaction, TransactionWithStatusResponse,
+    BlockNumber, BlockView, CellWithStatus, ChainInfo, Header, HeaderView, JsonBytes, OutPoint,
+    OutputsValidator, ResponseFormat, Transaction, TransactionView, TransactionWithStatusResponse,
+    TxStatus,
 };
 use ckb_sdk::rpc::ckb_indexer::{Cell, Pagination, SearchKey};
 use ckb_types::{packed, prelude::*, H256};
@@ -80,15 +81,37 @@ impl CkbReader for RpcClient {
     }
 
     fn get_block(&self, hash: &H256) -> Rpc<BlockView> {
-        todo!()
+        let resp = BlockView {
+            header: HeaderView {
+                inner: Header {
+                    number: 1u64.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        Box::pin(async { Ok(resp) })
     }
 
     fn get_tip_header(&self) -> Rpc<HeaderView> {
-        todo!()
+        let resp = HeaderView {
+            inner: Header {
+                number: u64::MAX.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        Box::pin(async { Ok(resp) })
     }
 
     fn get_transaction(&self, hash: &H256) -> Rpc<Option<TransactionWithStatusResponse>> {
-        todo!()
+        let transaction = ResponseFormat::<TransactionView>::json(Default::default());
+        let resp = TransactionWithStatusResponse {
+            transaction: Some(transaction),
+            tx_status: TxStatus::committed(hash.clone()),
+        };
+        Box::pin(async { Ok(Some(resp)) })
     }
 
     fn get_live_cell(&self, out_point: &OutPoint, with_data: bool) -> Rpc<CellWithStatus> {

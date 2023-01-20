@@ -26,6 +26,7 @@ use ibc_relayer_types::{
 };
 use semver::Version;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -116,14 +117,23 @@ impl CkbChain {
         &mut self,
         header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        let chain_id = self.id().to_string();
         let onchain_packed_client_opt = self.rt.block_on(self.rpc_client.fetch_packed_client(
             &self.config.lightclient_contract_typeargs,
             &self.config.id.to_string(),
         ))?;
+        if let Some(ref onchain_packed_client) = onchain_packed_client_opt {
+            utils::align_native_and_onchain_updates(
+                &chain_id,
+                &header_updates,
+                &self.storage,
+                onchain_packed_client,
+            )?;
+        }
         let (prev_slot_opt, packed_client, packed_proof_update) =
             utils::get_verified_packed_client_and_proof_update(
-                &self.id().to_string(),
-                header_updates,
+                &chain_id,
+                &header_updates,
                 &self.storage,
                 onchain_packed_client_opt,
             )?;
@@ -155,13 +165,31 @@ impl CkbChain {
                 if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
                     return err.into();
                 }
-                Error::rpc_response(format!(
-                    "{}\n==[json transaction is below]==\n{}",
+                Error::send_tx(format!(
+                    "{}\n== transaction for debugging is below ==\n{}",
                     e,
                     serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
                 ))
             })?;
-        tracing::info!("ckb send_transaction success: {}", hex::encode(hash));
+
+        tracing::info!(
+            "ckb send_transaction success: {}, wait committed to block",
+            hex::encode(&hash)
+        );
+
+        self.rt
+            .block_on(utils::wait_ckb_transaction_committed(
+                &self.rpc_client,
+                hash,
+                Duration::from_secs(3),
+                0,
+            ))
+            .map_err(|e| {
+                if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
+                    return err.into();
+                }
+                e
+            })?;
 
         Ok(vec![])
     }
