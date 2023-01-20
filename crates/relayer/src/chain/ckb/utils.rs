@@ -333,7 +333,9 @@ pub async fn wait_ckb_transaction_committed(
 #[cfg(test)]
 mod tests {
     use super::align_native_and_onchain_updates;
+    use super::commit_headers_into_mmr_storage;
     use super::get_verified_packed_client_and_proof_update;
+    use super::into_cached_headers;
     use super::EthHeader;
     use super::EthUpdate;
     use eth2_types::MainnetEthSpec;
@@ -354,8 +356,12 @@ mod tests {
             .collect::<Vec<_>>())
     }
 
-    #[test]
-    fn test_verify_and_align_updates_with_empty_storage() {
+    fn prepare_essentials() -> (
+        String,
+        Vec<EthUpdate>,
+        Vec<EthUpdate>,
+        Storage<MainnetEthSpec>,
+    ) {
         let chain_id = "chain_id".to_string();
         let updates_part_1 =
             load_updates_from_file("src/testdata/test_update_eth_client/headers-part-1.json")
@@ -365,6 +371,13 @@ mod tests {
                 .expect("part_2");
         let path = TempDir::new().unwrap();
         let storage: Storage<MainnetEthSpec> = Storage::new(path).unwrap();
+
+        (chain_id, updates_part_1, updates_part_2, storage)
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_empty_storage() {
+        let (chain_id, updates_part_1, updates_part_2, storage) = prepare_essentials();
 
         // generate onchain packed client for later use
         let onchain_packed_client = {
@@ -421,5 +434,33 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_and_align_updates_with_exceesive_storage() {}
+    fn test_verify_and_align_updates_with_exceesive_storage() {
+        let (chain_id, updates_part_1, updates_part_2, storage) = prepare_essentials();
+
+        // generate onchain packed client
+        let (_, onchain_packed_client, _) =
+            get_verified_packed_client_and_proof_update(&chain_id, &updates_part_1, &storage, None)
+                .expect("verify part_1");
+
+        // prepare exceesive full-filled storage
+        let headers_part_2 = into_cached_headers(&updates_part_2);
+        commit_headers_into_mmr_storage(&headers_part_2, &storage).expect("commit part_2");
+
+        // make new update beyond the last slot from updates_part_2
+        let next_update = EthUpdate {
+            finalized_header: EthHeader {
+                slot: updates_part_2.last().unwrap().finalized_header.slot + 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        align_native_and_onchain_updates(
+            &chain_id,
+            &vec![next_update],
+            &storage,
+            &onchain_packed_client,
+        )
+        .expect("align next_update");
+    }
 }
