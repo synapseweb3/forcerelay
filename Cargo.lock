@@ -2088,7 +2088,7 @@ dependencies = [
 [[package]]
 name = "eth_light_client_in_ckb-verification"
 version = "0.1.0-alpha.0"
-source = "git+https://github.com/yangby-cryptape/eth-light-client-in-ckb?rev=76a7e5c#76a7e5c5532dfb7f6e0a9485ec98a8ad50a81a01"
+source = "git+https://github.com/yangby-cryptape/eth-light-client-in-ckb?rev=779dab1#779dab1b3a70ec0af064620f312eb90daa22ab7f"
 dependencies = [
  "ckb-merkle-mountain-range",
  "eth2_hashing",

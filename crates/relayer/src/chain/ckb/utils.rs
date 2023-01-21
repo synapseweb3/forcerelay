@@ -332,52 +332,67 @@ pub async fn wait_ckb_transaction_committed(
 
 #[cfg(test)]
 mod tests {
-    use super::align_native_and_onchain_updates;
-    use super::commit_headers_into_mmr_storage;
-    use super::get_verified_packed_client_and_proof_update;
-    use super::into_cached_headers;
-    use super::EthHeader;
-    use super::EthUpdate;
-    use eth2_types::MainnetEthSpec;
-    use eyre::Result;
-    use ibc_relayer_storage::{prelude::StorageAsMMRStore, Storage};
-    use std::fs;
-    use tempfile::TempDir;
 
-    use crate::error::ErrorDetail::LightClientVerification;
+    use std::path::Path;
+
+    use eth2_types::MainnetEthSpec;
+    use ibc_relayer_storage::{prelude::StorageAsMMRStore, Storage};
+    use ibc_relayer_types::clients::ics07_eth::types::{Header as EthHeader, Update as EthUpdate};
+    use tempfile::TempDir;
     use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
 
-    fn load_updates_from_file(path: &str) -> Result<Vec<EthUpdate>> {
-        let headers_json = fs::read_to_string(path)?;
-        let headers: Vec<EthHeader> = serde_json::from_str(&headers_json)?;
-        Ok(headers
-            .into_iter()
-            .map(EthUpdate::from_finalized_header)
-            .collect::<Vec<_>>())
-    }
+    use super::{
+        super::tests::load_updates_from_file, align_native_and_onchain_updates,
+        commit_headers_into_mmr_storage, get_verified_packed_client_and_proof_update,
+        into_cached_headers,
+    };
+    use crate::error::ErrorDetail::LightClientVerification;
 
-    fn prepare_essentials() -> (
+    const TESTDATA_DIR: &str = "src/testdata/test_update_eth_client";
+
+    fn prepare_essentials(
+        case_id: usize,
+        tmp_dir: &Path,
+    ) -> (
         String,
         Vec<EthUpdate>,
         Vec<EthUpdate>,
         Storage<MainnetEthSpec>,
     ) {
-        let chain_id = "chain_id".to_string();
-        let updates_part_1 =
-            load_updates_from_file("src/testdata/test_update_eth_client/headers-part-1.json")
-                .expect("part_1");
-        let updates_part_2 =
-            load_updates_from_file("src/testdata/test_update_eth_client/headers-part-2.json")
-                .expect("part_2");
-        let path = TempDir::new().unwrap();
-        let storage: Storage<MainnetEthSpec> = Storage::new(path).unwrap();
+        let chain_id = format!("chain-id-case-{}", case_id);
+        let testdata_dir = format!("{}/case-{}", TESTDATA_DIR, case_id);
+        let updates_part_1 = load_updates_from_file(&testdata_dir, "headers_part_1.json");
+        let updates_part_2 = load_updates_from_file(&testdata_dir, "headers_part_2.json");
+        let storage: Storage<MainnetEthSpec> = Storage::new(tmp_dir).unwrap();
 
         (chain_id, updates_part_1, updates_part_2, storage)
     }
 
     #[test]
-    fn test_verify_and_align_updates_with_empty_storage() {
-        let (chain_id, updates_part_1, updates_part_2, storage) = prepare_essentials();
+    fn test_verify_and_align_updates_with_empty_storage_case_1() {
+        test_verify_and_align_updates_with_empty_storage(1);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_empty_storage_case_2() {
+        test_verify_and_align_updates_with_empty_storage(2);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_exceesive_storage_case_1() {
+        test_verify_and_align_updates_with_exceesive_storage(1);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_exceesive_storage_case_2() {
+        test_verify_and_align_updates_with_exceesive_storage(2);
+    }
+
+    fn test_verify_and_align_updates_with_empty_storage(case_id: usize) {
+        let tmp_dir = TempDir::new().unwrap();
+
+        let (chain_id, updates_part_1, updates_part_2, storage) =
+            prepare_essentials(case_id, tmp_dir.path());
 
         // generate onchain packed client for later use
         let onchain_packed_client = {
@@ -433,9 +448,11 @@ mod tests {
         .expect("align part_2");
     }
 
-    #[test]
-    fn test_verify_and_align_updates_with_exceesive_storage() {
-        let (chain_id, updates_part_1, updates_part_2, storage) = prepare_essentials();
+    fn test_verify_and_align_updates_with_exceesive_storage(case_id: usize) {
+        let tmp_dir = TempDir::new().unwrap();
+
+        let (chain_id, updates_part_1, updates_part_2, storage) =
+            prepare_essentials(case_id, tmp_dir.path());
 
         // generate onchain packed client
         let (_, onchain_packed_client, _) =

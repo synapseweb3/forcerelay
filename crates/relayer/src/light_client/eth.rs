@@ -157,7 +157,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
                 Ok(header) => header,
                 Err(error) => {
                     // TODO: need to fallback to another SECURE rpc to ensure the fork status
-                    warn!("beacon header forked: {}", error);
+                    warn!("beacon header is not found: {}", error);
                     Header {
                         slot: finality_update_slot,
                         ..Default::default()
