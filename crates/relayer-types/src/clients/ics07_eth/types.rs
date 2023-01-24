@@ -103,6 +103,15 @@ impl Update {
             ..Default::default()
         }
     }
+
+    pub fn is_finalized_empty(&self) -> bool {
+        let header = &self.finalized_header;
+        header.slot > 0
+            && header.proposer_index == 0
+            && header.parent_root == Default::default()
+            && header.state_root == Default::default()
+            && header.body_root == Default::default()
+    }
 }
 
 impl From<&Update> for GenericUpdate {

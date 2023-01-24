@@ -91,7 +91,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         contract_typeid_args: &H256,
         client_id: &String,
     ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error> {
-        // Find celldeps by searching live cells according typeid_args
+        // find celldeps by searching live cells according typeid_args
         let contract_typescript = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
         let contract_cell_dep = {
             let contract_cell =
@@ -109,18 +109,18 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
                 .dep_type(DepType::Code.into())
                 .build()
         };
-        // Search light-client cell by lightclient contract type_id hash
+        // search light-client cell by lightclient contract type_id hash
         let contract_typehash = contract_typescript.calc_script_hash();
         let lightclient_cell_opt = self
             .search_cell_by_typescript(&contract_typehash, &client_id.as_bytes().to_vec())
             .await?;
-        // Build Lightclient Lockscript and Typescript
+        // build Lightclient Lockscript and Typescript
         let pubkey_hash = address.payload().args();
         let lightclient_lock =
             make_lightclient_script(mock_lockscript.calc_script_hash(), pubkey_hash.to_vec());
         let lightclient_type =
             make_lightclient_script(contract_typehash, client_id.clone().into_bytes());
-        // Assemble Lightclient output cell
+        // assemble Lightclient output cell
         let output_data = packed_client.as_slice().pack();
         let output_cell = packed::CellOutput::new_builder()
             .lock(lightclient_lock)
@@ -135,7 +135,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             inputs_capacity += Unpack::<u64>::unpack(&lightclient_cell.output.capacity());
             inputs_cell_as_output.push(lightclient_cell.output);
         }
-        // Assemble Lightclient witness
+        // assemble Lightclient witness
         let witness = {
             let input_type_args = packed::BytesOpt::new_builder()
                 .set(Some(packed_proof_update.as_slice().pack()))
@@ -145,7 +145,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
                 .build();
             witness_args.as_bytes()
         };
-        // Assemble transaction
+        // assemble transaction
         let tx = TransactionView::new_advanced_builder()
             .inputs(inputs_cell)
             .output(output_cell)
@@ -158,7 +158,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         let (tx, mut new_inputs) = self
             .complete_tx_with_secp256k1_change(tx, address, inputs_capacity, fee_rate)
             .await?;
-        // Collect input cells to support signing process (calculating input group)
+        // collect input cells to support signing process (calculating input group)
         inputs_cell_as_output.append(&mut new_inputs);
         Ok((tx, inputs_cell_as_output))
     }

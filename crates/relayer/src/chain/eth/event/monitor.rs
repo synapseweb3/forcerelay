@@ -85,7 +85,7 @@ impl EthEventMonitor {
             if !headers.is_empty() {
                 let start_slot = headers.first().unwrap().slot;
                 let end_slot = headers.last().unwrap().slot;
-                info!("receive new headers from {} to {}", start_slot, end_slot);
+                info!("receive new headers [{}, {}]", start_slot, end_slot);
                 let events = headers
                     .into_iter()
                     .map(|header| {

@@ -85,9 +85,9 @@ where
 
 pub fn align_native_and_onchain_updates<S, E>(
     chain_id: &str,
-    header_updates: &Vec<EthUpdate>,
+    header_updates: &mut Vec<EthUpdate>,
     storage: &S,
-    onchain_packed_client: &PackedClient,
+    onchain_packed_client_opt: Option<&PackedClient>,
 ) -> Result<(), Error>
 where
     S: StorageReader<E> + StorageWriter<E> + StorageAsMMRStore<E>,
@@ -95,6 +95,19 @@ where
 {
     if header_updates.is_empty() {
         return Err(Error::empty_upgraded_client_state());
+    }
+
+    let onchain_packed_client;
+    if let Some(packed_client) = onchain_packed_client_opt {
+        onchain_packed_client = packed_client;
+    } else {
+        // trim empty headers on the left side if in Creation mode
+        *header_updates = header_updates
+            .clone()
+            .into_iter()
+            .skip_while(|update| update.is_finalized_empty())
+            .collect();
+        return Ok(());
     }
 
     // prepare minimal and maximal slots from onchain client
@@ -391,7 +404,7 @@ mod tests {
     fn test_verify_and_align_updates_with_empty_storage(case_id: usize) {
         let tmp_dir = TempDir::new().unwrap();
 
-        let (chain_id, updates_part_1, updates_part_2, storage) =
+        let (chain_id, mut updates_part_1, mut updates_part_2, storage) =
             prepare_essentials(case_id, tmp_dir.path());
 
         // generate onchain packed client for later use
@@ -421,9 +434,9 @@ mod tests {
         // test first updates alignment
         let result = align_native_and_onchain_updates(
             &chain_id,
-            &updates_part_1,
+            &mut updates_part_1,
             &storage,
-            &onchain_packed_client,
+            Some(&onchain_packed_client),
         );
         if let Err(error) = result {
             match error.detail() {
@@ -441,9 +454,9 @@ mod tests {
         // test next updates alignment
         align_native_and_onchain_updates(
             &chain_id,
-            &updates_part_2,
+            &mut updates_part_2,
             &storage,
-            &onchain_packed_client,
+            Some(&onchain_packed_client),
         )
         .expect("align part_2");
     }
@@ -474,9 +487,9 @@ mod tests {
 
         align_native_and_onchain_updates(
             &chain_id,
-            &vec![next_update],
+            &mut vec![next_update],
             &storage,
-            &onchain_packed_client,
+            Some(&onchain_packed_client),
         )
         .expect("align next_update");
     }

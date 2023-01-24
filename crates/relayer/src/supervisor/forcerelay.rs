@@ -29,14 +29,14 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     }
 
     if event_batch.events.is_empty() {
-        warn!("CAUTION: start to relay EMPTY headers");
+        warn!("CAUTION: start relaying EMPTY headers");
         return;
     }
 
     // assemble client states which are transformed from fianlity headers
     let mut start_slot = 0;
-    let end_slot = event_batch.height.revision_height();
-    info!("start to relay headers up to {}", end_slot);
+    let target_slot = event_batch.height.revision_height();
+    info!("start relaying headers up to {}", target_slot);
     let any_client_states = event_batch
         .events
         .iter()
@@ -72,15 +72,19 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     // try sending header
     let result = dst_chain.send_messages_and_wait_commit(tracked_msgs);
     if result.is_ok() {
-        info!("finish relay headers from {} to {}", start_slot, end_slot);
+        info!("finish relaying headers [{}, {}]", start_slot, target_slot);
         return;
     }
 
     // returned err indicates headers falling behind
-    let mut start_height = match extract_missing_slot_from_error(&result.unwrap_err()) {
+    start_slot = match extract_missing_slot_from_error(&result.unwrap_err()) {
         Some(slot) => {
+            if slot >= target_slot {
+                info!("finish relaying headers [{}, {}]", start_slot, target_slot);
+                return;
+            }
             warn!(
-                "upcoming header {} is beyond native header {}, start chasing",
+                "base upcoming header {} is beyond native tip header {}, start chasing",
                 start_slot, slot
             );
             slot
@@ -88,20 +92,19 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         None => return,
     };
 
-    // start to chase lost headers
-    let target_height = end_slot;
-    let mut retry_number = 0;
-    while start_height < target_height {
-        if retry_number > 0 {
+    // chasing lost headers
+    let mut retry = 0;
+    while start_slot < target_slot {
+        if retry > 0 {
             debug!(
-                "{} time retry from height {} to height {}",
-                retry_number, start_height, target_height
+                "{} time retry for [{},  {}]",
+                retry, start_slot, target_slot
             );
         }
-        let limit = std::cmp::min(MAX_HEADERS_IN_BATCH, target_height - start_height + 1);
+        let limit = std::cmp::min(MAX_HEADERS_IN_BATCH, target_slot - start_slot + 1);
         let request = QueryClientStatesRequest {
             pagination: Some(PageRequest {
-                offset: start_height,
+                offset: start_slot,
                 limit,
                 ..Default::default()
             }),
@@ -111,44 +114,41 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
             match client_states {
                 Ok(value) => value,
                 Err(err) => {
-                    error!("src_chain.query_clients: {}", err);
+                    error!("src_chain.query_clients: {}, skip this try", err);
                     return;
                 }
             }
         };
-        let clients_len = client_states.len() as u64;
-        let end_height = start_height + clients_len - 1;
-        if clients_len < limit {
+        let count = client_states.len() as u64;
+        if count < limit {
             warn!(
-                "cannot find enough headers to relay, expect {} but get {}",
-                limit, clients_len
+                "cannot find enough headers to relay, expect {} but got {}",
+                limit, count
             );
         }
-        info!(
-            "send chased headers from {} to {}",
-            start_height, end_height
-        );
+        let end_slot = start_slot + count - 1;
+        info!("sending chased headers [{}, {}]", start_slot, end_slot);
         match send_messages(dst_chain, client_states) {
             Ok(_) => {
                 debug!(
-                    "headers from {} to {} are relayed to ckb, keep chasing to {}",
-                    start_height, end_height, target_height
+                    "headers [{}, {}] are relayed to ckb, keep chasing to {}",
+                    start_slot, end_slot, target_slot
                 );
-                retry_number = 0;
-                start_height = end_height + 1;
+                retry = 0;
+                start_slot = end_slot + 1;
             }
             Err(error) => {
                 if let Some(slot) = extract_missing_slot_from_error(&error) {
-                    warn!("start_height needs to adjust, retry again: {}", error);
-                    start_height = slot;
+                    warn!("'start_slot' needs to adjust, retry again: {}", error);
+                    start_slot = slot;
                 }
-                retry_number += 1;
+                retry += 1;
             }
         }
-        if retry_number >= MAX_RETRY_NUMBER {
+        if retry >= MAX_RETRY_NUMBER {
             error!(
-                "retry number {} exceeds maximum value {}, stop retry process.",
-                retry_number, MAX_RETRY_NUMBER
+                "retry number {} exceeds the max {}, stop and listening to the next batch of headers",
+                retry, MAX_RETRY_NUMBER
             );
             return;
         }
