@@ -30,7 +30,7 @@ eth2_types       = { git = "https://github.com/yangby-cryptape/lighthouse", rev 
 tree_hash_derive = { git = "https://github.com/yangby-cryptape/lighthouse", rev = "62dc610" }
 tree_hash        = { git = "https://github.com/yangby-cryptape/lighthouse", rev = "62dc610" }
 
-eth_light_client_in_ckb-verification = { git = "https://github.com/yangby-cryptape/eth-light-client-in-ckb", rev = "76a7e5c", package = "eth_light_client_in_ckb-verification" }
+eth_light_client_in_ckb-verification = { version = "0.1.0-alpha.0", git = "https://github.com/yangby-cryptape/eth-light-client-in-ckb", rev = "779dab1" }
 
 subtle-encoding = "0.5"
 humantime-serde = "1.1.1"

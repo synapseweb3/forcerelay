@@ -1,8 +1,4 @@
-use std::{
-    fs::{self, read_to_string},
-    str::FromStr,
-    sync::Arc,
-};
+use std::{fs, str::FromStr, sync::Arc};
 
 use ckb_sdk::{
     constants::TYPE_ID_CODE_HASH,
@@ -64,13 +60,49 @@ fn random_cell(
     }
 }
 
-fn load_data_from_file(path: &str) -> Vec<u8> {
+fn load_data_from_file(dir: &str, file: &str) -> Vec<u8> {
+    let path = format!("{}/{}", dir, file);
     fs::read(path).unwrap()
 }
 
+pub(crate) fn load_updates_from_file(dir: &str, file: &str) -> Vec<EthUpdate> {
+    let path = format!("{}/{}", dir, file);
+    let json_str = fs::read_to_string(path).unwrap();
+    let json_value: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+    let values = json_value.as_array().unwrap();
+    let mut updates = Vec::with_capacity(values.len());
+    // N.B. The first value should NOT be null, due to this implement.
+    let mut next_slot = 0;
+    for value in values {
+        let header = if value.is_null() {
+            EthHeader {
+                slot: next_slot,
+                ..Default::default()
+            }
+        } else {
+            serde_json::from_value(value.clone()).unwrap()
+        };
+        next_slot = header.slot + 1;
+        let update = EthUpdate::from_finalized_header(header);
+        updates.push(update);
+    }
+    updates
+}
+
 #[test]
-fn test_update_eth_client() {
+fn test_update_eth_client_case_1() {
+    test_update_eth_client(1);
+}
+
+#[test]
+fn test_update_eth_client_case_2() {
+    test_update_eth_client(2);
+}
+
+fn test_update_eth_client(case_id: usize) {
     let tmp_dir = TempDir::new().unwrap();
+    let testdata_dir = format!("{}/case-{}", TESTDATA_DIR, case_id);
+
     let mut chain = {
         let ckb_config = CkbChainConfig {
             id: ChainId::new("chainA".to_string(), 10),
@@ -148,18 +180,7 @@ fn test_update_eth_client() {
         rpc_client.add_cell(&key, cell);
     }
 
-    let updates_part_1 = {
-        let filepath = format!("{}/{}", TESTDATA_DIR, "headers-part-1.json");
-        let headers_str = read_to_string(filepath).unwrap();
-        let headers: Vec<EthHeader> = serde_json::from_str(&headers_str).unwrap();
-        headers
-            .into_iter()
-            .map(|header| EthUpdate {
-                finalized_header: header,
-                ..Default::default()
-            })
-            .collect::<Vec<_>>()
-    };
+    let updates_part_1 = load_updates_from_file(&testdata_dir, "headers_part_1.json");
 
     let result = chain.update_eth_client(updates_part_1);
     assert!(result.is_ok());
@@ -170,8 +191,7 @@ fn test_update_eth_client() {
     let tx_create_client = rpc_client.get_transaction_by_index(0).unwrap();
 
     {
-        let filepath = format!("{}/{}", TESTDATA_DIR, "client.data");
-        let expected_data = load_data_from_file(&filepath);
+        let expected_data = load_data_from_file(&testdata_dir, "client.data");
         let actual_data = tx_create_client.outputs_data[0].as_bytes().to_vec();
         assert_eq!(expected_data, actual_data);
     }
@@ -235,18 +255,7 @@ fn test_update_eth_client() {
         rpc_client.add_cell(&key, cell);
     }
 
-    let updates_part_2 = {
-        let filepath = format!("{}/{}", TESTDATA_DIR, "headers-part-2.json");
-        let headers_str = read_to_string(filepath).unwrap();
-        let headers: Vec<EthHeader> = serde_json::from_str(&headers_str).unwrap();
-        headers
-            .into_iter()
-            .map(|header| EthUpdate {
-                finalized_header: header,
-                ..Default::default()
-            })
-            .collect::<Vec<_>>()
-    };
+    let updates_part_2 = load_updates_from_file(&testdata_dir, "headers_part_2.json");
 
     let result = chain.update_eth_client(updates_part_2);
     assert!(result.is_ok());
@@ -256,8 +265,7 @@ fn test_update_eth_client() {
 
     {
         let tx_update_client = rpc_client.get_transaction_by_index(1).unwrap();
-        let filepath = format!("{}/{}", TESTDATA_DIR, "new_client.data");
-        let expected_data = load_data_from_file(&filepath);
+        let expected_data = load_data_from_file(&testdata_dir, "new_client.data");
         let actual_data = tx_update_client.outputs_data[0].as_bytes().to_vec();
         assert_eq!(expected_data, actual_data);
     }

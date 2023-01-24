@@ -8,6 +8,7 @@ use std::time::UNIX_EPOCH;
 use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
+use tracing::warn;
 
 use async_trait::async_trait;
 use eyre::eyre;
@@ -152,7 +153,17 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             .get(&finality_update_slot)
             .cloned();
         if update.is_none() && finality_update_slot < self.store.finalized_header.slot {
-            let finalized_header = self.rpc.get_header(finality_update_slot).await?;
+            let finalized_header = match self.rpc.get_header(finality_update_slot).await {
+                Ok(header) => header,
+                Err(error) => {
+                    // TODO: need to fallback to another SECURE rpc to ensure the fork status
+                    warn!("beacon header is not found: {}", error);
+                    Header {
+                        slot: finality_update_slot,
+                        ..Default::default()
+                    }
+                }
+            };
             let new_update = Update::from_finalized_header(finalized_header);
             self.store
                 .finality_updates
