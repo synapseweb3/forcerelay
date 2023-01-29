@@ -65,7 +65,7 @@ id = 'ibc-eth-0'
 genesis_time = 1606824023
 genesis_root = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
 websocket_addr = 'wss://eth-mainnet.g.alchemy.com/v2/bP31lpybtbwJkUWRp850Qds3LV86d1Kv'
-initial_checkpoint = "0xe4d168932628537930f29f3022dc3b2cd51e77b25b86ea635c7449c41cfd0779"
+initial_checkpoint = "0xa179cbd497b112acb057039601a75e2daafae994aa5f01d6e1a1d6f85e07a8ef"
 # key_name = 'connections'
 key_name = 'relayer_eth_wallet'
 rpc_addr = 'https://www.lightclientdata.org'
@@ -80,7 +80,7 @@ bellatrix = { epoch = 144896, fork_version = "0x02000000" }
 id = 'ibc-ckb-0'
 ckb_rpc = "https://testnet.ckbapp.dev"
 ckb_indexer_rpc = "https://testnet.ckbapp.dev"
-lightclient_contract_typeargs = "0x491aa1c22c2b1beb4c82c00e694ff2c514adf58dce4cca8bed5cc601d6a7a9d7"
+lightclient_contract_typeargs = "0xb7fcfa4ad253ddd60481bdd35331a634ff985fdb3b3fab4e1066cf97faf40315"
 lightclient_lock_typeargs = "0xd6eb3b34c445a1fe914f4e22c13380cf3b6102d9c2b949a8544d1a2f72a8b6c7"
 key_name = "relayer_ckb_wallet"
 data_dir = "./ckb_mmr_storage"

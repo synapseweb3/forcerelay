@@ -8,7 +8,7 @@ use std::time::UNIX_EPOCH;
 use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
-use tracing::warn;
+use tracing::{error, warn};
 
 use async_trait::async_trait;
 use eyre::eyre;
@@ -114,7 +114,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         keep_continuos: bool,
     ) -> Result<()> {
         if self.store.next_sync_committee.is_none() {
-            println!(
+            warn!(
                 "[eth_light_client] skip finality_update store of slot {}",
                 finality_update.finalized_header.slot
             );
@@ -124,7 +124,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             if let Some((_, last_update)) = self.store.finality_updates.last_key_value() {
                 let start_slot = last_update.finalized_header.slot;
                 let end_slot = finality_update.finalized_header.slot;
-                for slot in start_slot..end_slot {
+                for slot in (start_slot + 1)..=end_slot {
                     let update = self.get_finality_update(slot).await?;
                     if let Some(update) = update {
                         self.store.finality_updates.insert(slot, update);
@@ -259,16 +259,20 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             let start_slot = previous_stored_fianlized_slot;
             let end_slot = finality_update.finalized_header.slot;
             let mut fianlized_headers = vec![];
-            for slot in start_slot..=end_slot {
+            for slot in (start_slot + 1)..=end_slot {
                 let update = self.get_finality_update(slot).await?;
                 if let Some(update) = update {
                     fianlized_headers.push(update.finalized_header);
                 }
             }
-            info!("emiting new headers from {} to {}", start_slot, end_slot);
+            if fianlized_headers.is_empty() {
+                warn!("finalized_headers are empty, skip emiting");
+                return Ok(());
+            }
+            info!("emiting new headers ({}, {}]", start_slot, end_slot);
             self.new_block_emitors.iter().for_each(|emitor| {
                 if let Err(e) = emitor.send(fianlized_headers.clone()) {
-                    println!("[eth_light_client] new_block emitor error: {}", e);
+                    error!("[eth_light_client] new_block emitor error: {}", e);
                 }
             });
         }
@@ -326,6 +330,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             } else if update_finalized_period == store_period + 1 {
                 self.store.current_sync_committee = self.store.next_sync_committee.clone().unwrap();
                 self.store.next_sync_committee = update.next_sync_committee.clone();
+                self.store.next_sync_committee_branch = update.next_sync_committee_branch.clone();
                 self.store.previous_max_active_participants =
                     self.store.current_max_active_participants;
                 self.store.current_max_active_participants = 0;
@@ -638,7 +643,7 @@ impl LightClient {
             loop {
                 let res = client.lock().await.advance().await;
                 if let Err(err) = res {
-                    println!("[eth_light_client] consensus error: {}", err);
+                    error!("[eth_light_client] consensus error: {}", err);
                 }
 
                 let next_update = client.lock().await.duration_until_next_update();

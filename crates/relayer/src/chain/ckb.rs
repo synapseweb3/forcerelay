@@ -115,21 +115,19 @@ impl CkbChain {
 
     pub(crate) fn update_eth_client(
         &mut self,
-        header_updates: Vec<EthUpdate>,
+        mut header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let chain_id = self.id().to_string();
         let onchain_packed_client_opt = self.rt.block_on(self.rpc_client.fetch_packed_client(
             &self.config.lightclient_contract_typeargs,
             &self.config.id.to_string(),
         ))?;
-        if let Some(ref onchain_packed_client) = onchain_packed_client_opt {
-            utils::align_native_and_onchain_updates(
-                &chain_id,
-                &header_updates,
-                &self.storage,
-                onchain_packed_client,
-            )?;
-        }
+        utils::align_native_and_onchain_updates(
+            &chain_id,
+            &mut header_updates,
+            &self.storage,
+            onchain_packed_client_opt.as_ref(),
+        )?;
         let (prev_slot_opt, packed_client, packed_proof_update) =
             utils::get_verified_packed_client_and_proof_update(
                 &chain_id,
