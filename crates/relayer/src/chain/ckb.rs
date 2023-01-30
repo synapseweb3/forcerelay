@@ -1,7 +1,9 @@
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTx};
 use ckb_sdk::{Address, AddressPayload, NetworkType};
 use eth2_types::MainnetEthSpec;
-use ibc_relayer_storage::{prelude::StorageAsMMRStore as _, Storage};
+use eth_light_client_in_ckb_verification::types::prelude::Unpack;
+use ibc_relayer_storage::prelude::{StorageAsMMRStore as _, StorageReader as _};
+use ibc_relayer_storage::Storage;
 use ibc_relayer_types::clients::ics07_ckb::{
     client_state::ClientState as CkbClientState,
     consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
@@ -118,10 +120,10 @@ impl CkbChain {
         mut header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let chain_id = self.id().to_string();
-        let onchain_packed_client_opt = self.rt.block_on(self.rpc_client.fetch_packed_client(
-            &self.config.lightclient_contract_typeargs,
-            &self.config.id.to_string(),
-        ))?;
+        let onchain_packed_client_opt = self.rt.block_on(
+            self.rpc_client
+                .fetch_packed_client(&self.config.lightclient_contract_typeargs, &chain_id),
+        )?;
         utils::align_native_and_onchain_updates(
             &chain_id,
             &mut header_updates,
@@ -239,6 +241,31 @@ impl CkbChain {
         };
         Ok(address)
     }
+
+    fn print_status_log(&self) -> Result<(), Error> {
+        let onchain_packed_client_opt = self.rt.block_on(self.rpc_client.fetch_packed_client(
+            &self.config.lightclient_contract_typeargs,
+            &self.id().to_string(),
+        ))?;
+        let mut status_log = String::new();
+        if let Some(packed_client) = onchain_packed_client_opt {
+            let minimal_slot: u64 = packed_client.minimal_slot().unpack();
+            let maximal_slot: u64 = packed_client.maximal_slot().unpack();
+            status_log += &format!("on-chain status: [{minimal_slot}, {maximal_slot}], ");
+        } else {
+            status_log += "on-chain status: NONE, ";
+        }
+        if let (Some(start_slot), Some(end_slot)) = (
+            self.storage.get_base_beacon_header_slot()?,
+            self.storage.get_tip_beacon_header_slot()?,
+        ) {
+            status_log += &format!("native status: [{start_slot}, {end_slot}]");
+        } else {
+            status_log += "native status: NONE";
+        }
+        tracing::info!("[forcerelay] {status_log}");
+        Ok(())
+    }
 }
 
 impl ChainEndpoint for CkbChain {
@@ -267,7 +294,7 @@ impl ChainEndpoint for CkbChain {
         let cached_network = RwLock::new(None);
         let cached_tx_assembler_address = RwLock::new(None);
 
-        Ok(CkbChain {
+        let ckb = CkbChain {
             rt,
             rpc_client,
             config,
@@ -275,7 +302,9 @@ impl ChainEndpoint for CkbChain {
             storage,
             cached_network,
             cached_tx_assembler_address,
-        })
+        };
+        ckb.print_status_log()?;
+        Ok(ckb)
     }
 
     fn shutdown(self) -> Result<(), Error> {

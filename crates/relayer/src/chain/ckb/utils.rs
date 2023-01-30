@@ -296,10 +296,10 @@ where
         client
             .unpack()
             .try_apply_packed_proof_update(packed_proof_update.as_reader())
-            .map_err(|_| Error::send_tx("failed to update header".to_owned()))?
+            .map_err(|e| Error::send_tx(format!("failed to update header, error = {}", e as u8)))?
     } else {
         EthLcClient::new_from_packed_proof_update(packed_proof_update.as_reader())
-            .map_err(|_| Error::send_tx("failed to create header".to_owned()))?
+            .map_err(|e| Error::send_tx(format!("failed to create header, error = {}", e as u8)))?
     };
 
     Ok((prev_tip_slot, client.pack(), packed_proof_update))
@@ -345,11 +345,12 @@ pub async fn wait_ckb_transaction_committed(
 
 #[cfg(test)]
 mod tests {
-
     use std::path::Path;
 
+    use ckb_types::prelude::Entity;
     use eth2_types::MainnetEthSpec;
-    use ibc_relayer_storage::{prelude::StorageAsMMRStore, Storage};
+    use ibc_relayer_storage::prelude::{StorageAsMMRStore, StorageReader};
+    use ibc_relayer_storage::Storage;
     use ibc_relayer_types::clients::ics07_eth::types::{Header as EthHeader, Update as EthUpdate};
     use tempfile::TempDir;
     use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
@@ -379,26 +380,6 @@ mod tests {
         let storage: Storage<MainnetEthSpec> = Storage::new(tmp_dir).unwrap();
 
         (chain_id, updates_part_1, updates_part_2, storage)
-    }
-
-    #[test]
-    fn test_verify_and_align_updates_with_empty_storage_case_1() {
-        test_verify_and_align_updates_with_empty_storage(1);
-    }
-
-    #[test]
-    fn test_verify_and_align_updates_with_empty_storage_case_2() {
-        test_verify_and_align_updates_with_empty_storage(2);
-    }
-
-    #[test]
-    fn test_verify_and_align_updates_with_exceesive_storage_case_1() {
-        test_verify_and_align_updates_with_exceesive_storage(1);
-    }
-
-    #[test]
-    fn test_verify_and_align_updates_with_exceesive_storage_case_2() {
-        test_verify_and_align_updates_with_exceesive_storage(2);
     }
 
     fn test_verify_and_align_updates_with_empty_storage(case_id: usize) {
@@ -492,5 +473,44 @@ mod tests {
             Some(&onchain_packed_client),
         )
         .expect("align next_update");
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_empty_storage_case_1() {
+        test_verify_and_align_updates_with_empty_storage(1);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_empty_storage_case_2() {
+        test_verify_and_align_updates_with_empty_storage(2);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_exceesive_storage_case_1() {
+        test_verify_and_align_updates_with_exceesive_storage(1);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_exceesive_storage_case_2() {
+        test_verify_and_align_updates_with_exceesive_storage(2);
+    }
+
+    #[ignore]
+    #[test]
+    fn print_mmr_value_by_slot() {
+        const STORAGE_PATH: &str = "../../ckb_mmr_storage";
+        const SLOT: u64 = 5654560;
+
+        let storage: Storage<MainnetEthSpec> = Storage::new(STORAGE_PATH).unwrap();
+        let base_slot = storage
+            .get_base_beacon_header_slot()
+            .expect("base slot")
+            .expect("empty storage");
+        assert!(SLOT >= base_slot);
+        let header = storage
+            .get_beacon_header_digest(SLOT - base_slot)
+            .expect("header digest")
+            .expect("no header");
+        println!("{SLOT} header_digest = {}", hex::encode(header.as_slice()));
     }
 }

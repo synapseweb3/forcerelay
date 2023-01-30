@@ -139,10 +139,11 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
             }
             Err(error) => {
                 if let Some(slot) = extract_missing_slot_from_error(&error) {
-                    warn!("'start_slot' needs to adjust, retry again: {}", error);
+                    debug!("adjust start_slot and continue retry: {}", error);
                     start_slot = slot;
+                } else {
+                    retry += 1;
                 }
-                retry += 1;
             }
         }
         if retry >= MAX_RETRY_NUMBER {
