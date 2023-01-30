@@ -57,7 +57,6 @@ pub struct ConsensusClient<R: ConsensusRpc> {
     last_checkpoint: Option<[u8; 32]>, // Vec<u8>
     config: Arc<EthChainConfig>,
     new_block_emitors: Vec<UnboundedSender<Vec<Header>>>,
-    enable_emitor: bool,
 }
 
 impl<R: ConsensusRpc> ConsensusClient<R> {
@@ -73,7 +72,6 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             last_checkpoint: None,
             config,
             new_block_emitors: vec![],
-            enable_emitor: false,
         }
     }
 
@@ -100,10 +98,12 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         }
 
         let finality_update = self.rpc.get_finality_update().await?;
+        let previous_stored_finalized_slot = self.store.finalized_header.slot;
         self.verify_finality_update(&finality_update)?;
         self.apply_finality_update(&finality_update);
-        self.store_finality_update(&finality_update, false).await?;
-        self.enable_emitor = true;
+        if self.store.finalized_header.slot > previous_stored_finalized_slot {
+            self.store_finality_update(&finality_update, false).await?;
+        }
 
         Ok(())
     }
@@ -157,7 +157,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
                 Ok(header) => header,
                 Err(error) => {
                     // TODO: need to fallback to another SECURE rpc to ensure the fork status
-                    warn!("beacon header is not found: {}", error);
+                    warn!("beacon header forked: {}", error);
                     Header {
                         slot: finality_update_slot,
                         ..Default::default()
@@ -232,7 +232,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
     }
 
     pub async fn advance(&mut self) -> Result<()> {
-        let previous_stored_fianlized_slot = self.store.finalized_header.slot;
+        let previous_stored_finalized_slot = self.store.finalized_header.slot;
         let finality_update = self.rpc.get_finality_update().await?;
         self.verify_finality_update(&finality_update)?;
         self.apply_finality_update(&finality_update);
@@ -252,31 +252,29 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             }
         }
 
-        self.store_finality_update(&finality_update, true).await?;
-        if self.enable_emitor
-            && finality_update.finalized_header.slot > previous_stored_fianlized_slot
-        {
-            let start_slot = previous_stored_fianlized_slot;
+        if self.store.finalized_header.slot > previous_stored_finalized_slot {
+            self.store_finality_update(&finality_update, true).await?;
+            // prepare headers for emiting
+            let start_slot = previous_stored_finalized_slot;
             let end_slot = finality_update.finalized_header.slot;
-            let mut fianlized_headers = vec![];
-            for slot in (start_slot + 1)..=end_slot {
+            let mut finalized_headers = vec![];
+            for slot in start_slot..end_slot {
                 let update = self.get_finality_update(slot).await?;
                 if let Some(update) = update {
-                    fianlized_headers.push(update.finalized_header);
+                    finalized_headers.push(update.finalized_header);
                 }
             }
-            if fianlized_headers.is_empty() {
+            if finalized_headers.is_empty() || finalized_headers.iter().all(|v| v.is_empty()) {
                 warn!("finalized_headers are empty, skip emiting");
                 return Ok(());
             }
-            info!("emiting new headers ({}, {}]", start_slot, end_slot);
+            info!("emiting new headers [{start_slot}, {end_slot})");
             self.new_block_emitors.iter().for_each(|emitor| {
-                if let Err(e) = emitor.send(fianlized_headers.clone()) {
+                if let Err(e) = emitor.send(finalized_headers.clone()) {
                     error!("[eth_light_client] new_block emitor error: {}", e);
                 }
             });
         }
-
         Ok(())
     }
 

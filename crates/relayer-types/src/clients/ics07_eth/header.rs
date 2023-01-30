@@ -24,6 +24,16 @@ pub struct Header {
     pub body_root: H256,
 }
 
+impl Header {
+    pub fn is_empty(&self) -> bool {
+        self.slot > 0
+            && self.proposer_index == 0
+            && self.parent_root == Default::default()
+            && self.state_root == Default::default()
+            && self.body_root == Default::default()
+    }
+}
+
 impl ics02_client::header::Header for Header {
     fn client_type(&self) -> ics02_client::client_type::ClientType {
         ics02_client::client_type::ClientType::Eth

@@ -1,5 +1,6 @@
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTx};
 use ckb_sdk::{Address, AddressPayload, NetworkType};
+use ckb_types::prelude::Entity;
 use eth2_types::MainnetEthSpec;
 use eth_light_client_in_ckb_verification::types::prelude::Unpack;
 use ibc_relayer_storage::prelude::{StorageAsMMRStore as _, StorageReader as _};
@@ -166,8 +167,7 @@ impl CkbChain {
                     return err.into();
                 }
                 Error::send_tx(format!(
-                    "{}\n== transaction for debugging is below ==\n{}",
-                    e,
+                    "{e}\n== transaction for debugging is below ==\n{}",
                     serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
                 ))
             })?;
@@ -191,6 +191,7 @@ impl CkbChain {
                 e
             })?;
 
+        self.print_status_log()?;
         Ok(vec![])
     }
 
@@ -251,7 +252,11 @@ impl CkbChain {
         if let Some(packed_client) = onchain_packed_client_opt {
             let minimal_slot: u64 = packed_client.minimal_slot().unpack();
             let maximal_slot: u64 = packed_client.maximal_slot().unpack();
-            status_log += &format!("on-chain status: [{minimal_slot}, {maximal_slot}], ");
+            let tip_header_digest = packed_client.tip_header_root();
+            status_log += &format!(
+                "on-chain status: [{minimal_slot}, {maximal_slot}] tip = 0x{}, ",
+                hex::encode(tip_header_digest.as_slice())
+            );
         } else {
             status_log += "on-chain status: NONE, ";
         }
@@ -263,7 +268,7 @@ impl CkbChain {
         } else {
             status_log += "native status: NONE";
         }
-        tracing::info!("[forcerelay] {status_log}");
+        tracing::info!("[STATUS] {status_log}");
         Ok(())
     }
 }

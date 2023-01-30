@@ -225,18 +225,20 @@ where
 
     // make sure the upcoming start slot is continuous with the stored tip slot
     if let Some(mut stored_tip_slot) = storage.get_tip_beacon_header_slot()? {
-        // trim exceesive slots from storage
-        if start_slot <= stored_tip_slot {
-            debug!(
-                "rollback stored tip slot from {} to {}",
-                stored_tip_slot, start_slot
-            );
-            storage.rollback_to(Some(start_slot - 1))?;
-            stored_tip_slot = storage
-                .get_tip_beacon_header_slot()?
-                .expect("reaquire stored tip slot");
+        if prev_tip_slot.is_none() {
+            debug!("remove all from storage for none on-chain data");
+            storage.rollback_to(None)?;
+        } else {
+            // trim exceesive slots from storage
+            if start_slot <= stored_tip_slot {
+                debug!("rollback stored tip slot from {stored_tip_slot} to {start_slot}");
+                storage.rollback_to(Some(start_slot - 1))?;
+                stored_tip_slot = storage
+                    .get_tip_beacon_header_slot()?
+                    .expect("reaquire stored tip slot");
+            }
+            assert_eq!(start_slot, stored_tip_slot + 1);
         }
-        assert_eq!(start_slot, stored_tip_slot + 1);
     }
 
     let finalized_headers = into_cached_headers(header_updates);
