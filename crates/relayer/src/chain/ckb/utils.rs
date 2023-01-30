@@ -349,11 +349,13 @@ mod tests {
 
     use ckb_types::prelude::Entity;
     use eth2_types::MainnetEthSpec;
+    use eth_light_client_in_ckb_verification::mmr::lib::leaf_index_to_pos;
     use ibc_relayer_storage::prelude::{StorageAsMMRStore, StorageReader};
     use ibc_relayer_storage::Storage;
     use ibc_relayer_types::clients::ics07_eth::types::{Header as EthHeader, Update as EthUpdate};
     use tempfile::TempDir;
     use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
+    use tree_hash::TreeHash;
 
     use super::{
         super::tests::load_updates_from_file, align_native_and_onchain_updates,
@@ -507,10 +509,19 @@ mod tests {
             .expect("base slot")
             .expect("empty storage");
         assert!(SLOT >= base_slot);
-        let header = storage
-            .get_beacon_header_digest(SLOT - base_slot)
+        let position = leaf_index_to_pos(SLOT - base_slot);
+        let header_hash = storage
+            .get_beacon_header_digest(position)
             .expect("header digest")
             .expect("no header");
-        println!("{SLOT} header_digest = {}", hex::encode(header.as_slice()));
+        let empty_header = EthHeader {
+            slot: SLOT,
+            ..Default::default()
+        };
+        println!(
+            "{SLOT} header_digest = 0x{}, empty = {}",
+            hex::encode(header_hash.as_slice()),
+            empty_header.tree_hash_root()
+        );
     }
 }
