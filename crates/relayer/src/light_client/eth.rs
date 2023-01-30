@@ -808,17 +808,13 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
+    use super::{
+        Bootstrap, ConsensusClient, ConsensusRpc, FinalityUpdate, HeaderResponse, NimbusRpc,
+        Result, Update,
+    };
     use crate::config::eth::EthChainConfig;
     use crate::light_client::eth::utils::calc_sync_period;
     use crate::light_client::eth::MAX_REQUEST_LIGHT_CLIENT_UPDATES;
-
-    use super::Bootstrap;
-    use super::ConsensusClient;
-    use super::ConsensusRpc;
-    use super::FinalityUpdate;
-    use super::HeaderResponse;
-    use super::Result;
-    use super::Update;
 
     use async_trait::async_trait;
     use ibc_relayer_types::clients::ics07_eth::header::Header;
@@ -1012,5 +1008,23 @@ mod tests {
 
         assert!(update.is_some());
         assert_eq!(update.unwrap().finalized_header.slot, 5595002);
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn pull_beacon_headers_range() {
+        const START_SLOT: u64 = 5687681;
+        const END_SLOT: u64 = 5687712;
+        const URL: &str = "https://www.lightclientdata.org";
+
+        let rpc = NimbusRpc::new(URL);
+        let mut headers = vec![];
+        for slot in START_SLOT..=END_SLOT {
+            let header = rpc.get_header(slot).await.expect("get header");
+            headers.push(header);
+        }
+        let path = format!("headers-{START_SLOT}-{END_SLOT}.json");
+        let contents = serde_json::to_string_pretty(&headers).expect("jsonify");
+        std::fs::write(path, contents).expect("write json");
     }
 }

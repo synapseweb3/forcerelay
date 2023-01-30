@@ -499,6 +499,17 @@ mod tests {
         test_verify_and_align_updates_with_exceesive_storage(2);
     }
 
+    #[test]
+    fn test_create_client_with_specified_headers_range() {
+        let tmp_dir = TempDir::new().unwrap();
+        let chain_id = "chain_id".to_owned();
+        let testdata_dir = format!("{TESTDATA_DIR}/case-3");
+        let updates = load_updates_from_file(&testdata_dir, "headers-5687681-5687712.json");
+        let storage: Storage<MainnetEthSpec> = Storage::new(tmp_dir).unwrap();
+        get_verified_packed_client_and_proof_update(&chain_id, &updates, &storage, None)
+            .expect("verify");
+    }
+
     #[ignore]
     #[test]
     fn print_mmr_value_by_slot() {
