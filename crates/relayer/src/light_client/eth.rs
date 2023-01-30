@@ -50,6 +50,10 @@ use self::utils::is_next_committee_proof_valid;
 
 pub const MAX_REQUEST_LIGHT_CLIENT_UPDATES: u8 = 128;
 
+fn calc_epoch(slot: u64) -> u64 {
+    slot / 32
+}
+
 pub struct ConsensusClient<R: ConsensusRpc> {
     rpc: R,
     store: LightClientStore,
@@ -231,6 +235,35 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         std::time::Duration::from_secs(next_update)
     }
 
+    async fn start_emiting_headers(&mut self, start_slot: u64, end_slot: u64) -> Result<()> {
+        let mut finalized_headers = vec![];
+        for slot in start_slot..end_slot {
+            let update = self.get_finality_update(slot).await?;
+            if let Some(update) = update {
+                finalized_headers.push(update.finalized_header);
+            }
+        }
+        // same epoch means the incoming finality epoch has forked headers at the begining
+        if calc_epoch(start_slot) == calc_epoch(end_slot) {
+            let update = self.get_finality_update(end_slot).await?;
+            if let Some(update) = update {
+                finalized_headers.push(update.finalized_header);
+            }
+        }
+        // empty container or all of items are empty headers means no need to relay
+        if finalized_headers.is_empty() || finalized_headers.iter().all(|v| v.is_empty()) {
+            warn!("finalized_headers are empty, skip emiting");
+            return Ok(());
+        }
+        info!("emiting new headers [{start_slot}, {end_slot})");
+        self.new_block_emitors.iter().for_each(|emitor| {
+            if let Err(e) = emitor.send(finalized_headers.clone()) {
+                error!("[eth_light_client] new_block emitor error: {}", e);
+            }
+        });
+        Ok(())
+    }
+
     pub async fn advance(&mut self) -> Result<()> {
         let previous_stored_finalized_slot = self.store.finalized_header.slot;
         let finality_update = self.rpc.get_finality_update().await?;
@@ -243,9 +276,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
 
             if updates.len() == 1 {
                 let update = updates.get_mut(0).unwrap();
-                let res = self.verify_update(update);
-
-                if res.is_ok() {
+                if self.verify_update(update).is_ok() {
                     self.apply_update(update);
                     return Ok(());
                 }
@@ -254,26 +285,11 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
 
         if self.store.finalized_header.slot > previous_stored_finalized_slot {
             self.store_finality_update(&finality_update, true).await?;
-            // prepare headers for emiting
-            let start_slot = previous_stored_finalized_slot;
-            let end_slot = finality_update.finalized_header.slot;
-            let mut finalized_headers = vec![];
-            for slot in start_slot..end_slot {
-                let update = self.get_finality_update(slot).await?;
-                if let Some(update) = update {
-                    finalized_headers.push(update.finalized_header);
-                }
-            }
-            if finalized_headers.is_empty() || finalized_headers.iter().all(|v| v.is_empty()) {
-                warn!("finalized_headers are empty, skip emiting");
-                return Ok(());
-            }
-            info!("emiting new headers [{start_slot}, {end_slot})");
-            self.new_block_emitors.iter().for_each(|emitor| {
-                if let Err(e) = emitor.send(finalized_headers.clone()) {
-                    error!("[eth_light_client] new_block emitor error: {}", e);
-                }
-            });
+            self.start_emiting_headers(
+                previous_stored_finalized_slot,
+                self.store.finalized_header.slot,
+            )
+            .await?;
         }
         Ok(())
     }
