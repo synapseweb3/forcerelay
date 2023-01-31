@@ -2088,13 +2088,14 @@ dependencies = [
 [[package]]
 name = "eth_light_client_in_ckb-verification"
 version = "0.1.0-alpha.0"
-source = "git+https://github.com/yangby-cryptape/eth-light-client-in-ckb?rev=779dab1#779dab1b3a70ec0af064620f312eb90daa22ab7f"
+source = "git+https://github.com/yangby-cryptape/eth-light-client-in-ckb?rev=707d7f6#707d7f656fd253152da029955aa7d73ff9b9c5e3"
 dependencies = [
  "ckb-merkle-mountain-range",
  "eth2_hashing",
  "eth2_ssz",
  "eth2_ssz_derive",
  "eth2_ssz_types",
+ "log",
  "merkle_proof",
  "molecule",
  "rlp",

@@ -28,9 +28,9 @@ impl Header {
     pub fn is_empty(&self) -> bool {
         self.slot > 0
             && self.proposer_index == 0
-            && self.parent_root == Default::default()
-            && self.state_root == Default::default()
-            && self.body_root == Default::default()
+            && self.parent_root.is_zero()
+            && self.state_root.is_zero()
+            && self.body_root.is_zero()
     }
 }
 
