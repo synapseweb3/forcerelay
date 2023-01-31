@@ -225,18 +225,20 @@ where
 
     // make sure the upcoming start slot is continuous with the stored tip slot
     if let Some(mut stored_tip_slot) = storage.get_tip_beacon_header_slot()? {
-        // trim exceesive slots from storage
-        if start_slot <= stored_tip_slot {
-            debug!(
-                "rollback stored tip slot from {} to {}",
-                stored_tip_slot, start_slot
-            );
-            storage.rollback_to(Some(start_slot - 1))?;
-            stored_tip_slot = storage
-                .get_tip_beacon_header_slot()?
-                .expect("reaquire stored tip slot");
+        if prev_tip_slot.is_none() {
+            debug!("remove all from storage for none on-chain data");
+            storage.rollback_to(None)?;
+        } else {
+            // trim exceesive slots from storage
+            if start_slot <= stored_tip_slot {
+                debug!("rollback stored tip slot from {stored_tip_slot} to {start_slot}");
+                storage.rollback_to(Some(start_slot - 1))?;
+                stored_tip_slot = storage
+                    .get_tip_beacon_header_slot()?
+                    .expect("reaquire stored tip slot");
+            }
+            assert_eq!(start_slot, stored_tip_slot + 1);
         }
-        assert_eq!(start_slot, stored_tip_slot + 1);
     }
 
     let finalized_headers = into_cached_headers(header_updates);
@@ -296,10 +298,10 @@ where
         client
             .unpack()
             .try_apply_packed_proof_update(packed_proof_update.as_reader())
-            .map_err(|_| Error::send_tx("failed to update header".to_owned()))?
+            .map_err(|e| Error::send_tx(format!("failed to update header, error = {}", e as u8)))?
     } else {
         EthLcClient::new_from_packed_proof_update(packed_proof_update.as_reader())
-            .map_err(|_| Error::send_tx("failed to create header".to_owned()))?
+            .map_err(|e| Error::send_tx(format!("failed to create header, error = {}", e as u8)))?
     };
 
     Ok((prev_tip_slot, client.pack(), packed_proof_update))
@@ -345,14 +347,17 @@ pub async fn wait_ckb_transaction_committed(
 
 #[cfg(test)]
 mod tests {
-
     use std::path::Path;
 
+    use ckb_types::prelude::Entity;
     use eth2_types::MainnetEthSpec;
-    use ibc_relayer_storage::{prelude::StorageAsMMRStore, Storage};
+    use eth_light_client_in_ckb_verification::mmr::lib::leaf_index_to_pos;
+    use ibc_relayer_storage::prelude::{StorageAsMMRStore, StorageReader};
+    use ibc_relayer_storage::Storage;
     use ibc_relayer_types::clients::ics07_eth::types::{Header as EthHeader, Update as EthUpdate};
     use tempfile::TempDir;
     use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
+    use tree_hash::TreeHash;
 
     use super::{
         super::tests::load_updates_from_file, align_native_and_onchain_updates,
@@ -379,26 +384,6 @@ mod tests {
         let storage: Storage<MainnetEthSpec> = Storage::new(tmp_dir).unwrap();
 
         (chain_id, updates_part_1, updates_part_2, storage)
-    }
-
-    #[test]
-    fn test_verify_and_align_updates_with_empty_storage_case_1() {
-        test_verify_and_align_updates_with_empty_storage(1);
-    }
-
-    #[test]
-    fn test_verify_and_align_updates_with_empty_storage_case_2() {
-        test_verify_and_align_updates_with_empty_storage(2);
-    }
-
-    #[test]
-    fn test_verify_and_align_updates_with_exceesive_storage_case_1() {
-        test_verify_and_align_updates_with_exceesive_storage(1);
-    }
-
-    #[test]
-    fn test_verify_and_align_updates_with_exceesive_storage_case_2() {
-        test_verify_and_align_updates_with_exceesive_storage(2);
     }
 
     fn test_verify_and_align_updates_with_empty_storage(case_id: usize) {
@@ -492,5 +477,64 @@ mod tests {
             Some(&onchain_packed_client),
         )
         .expect("align next_update");
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_empty_storage_case_1() {
+        test_verify_and_align_updates_with_empty_storage(1);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_empty_storage_case_2() {
+        test_verify_and_align_updates_with_empty_storage(2);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_exceesive_storage_case_1() {
+        test_verify_and_align_updates_with_exceesive_storage(1);
+    }
+
+    #[test]
+    fn test_verify_and_align_updates_with_exceesive_storage_case_2() {
+        test_verify_and_align_updates_with_exceesive_storage(2);
+    }
+
+    #[test]
+    fn test_create_client_with_specified_headers_range() {
+        let tmp_dir = TempDir::new().unwrap();
+        let chain_id = "chain_id".to_owned();
+        let testdata_dir = format!("{TESTDATA_DIR}/case-3");
+        let updates = load_updates_from_file(&testdata_dir, "headers-5687681-5687712.json");
+        let storage: Storage<MainnetEthSpec> = Storage::new(tmp_dir).unwrap();
+        get_verified_packed_client_and_proof_update(&chain_id, &updates, &storage, None)
+            .expect("verify");
+    }
+
+    #[ignore]
+    #[test]
+    fn print_mmr_value_by_slot() {
+        const STORAGE_PATH: &str = "../../ckb_mmr_storage";
+        const SLOT: u64 = 5654560;
+
+        let storage: Storage<MainnetEthSpec> = Storage::new(STORAGE_PATH).unwrap();
+        let base_slot = storage
+            .get_base_beacon_header_slot()
+            .expect("base slot")
+            .expect("empty storage");
+        assert!(SLOT >= base_slot);
+        let position = leaf_index_to_pos(SLOT - base_slot);
+        let header_hash = storage
+            .get_beacon_header_digest(position)
+            .expect("header digest")
+            .expect("no header");
+        let empty_header = EthHeader {
+            slot: SLOT,
+            ..Default::default()
+        };
+        println!(
+            "{SLOT} header_digest = 0x{}, empty = {}",
+            hex::encode(header_hash.as_slice()),
+            empty_header.tree_hash_root()
+        );
     }
 }

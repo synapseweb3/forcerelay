@@ -23,8 +23,8 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         || !matches!(dst_chain.config().unwrap(), ChainConfig::Ckb(_))
     {
         error!("ignore header relay while src chain is not eth or dst chain is not ckb");
-        error!("src_chain: {:?}", src_chain);
-        error!("dst_chain: {:?}", dst_chain);
+        error!("src_chain: {src_chain:?}");
+        error!("dst_chain: {dst_chain:?}");
         return;
     }
 
@@ -33,10 +33,9 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         return;
     }
 
-    // assemble client states which are transformed from fianlity headers
+    // assemble client states which are transformed from finality headers
     let mut start_slot = 0;
     let target_slot = event_batch.height.revision_height();
-    info!("start relaying headers up to {}", target_slot);
     let any_client_states = event_batch
         .events
         .iter()
@@ -53,7 +52,7 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
                     match client_state {
                         Ok(value) => value,
                         Err(err) => {
-                            error!("src_chain.build_client_state: {}", err);
+                            error!("src_chain.build_client_state: {err}");
                             return None;
                         }
                     }
@@ -69,10 +68,10 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         tracking_id: TrackingId::Static(NonCosmosTrackingId::ETH_UPDATE_CLIENT),
     };
 
-    // try sending header
+    // try sending headers
     let result = dst_chain.send_messages_and_wait_commit(tracked_msgs);
     if result.is_ok() {
-        info!("finish relaying headers [{}, {}]", start_slot, target_slot);
+        info!("finish relaying headers [{start_slot}, {target_slot}]");
         return;
     }
 
@@ -80,13 +79,10 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     start_slot = match extract_missing_slot_from_error(&result.unwrap_err()) {
         Some(slot) => {
             if slot >= target_slot {
-                info!("finish relaying headers [{}, {}]", start_slot, target_slot);
+                info!("finish relaying headers [{start_slot}, {target_slot}]");
                 return;
             }
-            warn!(
-                "base upcoming header {} is beyond native tip header {}, start chasing",
-                start_slot, slot
-            );
+            warn!("upcoming header {start_slot} not match native tip header {slot}, start chasing");
             slot
         }
         None => return,
@@ -96,10 +92,7 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     let mut retry = 0;
     while start_slot < target_slot {
         if retry > 0 {
-            debug!(
-                "{} time retry for [{},  {}]",
-                retry, start_slot, target_slot
-            );
+            debug!("{retry} time retry for [{start_slot}, {target_slot}]");
         }
         let limit = std::cmp::min(MAX_HEADERS_IN_BATCH, target_slot - start_slot + 1);
         let request = QueryClientStatesRequest {
@@ -109,47 +102,39 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
                 ..Default::default()
             }),
         };
-        let client_states = {
-            let client_states = src_chain.query_clients(request);
-            match client_states {
-                Ok(value) => value,
-                Err(err) => {
-                    error!("src_chain.query_clients: {}, skip this try", err);
-                    return;
-                }
+        let client_states = match src_chain.query_clients(request) {
+            Ok(value) => value,
+            Err(err) => {
+                error!("src_chain.query_clients: {err}, skip this try");
+                return;
             }
         };
-        let count = client_states.len() as u64;
-        if count < limit {
-            warn!(
-                "cannot find enough headers to relay, expect {} but got {}",
-                limit, count
-            );
-        }
-        let end_slot = start_slot + count - 1;
-        info!("sending chased headers [{}, {}]", start_slot, end_slot);
+        let end_slot = start_slot + client_states.len() as u64 - 1;
+        info!("send chasing headers [{start_slot}, {end_slot}]");
         match send_messages(dst_chain, client_states) {
             Ok(_) => {
-                debug!(
-                    "headers [{}, {}] are relayed to ckb, keep chasing to {}",
-                    start_slot, end_slot, target_slot
-                );
+                let mut retry_log =
+                    format!("headers [{start_slot}, {end_slot}] are relayed to ckb, ");
+                if end_slot < target_slot - 1 {
+                    retry_log += &format!("keep chasing to {target_slot}");
+                } else {
+                    retry_log += "chasing complete";
+                }
+                debug!("{retry_log}");
                 retry = 0;
                 start_slot = end_slot + 1;
             }
             Err(error) => {
                 if let Some(slot) = extract_missing_slot_from_error(&error) {
-                    warn!("'start_slot' needs to adjust, retry again: {}", error);
+                    debug!("adjust start_slot and continue retry: {error}");
                     start_slot = slot;
+                } else {
+                    retry += 1;
                 }
-                retry += 1;
             }
         }
         if retry >= MAX_RETRY_NUMBER {
-            error!(
-                "retry number {} exceeds the max {}, stop and listening to the next batch of headers",
-                retry, MAX_RETRY_NUMBER
-            );
+            error!("retry number {retry} exceeds the max {MAX_RETRY_NUMBER}, stop and listening to the next batch of headers");
             return;
         }
     }
@@ -175,6 +160,6 @@ fn extract_missing_slot_from_error(error: &Error) -> Option<u64> {
             return Some(height.height.into());
         }
     }
-    error!("unexpected error: {}", error);
+    error!("unexpected error: {error}");
     None
 }
