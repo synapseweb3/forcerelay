@@ -1,6 +1,8 @@
 use ibc_relayer_types::events::IbcEvent;
+use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
+use crate::chain::client::ClientSettings;
 use crate::chain::handle::ChainHandle;
 use crate::chain::requests::{PageRequest, QueryClientStatesRequest};
 use crate::chain::tracking::{NonCosmosTrackingId, TrackedMsgs, TrackingId};
@@ -11,20 +13,20 @@ use crate::event::monitor::EventBatch;
 use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
 
 const MAX_HEADERS_IN_BATCH: u64 = 128;
+const MAX_SLEEP_SECONDS: u64 = 5;
 const MAX_RETRY_NUMBER: u8 = 5;
-pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
-    eth_chain: &ChainA,
-    ckb_chain: &ChainB,
+
+pub fn handle_event_batch(
+    eth_chain: &impl ChainHandle,
+    ckb_chain: &impl ChainHandle,
     event_batch: &EventBatch,
 ) {
-    let dst_chain = ckb_chain;
-    let src_chain = eth_chain;
-    if !matches!(src_chain.config().unwrap(), ChainConfig::Eth(_))
-        || !matches!(dst_chain.config().unwrap(), ChainConfig::Ckb(_))
+    if !matches!(eth_chain.config().unwrap(), ChainConfig::Eth(_))
+        || !matches!(ckb_chain.config().unwrap(), ChainConfig::Ckb(_))
     {
         error!("ignore header relay while src chain is not eth or dst chain is not ckb");
-        error!("src_chain: {src_chain:?}");
-        error!("dst_chain: {dst_chain:?}");
+        error!("src_chain: {eth_chain:?}");
+        error!("dst_chain: {ckb_chain:?}");
         return;
     }
 
@@ -33,10 +35,66 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         return;
     }
 
+    match event_batch.events[0].event {
+        IbcEvent::CreateClient(_) => {
+            let request = QueryClientStatesRequest { pagination: None };
+            if ckb_chain
+                .query_clients(request)
+                .expect("ckb query_clients")
+                .is_empty()
+            {
+                create_ethereum_light_client(eth_chain, ckb_chain, event_batch);
+            }
+        }
+        IbcEvent::NewBlock(_) => update_ethereum_headers(eth_chain, ckb_chain, event_batch),
+        _ => warn!("receiving unrecognized event"),
+    }
+}
+
+fn create_ethereum_light_client(
+    src_chain: &impl ChainHandle,
+    dst_chain: &impl ChainHandle,
+    event_batch: &EventBatch,
+) {
+    let checkpoint_slot = event_batch.height;
+    let client_state = {
+        let client_state = src_chain.build_client_state(checkpoint_slot, ClientSettings::Other);
+        match client_state {
+            Ok(value) => value,
+            Err(err) => {
+                error!("src_chain.build_client_state: {err}");
+                return;
+            }
+        }
+    };
+
+    let tracked_msgs = TrackedMsgs {
+        msgs: vec![client_state.into()],
+        tracking_id: TrackingId::Static(NonCosmosTrackingId::ETH_CREATE_CLIENT),
+    };
+
+    match dst_chain.send_messages_and_wait_commit(tracked_msgs) {
+        Ok(_) => info!(
+            "finish creating light-client at slot {}",
+            checkpoint_slot.revision_height()
+        ),
+        Err(error) => {
+            if let Some(slot) = extract_missing_slot_from_error(&error) {
+                info!("light-client already created at slot {slot}");
+            }
+        }
+    }
+}
+
+fn update_ethereum_headers(
+    src_chain: &impl ChainHandle,
+    dst_chain: &impl ChainHandle,
+    event_batch: &EventBatch,
+) {
     // assemble client states which are transformed from finality headers
     let mut start_slot = 0;
     let target_slot = event_batch.height.revision_height();
-    let any_client_states = event_batch
+    let msgs = event_batch
         .events
         .iter()
         .filter_map(|event| {
@@ -45,10 +103,8 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
                     start_slot = new_block.height.revision_height();
                 }
                 let client_state = {
-                    let client_state = src_chain.build_client_state(
-                        new_block.height,
-                        crate::chain::client::ClientSettings::Other,
-                    );
+                    let client_state =
+                        src_chain.build_client_state(new_block.height, ClientSettings::Other);
                     match client_state {
                         Ok(value) => value,
                         Err(err) => {
@@ -64,7 +120,7 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
         .collect();
 
     let tracked_msgs = TrackedMsgs {
-        msgs: any_client_states,
+        msgs,
         tracking_id: TrackingId::Static(NonCosmosTrackingId::ETH_UPDATE_CLIENT),
     };
 
@@ -92,7 +148,8 @@ pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     let mut retry = 0;
     while start_slot < target_slot {
         if retry > 0 {
-            debug!("{retry} time retry for [{start_slot}, {target_slot}]");
+            debug!("{retry} time retry for [{start_slot}, {target_slot}] after sleeping {MAX_SLEEP_SECONDS}s");
+            std::thread::sleep(Duration::from_secs(MAX_SLEEP_SECONDS));
         }
         let limit = std::cmp::min(MAX_HEADERS_IN_BATCH, target_slot - start_slot + 1);
         let request = QueryClientStatesRequest {

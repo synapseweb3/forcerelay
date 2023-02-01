@@ -23,7 +23,7 @@ use crate::error::Error;
 
 use super::rpc_client::RpcClient;
 
-fn into_height(slot: u64) -> tendermint::block::Height {
+pub fn into_height(slot: u64) -> tendermint::block::Height {
     slot.try_into().expect("slot too big")
 }
 
@@ -191,7 +191,7 @@ pub fn get_verified_packed_client_and_proof_update<S, E>(
     chain_id: &String,
     header_updates: &Vec<EthUpdate>,
     storage: &S,
-    onchain_packed_client_opt: Option<PackedClient>,
+    onchain_packed_client_opt: Option<&PackedClient>,
 ) -> Result<(Option<Slot>, PackedClient, PackedProofUpdate), Error>
 where
     S: StorageReader<E> + StorageWriter<E> + StorageAsMMRStore<E>,
@@ -212,7 +212,7 @@ where
     }
 
     // make sure the upcoming start slot is continuous with the onchain tip slot
-    if let Some(ref client) = onchain_packed_client_opt {
+    if let Some(client) = onchain_packed_client_opt {
         let onchain_tip_slot: u64 = client.maximal_slot().unpack();
         if start_slot != onchain_tip_slot + 1 {
             return Err(Error::light_client_verification(
@@ -405,7 +405,7 @@ mod tests {
                 &chain_id,
                 &updates_part_2,
                 &storage,
-                Some(onchain_packed_client),
+                Some(&onchain_packed_client),
             )
             .expect("verify part_2");
 

@@ -1,7 +1,11 @@
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTx};
 use ckb_sdk::{Address, AddressPayload, NetworkType};
+use ckb_types::core::TransactionView;
+use ckb_types::packed::CellOutput;
 use eth2_types::MainnetEthSpec;
-use eth_light_client_in_ckb_verification::types::prelude::Unpack;
+use eth_light_client_in_ckb_verification::types::{
+    packed::Client as PackedClient, prelude::Unpack,
+};
 use ibc_relayer_storage::prelude::{StorageAsMMRStore as _, StorageReader as _};
 use ibc_relayer_storage::Storage;
 use ibc_relayer_types::clients::ics07_ckb::{
@@ -10,7 +14,7 @@ use ibc_relayer_types::clients::ics07_ckb::{
     light_block::LightBlock as CkbLightBlock,
 };
 use ibc_relayer_types::clients::ics07_eth::{
-    client_state::ClientState as EthClient, types::Update as EthUpdate,
+    client_state::ClientState as EthClientState, types::Update as EthUpdate,
 };
 use ibc_relayer_types::{
     core::{
@@ -29,6 +33,7 @@ use ibc_relayer_types::{
 use semver::Version;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+use tendermint_light_client::errors::Error as LightClientError;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -108,34 +113,40 @@ pub struct CkbChain {
 
     pub cached_network: RwLock<Option<NetworkType>>,
     pub cached_tx_assembler_address: RwLock<Option<Address>>,
+    pub cached_onchain_packed_client: Option<PackedClient>,
 }
 
 impl CkbChain {
-    fn create_eth_client(&mut self) -> Result<Vec<IbcEventWithHeight>, Error> {
-        Ok(vec![])
-    }
-
-    pub(crate) fn update_eth_client(
+    fn create_eth_client(
         &mut self,
         mut header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let chain_id = self.id().to_string();
-        let onchain_packed_client_opt = self.rt.block_on(
+        self.cached_onchain_packed_client = self.rt.block_on(
             self.rpc_client
                 .fetch_packed_client(&self.config.lightclient_contract_typeargs, &chain_id),
         )?;
+
+        if let Some(packed_client) = self.cached_onchain_packed_client.as_ref() {
+            let onchain_base_slot = packed_client.maximal_slot().unpack();
+            return Err(Error::light_client_verification(
+                chain_id.to_owned(),
+                LightClientError::missing_last_block_id(utils::into_height(onchain_base_slot)),
+            ));
+        }
+
         utils::align_native_and_onchain_updates(
             &chain_id,
             &mut header_updates,
             &self.storage,
-            onchain_packed_client_opt.as_ref(),
+            None.as_ref(),
         )?;
         let (prev_slot_opt, packed_client, packed_proof_update) =
             utils::get_verified_packed_client_and_proof_update(
                 &chain_id,
                 &header_updates,
                 &self.storage,
-                onchain_packed_client_opt,
+                None,
             )?;
 
         let tx_assembler_address = self.tx_assembler_address()?;
@@ -147,8 +158,70 @@ impl CkbChain {
                 packed_proof_update,
                 &self.config.lightclient_lock_typeargs,
                 &self.config.lightclient_contract_typeargs,
-                &self.config.id.to_string(),
+                &chain_id,
             ))?;
+        self.sign_and_send_transaction(tx, inputs).map_err(|err| {
+            if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
+                return err.into();
+            }
+            err
+        })?;
+
+        self.print_status_log()?;
+        Ok(vec![])
+    }
+
+    pub(crate) fn update_eth_client(
+        &mut self,
+        mut header_updates: Vec<EthUpdate>,
+    ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        let chain_id = self.id().to_string();
+        self.cached_onchain_packed_client = self.rt.block_on(
+            self.rpc_client
+                .fetch_packed_client(&self.config.lightclient_contract_typeargs, &chain_id),
+        )?;
+
+        utils::align_native_and_onchain_updates(
+            &chain_id,
+            &mut header_updates,
+            &self.storage,
+            self.cached_onchain_packed_client.as_ref(),
+        )?;
+        let (prev_slot_opt, packed_client, packed_proof_update) =
+            utils::get_verified_packed_client_and_proof_update(
+                &chain_id,
+                &header_updates,
+                &self.storage,
+                self.cached_onchain_packed_client.as_ref(),
+            )?;
+
+        let tx_assembler_address = self.tx_assembler_address()?;
+        let (tx, inputs) = self
+            .rt
+            .block_on(self.rpc_client.assemble_updates_into_transaction(
+                &tx_assembler_address,
+                packed_client,
+                packed_proof_update,
+                &self.config.lightclient_lock_typeargs,
+                &self.config.lightclient_contract_typeargs,
+                &chain_id,
+            ))?;
+        self.sign_and_send_transaction(tx, inputs).map_err(|err| {
+            if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
+                return err.into();
+            }
+            err
+        })?;
+
+        self.print_status_log()?;
+        Ok(vec![])
+    }
+
+    pub fn sign_and_send_transaction(
+        &mut self,
+        tx: TransactionView,
+        inputs: Vec<CellOutput>,
+    ) -> Result<(), Error> {
         let key: Secp256k1KeyPair = self
             .keybase
             .get_key(&self.config.key_name)
@@ -162,9 +235,6 @@ impl CkbChain {
                     .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
             )
             .map_err(|e| {
-                if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
-                    return err.into();
-                }
                 Error::send_tx(format!(
                     "{e}\n== transaction for debugging is below ==\n{}",
                     serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
@@ -176,22 +246,14 @@ impl CkbChain {
             hex::encode(&hash)
         );
 
-        self.rt
-            .block_on(utils::wait_ckb_transaction_committed(
-                &self.rpc_client,
-                hash,
-                Duration::from_secs(3),
-                0,
-            ))
-            .map_err(|e| {
-                if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
-                    return err.into();
-                }
-                e
-            })?;
+        self.rt.block_on(utils::wait_ckb_transaction_committed(
+            &self.rpc_client,
+            hash,
+            Duration::from_secs(3),
+            0,
+        ))?;
 
-        self.print_status_log()?;
-        Ok(vec![])
+        Ok(())
     }
 
     pub fn network(&self) -> Result<NetworkType, Error> {
@@ -290,8 +352,9 @@ impl ChainEndpoint for CkbChain {
         let keybase =
             KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
 
-        let cached_network = RwLock::new(None);
-        let cached_tx_assembler_address = RwLock::new(None);
+        // check out the existence of the secret key
+        #[cfg(not(test))]
+        let _: Secp256k1KeyPair = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
 
         let ckb = CkbChain {
             rt,
@@ -299,10 +362,12 @@ impl ChainEndpoint for CkbChain {
             config,
             keybase,
             storage,
-            cached_network,
-            cached_tx_assembler_address,
+            cached_network: RwLock::new(None),
+            cached_tx_assembler_address: RwLock::new(None),
+            cached_onchain_packed_client: None,
         };
         ckb.print_status_log()?;
+
         Ok(ckb)
     }
 
@@ -339,20 +404,18 @@ impl ChainEndpoint for CkbChain {
         &mut self,
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        let updates = tracked_msgs
+            .msgs
+            .into_iter()
+            .map(|msg| msg.try_into())
+            .collect::<Result<Vec<EthClientState>, _>>()
+            .map_err(|e| Error::send_tx(e.to_string()))?
+            .into_iter()
+            .map(|client| client.lightclient_update)
+            .collect();
         match tracked_msgs.tracking_id {
-            TrackingId::Static(NonCosmos::ETH_CREATE_CLIENT) => self.create_eth_client(),
-            TrackingId::Static(NonCosmos::ETH_UPDATE_CLIENT) => {
-                let updates = tracked_msgs
-                    .msgs
-                    .into_iter()
-                    .map(|msg| msg.try_into())
-                    .collect::<Result<Vec<EthClient>, _>>()
-                    .map_err(|e| Error::send_tx(e.to_string()))?
-                    .into_iter()
-                    .map(|client| client.lightclient_update)
-                    .collect();
-                self.update_eth_client(updates)
-            }
+            TrackingId::Static(NonCosmos::ETH_CREATE_CLIENT) => self.create_eth_client(updates),
+            TrackingId::Static(NonCosmos::ETH_UPDATE_CLIENT) => self.update_eth_client(updates),
             _ => Err(Error::send_tx("unknown msg".to_owned())),
         }
     }
@@ -409,7 +472,17 @@ impl ChainEndpoint for CkbChain {
         &self,
         _request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
-        todo!()
+        let mut clients = vec![];
+        if self.cached_onchain_packed_client.is_some() {
+            let client_state = IdentifiedAnyClientState {
+                client_id: Default::default(),
+                client_state: AnyClientState::Ckb(CkbClientState {
+                    chain_id: self.id(),
+                }),
+            };
+            clients.push(client_state);
+        }
+        Ok(clients)
     }
 
     fn query_client_state(
