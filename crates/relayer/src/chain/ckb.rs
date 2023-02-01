@@ -1,6 +1,5 @@
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTx};
 use ckb_sdk::{Address, AddressPayload, NetworkType};
-use ckb_types::prelude::Entity;
 use eth2_types::MainnetEthSpec;
 use eth_light_client_in_ckb_verification::types::prelude::Unpack;
 use ibc_relayer_storage::prelude::{StorageAsMMRStore as _, StorageReader as _};
@@ -250,13 +249,8 @@ impl CkbChain {
         ))?;
         let mut status_log = String::new();
         if let Some(packed_client) = onchain_packed_client_opt {
-            let minimal_slot: u64 = packed_client.minimal_slot().unpack();
-            let maximal_slot: u64 = packed_client.maximal_slot().unpack();
-            let tip_header_digest = packed_client.tip_header_root();
-            status_log += &format!(
-                "on-chain status: [{minimal_slot}, {maximal_slot}] tip = 0x{}, ",
-                hex::encode(tip_header_digest.as_slice())
-            );
+            let client = packed_client.unpack();
+            status_log += &format!("on-chain status: {client}, ");
         } else {
             status_log += "on-chain status: NONE, ";
         }

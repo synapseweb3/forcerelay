@@ -298,10 +298,10 @@ where
         client
             .unpack()
             .try_apply_packed_proof_update(packed_proof_update.as_reader())
-            .map_err(|e| Error::send_tx(format!("failed to update header, error = {}", e as u8)))?
+            .map_err(|e| Error::send_tx(format!("failed to update header, error = {}", e as i8)))?
     } else {
         EthLcClient::new_from_packed_proof_update(packed_proof_update.as_reader())
-            .map_err(|e| Error::send_tx(format!("failed to create header, error = {}", e as u8)))?
+            .map_err(|e| Error::send_tx(format!("failed to create header, error = {}", e as i8)))?
     };
 
     Ok((prev_tip_slot, client.pack(), packed_proof_update))
@@ -322,8 +322,7 @@ pub async fn wait_ckb_transaction_committed(
             .expect("wait transaction response");
         if tx.tx_status.status == Status::Rejected {
             return Err(Error::send_tx(format!(
-                "transaction {} had been rejected",
-                hex::encode(hash)
+                "transaction {hash:#x} had been rejected"
             )));
         }
         if tx.tx_status.status != Status::Committed {
