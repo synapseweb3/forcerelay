@@ -38,22 +38,21 @@ impl Runnable for ForcerelayCmd {
         let config = (*app_config()).clone();
         let registry = SharedRegistry::<CachingChainHandle>::new(config);
         let eth = registry.get_or_spawn(&self.eth_chain).unwrap_or_else(|e| {
-            Output::error(format!("Forcerelay failed to start ethereum: {}", e)).exit()
+            Output::error(format!("Forcerelay failed to start ethereum: {e}")).exit()
         });
         let ckb = registry.get_or_spawn(&self.ckb_chain).unwrap_or_else(|e| {
-            Output::error(format!("Forcerelay failed to start ckb: {}", e)).exit()
+            Output::error(format!("Forcerelay failed to start ckb: {e}")).exit()
         });
         let eth_subscription = eth.subscribe().unwrap_or_else(|e| {
             Output::error(format!(
-                "Forcerelay failed to subscribe ethereum events: {}",
-                e
+                "Forcerelay failed to subscribe ethereum events: {e}"
             ))
             .exit()
         });
 
         spawn_background_task(
-            error_span!("worker.batch", eth_chain = %self.eth_chain, ckb_chain = %self.ckb_chain),
-            Some(Duration::from_millis(5)),
+            error_span!("worker.forcerelay"),
+            Some(Duration::from_secs(5)),
             move || -> Result<Next, TaskError<Infallible>> {
                 if let Ok(batch) = eth_subscription.try_recv() {
                     match batch.deref() {
@@ -64,11 +63,10 @@ impl Runnable for ForcerelayCmd {
                             warn!("event subscription was cancelled, clearing pending packets");
                         }
                         Err(e) => {
-                            error!("error when receiving event batch: {}", e)
+                            error!("error when receiving event batch: {e}")
                         }
                     }
                 }
-
                 Ok(Next::Continue)
             },
         )

@@ -83,8 +83,8 @@ impl ChainEndpoint for EthChain {
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: EthChainConfig = config.try_into()?;
         let mut light_client = EthLightClient::from_config(&config, rt.clone())?;
-        let keybase = KeyRing::new_secp256k1(Default::default(), "eth", &config.id).unwrap();
         light_client.bootstrap()?;
+        let keybase = KeyRing::new_secp256k1(Default::default(), "eth", &config.id).unwrap();
         Ok(EthChain {
             rt,
             config,
@@ -438,11 +438,15 @@ impl EthChain {
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
         crate::time!("eth_init_event_monitor");
 
-        let header_receiver = self.light_client.subscribe();
+        let (create_receiver, header_receiver) = self.light_client.subscribe();
         // TODO: configure URLs
-        let (event_monitor, monitor_tx) =
-            EthEventMonitor::new(self.config.id.clone(), header_receiver, self.rt.clone())
-                .map_err(Error::event_monitor)?;
+        let (event_monitor, monitor_tx) = EthEventMonitor::new(
+            self.config.id.clone(),
+            create_receiver,
+            header_receiver,
+            self.rt.clone(),
+        )
+        .map_err(Error::event_monitor)?;
 
         thread::spawn(move || event_monitor.run());
 

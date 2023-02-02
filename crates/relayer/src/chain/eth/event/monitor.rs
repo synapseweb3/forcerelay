@@ -22,6 +22,7 @@ pub struct EthEventMonitor {
     chain_id: ChainId,
     rx_cmd: channel::Receiver<MonitorCmd>,
     header_receiver: UnboundedReceiver<Vec<EthHeader>>,
+    create_receiver: UnboundedReceiver<EthHeader>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
 }
 
@@ -35,6 +36,7 @@ impl EthEventMonitor {
     )]
     pub fn new(
         chain_id: ChainId,
+        create_receiver: UnboundedReceiver<EthHeader>,
         header_receiver: UnboundedReceiver<Vec<EthHeader>>,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, TxMonitorCmd)> {
@@ -46,6 +48,7 @@ impl EthEventMonitor {
             chain_id,
             rx_cmd,
             header_receiver,
+            create_receiver,
             event_bus,
         };
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
@@ -81,13 +84,26 @@ impl EthEventMonitor {
             }
         }
 
+        // process incoming initial checkpoint
+        if let Ok(checkpoint) = self.create_receiver.try_recv() {
+            let height = Height::new(0, checkpoint.slot).unwrap();
+            let event =
+                IbcEventWithHeight::new(events::CreateClient(Default::default()).into(), height);
+            let batch = EventBatch {
+                chain_id: self.chain_id.clone(),
+                tracking_id: TrackingId::new_uuid(),
+                height,
+                events: vec![event],
+            };
+            self.process_batch(batch);
+        }
+
+        // process incoming headers
         if let Ok(headers) = self.header_receiver.try_recv() {
-            if !headers.is_empty() {
-                let start_slot = headers.first().unwrap().slot;
-                let end_slot = headers.last().unwrap().slot;
-                info!("receive new headers [{}, {}]", start_slot, end_slot);
+            if let (Some(first), Some(last)) = (headers.first(), headers.last()) {
+                info!("receive new headers [{}, {}]", first.slot, last.slot);
                 let events = headers
-                    .into_iter()
+                    .iter()
                     .map(|header| {
                         let height = Height::new(0, header.slot).unwrap();
                         IbcEventWithHeight::new(events::NewBlock::new(height).into(), height)
@@ -96,14 +112,13 @@ impl EthEventMonitor {
                 let batch = EventBatch {
                     chain_id: self.chain_id.clone(),
                     tracking_id: TrackingId::new_uuid(),
-                    height: Height::new(0, end_slot).unwrap(),
+                    height: Height::new(0, last.slot).unwrap(),
                     events,
                 };
                 self.process_batch(batch);
-            } else {
-                warn!("receive empty headers");
             }
         }
+
         Next::Continue
     }
 

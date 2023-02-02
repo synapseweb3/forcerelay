@@ -61,6 +61,7 @@ pub struct ConsensusClient<R: ConsensusRpc> {
     last_checkpoint: Option<[u8; 32]>, // Vec<u8>
     config: Arc<EthChainConfig>,
     new_block_emitors: Vec<UnboundedSender<Vec<Header>>>,
+    new_client_emitors: Vec<UnboundedSender<Header>>,
 }
 
 impl<R: ConsensusRpc> ConsensusClient<R> {
@@ -76,13 +77,16 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             last_checkpoint: None,
             config,
             new_block_emitors: vec![],
+            new_client_emitors: vec![],
         }
     }
 
-    pub fn subscribe(&mut self) -> UnboundedReceiver<Vec<Header>> {
-        let (sender, receiver) = unbounded_channel();
-        self.new_block_emitors.push(sender);
-        receiver
+    pub fn subscribe(&mut self) -> (UnboundedReceiver<Header>, UnboundedReceiver<Vec<Header>>) {
+        let (sender_nc, receiver_nc) = unbounded_channel();
+        let (sender_nb, receiver_nb) = unbounded_channel();
+        self.new_client_emitors.push(sender_nc);
+        self.new_block_emitors.push(sender_nb);
+        (receiver_nc, receiver_nb)
     }
 
     pub async fn sync(&mut self) -> Result<()> {
@@ -161,7 +165,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
                 Ok(header) => header,
                 Err(error) => {
                     // TODO: need to fallback to another SECURE rpc to ensure the fork status
-                    warn!("beacon header forked: {}", error);
+                    warn!("slot forked or skipped: {error}");
                     Header {
                         slot: finality_update_slot,
                         ..Default::default()
@@ -182,7 +186,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             .rpc
             .get_bootstrap(&self.initial_checkpoint)
             .await
-            .map_err(|e| eyre!("could not fetch bootstrap: {}", e))?;
+            .map_err(|e| eyre!("could not fetch bootstrap: {e}"))?;
 
         let is_valid = self.is_valid_checkpoint(bootstrap.header.slot);
         if !is_valid {
@@ -258,7 +262,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         info!("emiting new headers [{start_slot}, {end_slot})");
         self.new_block_emitors.iter().for_each(|emitor| {
             if let Err(e) = emitor.send(finalized_headers.clone()) {
-                error!("[eth_light_client] new_block emitor error: {}", e);
+                error!("[eth_light_client] new_block emitor error: {e}");
             }
         });
         Ok(())
@@ -281,6 +285,15 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
                     return Ok(());
                 }
             }
+        }
+
+        // emit initial event every advance (because relayer will miss it if only emit once at sync())
+        if let Some((_, update)) = self.store.finality_updates.first_key_value() {
+            self.new_client_emitors.iter().for_each(|emitor| {
+                if let Err(e) = emitor.send(update.finalized_header.clone()) {
+                    error!("[eth_light_client] new_client emitor error: {e}");
+                }
+            });
         }
 
         if self.store.finalized_header.slot > previous_stored_finalized_slot {
@@ -562,8 +575,8 @@ impl ConsensusRpc for NimbusRpc {
     async fn get_updates(&self, period: u64, count: u8) -> Result<Vec<Update>> {
         let count = cmp::min(count, MAX_REQUEST_LIGHT_CLIENT_UPDATES);
         let req = format!(
-            "{}/eth/v1/beacon/light_client/updates?start_period={}&count={}",
-            self.rpc, period, count
+            "{}/eth/v1/beacon/light_client/updates?start_period={period}&count={count}",
+            self.rpc
         );
 
         let res = self
@@ -593,8 +606,8 @@ impl ConsensusRpc for NimbusRpc {
     async fn get_bootstrap(&self, block_root: &[u8]) -> Result<Bootstrap> {
         let root_hex = hex::encode(block_root);
         let req = format!(
-            "{}/eth/v1/beacon/light_client/bootstrap/0x{}",
-            self.rpc, root_hex
+            "{}/eth/v1/beacon/light_client/bootstrap/0x{root_hex}",
+            self.rpc
         );
 
         let res = self
@@ -609,7 +622,7 @@ impl ConsensusRpc for NimbusRpc {
     }
 
     async fn get_header(&self, slot: u64) -> Result<Header> {
-        let req = format!("{}/eth/v1/beacon/headers/{}", self.rpc, slot);
+        let req = format!("{}/eth/v1/beacon/headers/{slot}", self.rpc);
         let res = self
             .client
             .get(req)
@@ -617,7 +630,7 @@ impl ConsensusRpc for NimbusRpc {
             .await?
             .json::<HeaderResponse::Response>()
             .await
-            .map_err(|e| eyre::eyre!(format!("{} (slot {})", e, slot)))?;
+            .map_err(|e| eyre::eyre!(format!("{e} (slot {slot})")))?;
 
         Ok(res.data.header.message)
     }
@@ -644,7 +657,7 @@ impl LightClient {
         Ok(light_client)
     }
 
-    pub fn subscribe(&mut self) -> UnboundedReceiver<Vec<Header>> {
+    pub fn subscribe(&mut self) -> (UnboundedReceiver<Header>, UnboundedReceiver<Vec<Header>>) {
         self.rt.block_on(self.consensus_client.lock()).subscribe()
     }
 
@@ -652,12 +665,12 @@ impl LightClient {
         let client = self.consensus_client.clone();
         self.rt
             .block_on(self.rt.block_on(client.lock()).sync())
-            .map_err(|e| Error::rpc_response(format!("chain {}: {}", self.chain_id, e)))?;
+            .map_err(|e| Error::rpc_response(format!("chain {}: {e}", self.chain_id)))?;
         self.rt.spawn(async move {
             loop {
                 let res = client.lock().await.advance().await;
                 if let Err(err) = res {
-                    error!("[eth_light_client] consensus error: {}", err);
+                    error!("[eth_light_client] consensus error: {err}");
                 }
 
                 let next_update = client.lock().await.duration_until_next_update();
