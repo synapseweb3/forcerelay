@@ -114,10 +114,10 @@ where
     let onchain_minimal_slot = onchain_packed_client.minimal_slot().unpack();
     let onchain_maximal_slot = onchain_packed_client.maximal_slot().unpack();
 
-    // check stored base slot is less than the onchain slot
+    // check stored base slot is NOT equal to the onchain base slot
     if let Some(stored_base_slot) = storage.get_base_beacon_header_slot()? {
         // unrecoverable condition
-        if stored_base_slot > onchain_minimal_slot {
+        if stored_base_slot != onchain_minimal_slot {
             return Err(Error::light_client_verification(
                 chain_id.to_owned(),
                 LightClientError::target_lower_than_trusted_state(

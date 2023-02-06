@@ -49,6 +49,7 @@ use self::utils::is_finality_proof_valid;
 use self::utils::is_next_committee_proof_valid;
 
 pub const MAX_REQUEST_LIGHT_CLIENT_UPDATES: u8 = 128;
+pub const MAX_CACHED_UPDATES: usize = 32 * 1024;
 
 fn calc_epoch(slot: u64) -> u64 {
     slot / 32
@@ -148,6 +149,11 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         self.store
             .finality_updates
             .insert(update.finalized_header.slot, update);
+
+        // trim exceesive updates from the beginning of the native store
+        while self.store.finality_updates.len() > MAX_CACHED_UPDATES {
+            self.store.finality_updates.pop_first();
+        }
         Ok(())
     }
 
