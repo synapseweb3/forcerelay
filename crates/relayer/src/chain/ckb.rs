@@ -128,7 +128,7 @@ impl CkbChain {
         )?;
 
         if let Some(packed_client) = self.cached_onchain_packed_client.as_ref() {
-            let onchain_base_slot = packed_client.maximal_slot().unpack();
+            let onchain_base_slot = packed_client.minimal_slot().unpack();
             return Err(Error::light_client_verification(
                 chain_id.to_owned(),
                 LightClientError::missing_last_block_id(utils::into_height(onchain_base_slot)),
