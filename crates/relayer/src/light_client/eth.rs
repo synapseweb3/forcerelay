@@ -239,7 +239,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             .unwrap()
             .as_secs();
 
-        let time_to_next_slot = next_slot_timestamp.checked_sub(now).unwrap_or(0);
+        let time_to_next_slot = next_slot_timestamp.saturating_sub(now);
         let next_update = time_to_next_slot + 4;
 
         std::time::Duration::from_secs(next_update)

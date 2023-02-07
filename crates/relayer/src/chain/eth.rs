@@ -95,6 +95,7 @@ impl ChainEndpoint for EthChain {
     }
 
     fn shutdown(self) -> Result<(), Error> {
+        tracing::debug!("runtime of eth chain endpoint shutdown");
         Ok(())
     }
 
