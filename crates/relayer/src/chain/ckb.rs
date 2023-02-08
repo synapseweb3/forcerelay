@@ -372,6 +372,7 @@ impl ChainEndpoint for CkbChain {
     }
 
     fn shutdown(self) -> Result<(), Error> {
+        tracing::debug!("runtime of ckb chain endpoint shutdown");
         Ok(())
     }
 

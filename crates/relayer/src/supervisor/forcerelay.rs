@@ -1,4 +1,5 @@
 use ibc_relayer_types::events::IbcEvent;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
@@ -16,17 +17,17 @@ const MAX_HEADERS_IN_BATCH: u64 = 128;
 const MAX_SLEEP_SECONDS: u64 = 5;
 const MAX_RETRY_NUMBER: u8 = 5;
 
-pub fn handle_event_batch(
-    eth_chain: &impl ChainHandle,
-    ckb_chain: &impl ChainHandle,
+pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
+    src_chain: &Arc<ChainA>,
+    dst_chain: &Arc<ChainB>,
     event_batch: &EventBatch,
 ) {
-    if !matches!(eth_chain.config().unwrap(), ChainConfig::Eth(_))
-        || !matches!(ckb_chain.config().unwrap(), ChainConfig::Ckb(_))
+    if !matches!(src_chain.config().unwrap(), ChainConfig::Eth(_))
+        || !matches!(dst_chain.config().unwrap(), ChainConfig::Ckb(_))
     {
         error!("ignore header relay while src chain is not eth or dst chain is not ckb");
-        error!("src_chain: {eth_chain:?}");
-        error!("dst_chain: {ckb_chain:?}");
+        error!("src_chain: {src_chain:?}");
+        error!("dst_chain: {dst_chain:?}");
         return;
     }
 
@@ -38,22 +39,22 @@ pub fn handle_event_batch(
     match event_batch.events[0].event {
         IbcEvent::CreateClient(_) => {
             let request = QueryClientStatesRequest { pagination: None };
-            if ckb_chain
+            if dst_chain
                 .query_clients(request)
                 .expect("ckb query_clients")
                 .is_empty()
             {
-                create_ethereum_light_client(eth_chain, ckb_chain, event_batch);
+                create_ethereum_light_client(src_chain, dst_chain, event_batch);
             }
         }
-        IbcEvent::NewBlock(_) => update_ethereum_headers(eth_chain, ckb_chain, event_batch),
+        IbcEvent::NewBlock(_) => update_ethereum_headers(src_chain, dst_chain, event_batch),
         _ => warn!("receiving unrecognized event"),
     }
 }
 
-fn create_ethereum_light_client(
-    src_chain: &impl ChainHandle,
-    dst_chain: &impl ChainHandle,
+fn create_ethereum_light_client<ChainA: ChainHandle, ChainB: ChainHandle>(
+    src_chain: &Arc<ChainA>,
+    dst_chain: &Arc<ChainB>,
     event_batch: &EventBatch,
 ) {
     let checkpoint_slot = event_batch.height;
@@ -86,9 +87,9 @@ fn create_ethereum_light_client(
     }
 }
 
-fn update_ethereum_headers(
-    src_chain: &impl ChainHandle,
-    dst_chain: &impl ChainHandle,
+fn update_ethereum_headers<ChainA: ChainHandle, ChainB: ChainHandle>(
+    src_chain: &Arc<ChainA>,
+    dst_chain: &Arc<ChainB>,
     event_batch: &EventBatch,
 ) {
     // assemble client states which are transformed from finality headers
@@ -198,7 +199,7 @@ fn update_ethereum_headers(
 }
 
 fn send_messages<Chain: ChainHandle>(
-    chain: &Chain,
+    chain: &Arc<Chain>,
     client_states: Vec<IdentifiedAnyClientState>,
 ) -> Result<Vec<crate::event::IbcEventWithHeight>, Error> {
     let tracked_msgs = TrackedMsgs {
