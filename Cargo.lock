@@ -498,26 +498,14 @@ dependencies = [
 
 [[package]]
 name = "bitvec"
-version = "0.20.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7774144344a4faa177370406a7ff5f1da24303817368584c6206c8303eb07848"
-dependencies = [
- "funty 1.1.0",
- "radium 0.6.2",
- "tap",
- "wyz 0.2.0",
-]
-
-[[package]]
-name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
 dependencies = [
- "funty 2.0.0",
+ "funty",
  "radium 0.7.0",
  "tap",
- "wyz 0.5.1",
+ "wyz",
 ]
 
 [[package]]
@@ -587,13 +575,13 @@ dependencies = [
 [[package]]
 name = "bls"
 version = "0.2.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "blst",
  "eth2_hashing",
  "eth2_serde_utils",
  "eth2_ssz",
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "hex",
  "rand 0.7.3",
  "serde",
@@ -726,13 +714,13 @@ dependencies = [
 [[package]]
 name = "cached_tree_hash"
 version = "0.1.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "eth2_hashing",
  "eth2_ssz",
  "eth2_ssz_derive",
  "eth2_ssz_types",
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "smallvec",
  "tree_hash",
 ]
@@ -1297,12 +1285,12 @@ dependencies = [
 [[package]]
 name = "compare_fields"
 version = "0.2.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 
 [[package]]
 name = "compare_fields_derive"
 version = "0.2.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "quote",
  "syn",
@@ -2013,7 +2001,7 @@ dependencies = [
 [[package]]
 name = "eth2_hashing"
 version = "0.3.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "cpufeatures",
  "lazy_static",
@@ -2024,7 +2012,7 @@ dependencies = [
 [[package]]
 name = "eth2_interop_keypairs"
 version = "0.2.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "bls",
  "eth2_hashing",
@@ -2039,9 +2027,9 @@ dependencies = [
 [[package]]
 name = "eth2_serde_utils"
 version = "0.1.1"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "hex",
  "serde",
  "serde_derive",
@@ -2051,9 +2039,9 @@ dependencies = [
 [[package]]
 name = "eth2_ssz"
 version = "0.4.1"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "itertools",
  "smallvec",
 ]
@@ -2061,7 +2049,7 @@ dependencies = [
 [[package]]
 name = "eth2_ssz_derive"
 version = "0.3.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -2072,7 +2060,7 @@ dependencies = [
 [[package]]
 name = "eth2_ssz_types"
 version = "0.2.2"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "arbitrary",
  "derivative",
@@ -2088,7 +2076,7 @@ dependencies = [
 [[package]]
 name = "eth_light_client_in_ckb-verification"
 version = "0.1.0-alpha.0"
-source = "git+https://github.com/yangby-cryptape/eth-light-client-in-ckb?rev=707d7f6#707d7f656fd253152da029955aa7d73ff9b9c5e3"
+source = "git+https://github.com/yangby-cryptape/eth-light-client-in-ckb?rev=5ba3e1e#5ba3e1ed87f1b378b8b4c5cfc96203d8f337d4ab"
 dependencies = [
  "ckb-merkle-mountain-range",
  "eth2_hashing",
@@ -2111,7 +2099,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7413c5f74cc903ea37386a8965a936cbeb334bd270862fdece542c1b2dcbc898"
 dependencies = [
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "hex",
  "once_cell",
  "regex",
@@ -2124,44 +2112,17 @@ dependencies = [
 
 [[package]]
 name = "ethbloom"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfb684ac8fa8f6c5759f788862bb22ec6fe3cb392f6bfd08e3c64b603661e3f8"
-dependencies = [
- "crunchy",
- "fixed-hash 0.7.0",
- "impl-rlp",
- "impl-serde 0.3.2",
- "tiny-keccak",
-]
-
-[[package]]
-name = "ethbloom"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c22d4b5885b6aa2fe5e8b9329fb8d232bf739e434e6b87347c63bdd00c120f60"
 dependencies = [
  "crunchy",
- "fixed-hash 0.8.0",
- "impl-codec 0.6.0",
+ "fixed-hash",
+ "impl-codec",
  "impl-rlp",
- "impl-serde 0.4.0",
+ "impl-serde",
  "scale-info",
  "tiny-keccak",
-]
-
-[[package]]
-name = "ethereum-types"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05136f7057fe789f06e6d41d07b34e6f70d8c86e5693b60f97aaa6553553bdaf"
-dependencies = [
- "ethbloom 0.11.1",
- "fixed-hash 0.7.0",
- "impl-rlp",
- "impl-serde 0.3.2",
- "primitive-types 0.10.1",
- "uint",
 ]
 
 [[package]]
@@ -2170,12 +2131,12 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02d215cbf040552efcbe99a38372fe80ab9d00268e20012b79fcd0f073edd8ee"
 dependencies = [
- "ethbloom 0.13.0",
- "fixed-hash 0.8.0",
- "impl-codec 0.6.0",
+ "ethbloom",
+ "fixed-hash",
+ "impl-codec",
  "impl-rlp",
- "impl-serde 0.4.0",
- "primitive-types 0.12.1",
+ "impl-serde",
+ "primitive-types",
  "scale-info",
  "uint",
 ]
@@ -2505,18 +2466,6 @@ dependencies = [
 
 [[package]]
 name = "fixed-hash"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
-dependencies = [
- "byteorder",
- "rand 0.8.5",
- "rustc-hex",
- "static_assertions",
-]
-
-[[package]]
-name = "fixed-hash"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "835c052cb0c08c1acf6ffd71c022172e18723949c8282f2b9f27efbc51e64534"
@@ -2634,12 +2583,6 @@ name = "fuchsia-zircon-sys"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
-
-[[package]]
-name = "funty"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fed34cd105917e91daa4da6b3728c47b068749d6a62c59811f06ed2ac71d9da7"
 
 [[package]]
 name = "funty"
@@ -3444,7 +3387,7 @@ dependencies = [
  "env_logger 0.10.0",
  "erased-serde",
  "eth2_ssz_types",
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "flex-error",
  "hex",
  "ibc-proto",
@@ -3452,7 +3395,7 @@ dependencies = [
  "itertools",
  "modelator",
  "num-rational",
- "primitive-types 0.12.1",
+ "primitive-types",
  "prost",
  "safe-regex",
  "serde",
@@ -3557,20 +3500,11 @@ dependencies = [
 
 [[package]]
 name = "impl-codec"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "161ebdfec3c8e3b52bf61c4f3550a1eea4f9579d10dc1b936f3171ebdcd6c443"
-dependencies = [
- "parity-scale-codec 2.3.1",
-]
-
-[[package]]
-name = "impl-codec"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba6a270039626615617f3f36d15fc827041df3b78c439da2cadfa47455a77f2f"
 dependencies = [
- "parity-scale-codec 3.2.1",
+ "parity-scale-codec",
 ]
 
 [[package]]
@@ -3580,15 +3514,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f28220f89297a075ddc7245cd538076ee98b01f2a9c23a53a4f1105d5a322808"
 dependencies = [
  "rlp",
-]
-
-[[package]]
-name = "impl-serde"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4551f042f3438e64dbd6226b20527fc84a6e1fe65688b58746a2f53623f25f5c"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -3704,7 +3629,7 @@ dependencies = [
 [[package]]
 name = "int_to_bytes"
 version = "0.2.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "bytes",
 ]
@@ -4088,12 +4013,35 @@ dependencies = [
 [[package]]
 name = "merkle_proof"
 version = "0.2.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "eth2_hashing",
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "lazy_static",
  "safe_arith",
+]
+
+[[package]]
+name = "metastruct"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "734788dec2091fe9afa39530ca2ea7994f4a2c9aff3dbfebb63f2c1945c6f10b"
+dependencies = [
+ "metastruct_macro",
+]
+
+[[package]]
+name = "metastruct_macro"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42ded15e7570c2a507a23e6c3a1c8d74507b779476e43afe93ddfc261d44173d"
+dependencies = [
+ "darling",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "smallvec",
+ "syn",
 ]
 
 [[package]]
@@ -4512,7 +4460,7 @@ dependencies = [
  "arrayvec",
  "auto_impl 1.0.1",
  "bytes",
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "open-fastrlp-derive",
 ]
 
@@ -4670,20 +4618,6 @@ checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
 name = "parity-scale-codec"
-version = "2.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "373b1a4c1338d9cd3d1fa53b3a11bdab5ab6bd80a20f7f7becd76953ae2be909"
-dependencies = [
- "arrayvec",
- "bitvec 0.20.4",
- "byte-slice-cast",
- "impl-trait-for-tuples",
- "parity-scale-codec-derive 2.3.1",
- "serde",
-]
-
-[[package]]
-name = "parity-scale-codec"
 version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "366e44391a8af4cfd6002ef6ba072bae071a96aafca98d7d448a34c5dca38b6a"
@@ -4692,20 +4626,8 @@ dependencies = [
  "bitvec 1.0.1",
  "byte-slice-cast",
  "impl-trait-for-tuples",
- "parity-scale-codec-derive 3.1.3",
+ "parity-scale-codec-derive",
  "serde",
-]
-
-[[package]]
-name = "parity-scale-codec-derive"
-version = "2.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1557010476e0595c9b568d16dcfb81b93cdeb157612726f5170d31aa707bed27"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -5066,27 +4988,14 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "primitive-types"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
-dependencies = [
- "fixed-hash 0.7.0",
- "impl-codec 0.5.1",
- "impl-rlp",
- "impl-serde 0.3.2",
- "uint",
-]
-
-[[package]]
-name = "primitive-types"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f3486ccba82358b11a77516035647c34ba167dfa53312630de83b12bd4f3d66"
 dependencies = [
- "fixed-hash 0.8.0",
- "impl-codec 0.6.0",
+ "fixed-hash",
+ "impl-codec",
  "impl-rlp",
- "impl-serde 0.4.0",
+ "impl-serde",
  "scale-info",
  "uint",
 ]
@@ -5256,12 +5165,6 @@ name = "radium"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "def50a86306165861203e7f84ecffbbdfdea79f0e51039b33de1e952358c47ac"
-
-[[package]]
-name = "radium"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "643f8f41a8ebc4c5dc4515c82bb8abd397b527fc20fd681b7c011c2aee5d44fb"
 
 [[package]]
 name = "radium"
@@ -5829,7 +5732,7 @@ dependencies = [
 [[package]]
 name = "safe_arith"
 version = "0.1.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 
 [[package]]
 name = "safemem"
@@ -5863,7 +5766,7 @@ checksum = "88d8a765117b237ef233705cc2cc4c6a27fccd46eea6ef0c8c6dae5f3ef407f8"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
- "parity-scale-codec 3.2.1",
+ "parity-scale-codec",
  "scale-info-derive",
 ]
 
@@ -6520,10 +6423,10 @@ dependencies = [
 [[package]]
 name = "swap_or_not_shuffle"
 version = "0.2.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "eth2_hashing",
- "ethereum-types 0.12.1",
+ "ethereum-types",
 ]
 
 [[package]]
@@ -6792,7 +6695,7 @@ dependencies = [
 [[package]]
 name = "test_random_derive"
 version = "0.2.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "quote",
  "syn",
@@ -7264,17 +7167,17 @@ dependencies = [
 [[package]]
 name = "tree_hash"
 version = "0.4.1"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "eth2_hashing",
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "smallvec",
 ]
 
 [[package]]
 name = "tree_hash_derive"
 version = "0.4.0"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "darling",
  "quote",
@@ -7332,7 +7235,7 @@ checksum = "497961ef93d974e23eb6f433eb5fe1b7930b659f06d12dec6fc44a8f554c0bba"
 [[package]]
 name = "types"
 version = "0.2.1"
-source = "git+https://github.com/yangby-cryptape/lighthouse?rev=62dc610#62dc610037abf9b7cb08fc9c9bb05528ebedf9cf"
+source = "git+https://github.com/yangby-cryptape/lighthouse?rev=307ade9#307ade97f19792c6ee6b93fdfaa392c3d38ea110"
 dependencies = [
  "bls",
  "cached_tree_hash",
@@ -7345,7 +7248,7 @@ dependencies = [
  "eth2_ssz",
  "eth2_ssz_derive",
  "eth2_ssz_types",
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "hex",
  "int_to_bytes",
  "itertools",
@@ -7353,6 +7256,7 @@ dependencies = [
  "log",
  "maplit",
  "merkle_proof",
+ "metastruct",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rand_xorshift",
@@ -7921,12 +7825,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
 ]
-
-[[package]]
-name = "wyz"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
 
 [[package]]
 name = "wyz"
