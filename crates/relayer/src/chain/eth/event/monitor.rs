@@ -84,41 +84,41 @@ impl EthEventMonitor {
             }
         }
 
-        // process incoming initial checkpoint
-        if let Ok(checkpoint) = self.create_receiver.try_recv() {
-            let height = Height::new(0, checkpoint.slot).unwrap();
-            let event =
-                IbcEventWithHeight::new(events::CreateClient(Default::default()).into(), height);
-            let batch = EventBatch {
-                chain_id: self.chain_id.clone(),
-                tracking_id: TrackingId::new_uuid(),
-                height,
-                events: vec![event],
-            };
-            self.process_batch(batch);
-        }
-
-        // process incoming headers
-        if let Ok(headers) = self.header_receiver.try_recv() {
-            if let (Some(first), Some(last)) = (headers.first(), headers.last()) {
-                info!("receive new headers [{}, {}]", first.slot, last.slot);
-                let events = headers
-                    .iter()
-                    .map(|header| {
-                        let height = Height::new(0, header.slot).unwrap();
-                        IbcEventWithHeight::new(events::NewBlock::new(height).into(), height)
-                    })
-                    .collect();
+        tokio::select! {
+            // process incoming initial checkpoint
+            Some(checkpoint) = self.create_receiver.recv() => {
+                let height = Height::new(0, checkpoint.slot).unwrap();
+                let event =
+                    IbcEventWithHeight::new(events::CreateClient(Default::default()).into(), height);
                 let batch = EventBatch {
                     chain_id: self.chain_id.clone(),
                     tracking_id: TrackingId::new_uuid(),
-                    height: Height::new(0, last.slot).unwrap(),
-                    events,
+                    height,
+                    events: vec![event],
                 };
                 self.process_batch(batch);
-            }
+            },
+            // process incoming headers
+            Some(headers) = self.header_receiver.recv() => {
+                if let (Some(first), Some(last)) = (headers.first(), headers.last()) {
+                    info!("receive new headers [{}, {}]", first.slot, last.slot);
+                    let events = headers
+                        .iter()
+                        .map(|header| {
+                            let height = Height::new(0, header.slot).unwrap();
+                            IbcEventWithHeight::new(events::NewBlock::new(height).into(), height)
+                        })
+                        .collect();
+                    let batch = EventBatch {
+                        chain_id: self.chain_id.clone(),
+                        tracking_id: TrackingId::new_uuid(),
+                        height: Height::new(0, last.slot).unwrap(),
+                        events,
+                    };
+                    self.process_batch(batch);
+                }
+            },
         }
-
         Next::Continue
     }
 
