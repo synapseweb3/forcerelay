@@ -269,8 +269,10 @@ impl CkbChain {
                     .map_err(|e| Error::rpc_response(e.to_string()))?;
                 if chain_info.chain == "ckb" {
                     NetworkType::Mainnet
-                } else {
+                } else if chain_info.chain == "ckb_testnet" {
                     NetworkType::Testnet
+                } else {
+                    NetworkType::Dev
                 }
             };
             *self.cached_network.write().map_err(Error::other)? = Some(network);

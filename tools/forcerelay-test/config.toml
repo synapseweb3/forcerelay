@@ -1,0 +1,43 @@
+[global]
+log_level = 'error'
+
+[mode]
+
+[mode.clients]
+enabled = true
+refresh = true
+misbehaviour = true
+
+[mode.connections]
+enabled = false
+
+[mode.channels]
+enabled = false
+
+[mode.packets]
+enabled = true
+clear_interval = 100
+clear_on_start = true
+tx_confirmation = true
+
+[[chains]]
+id = 'ibc-eth-0'
+genesis_time = 1606824023
+genesis_root = "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"
+initial_checkpoint = "0xe06056afdb9a0a9fd7fbaf89bb0e96eced24de0104bc5b7e3960c115d6990f90"
+key_name = 'relayer_eth_wallet'
+rpc_addr_pool = ['http://127.0.0.1:8545']
+rpc_port = 8545
+[chains.forks]
+genesis = { epoch = 0, fork_version = "0x00000000" }
+altair = { epoch = 74240, fork_version = "0x01000000" }
+bellatrix = { epoch = 144896, fork_version = "0x02000000" }
+
+[[chains]]
+id = 'ibc-ckb-0'
+ckb_rpc= "http://127.0.0.1:8114"
+ckb_indexer_rpc = "http://127.0.0.1:8114"
+lightclient_contract_typeargs = "0xf49ce32397c6741998b04d7548c5ed372007424daf67ee5bfadaefec3c865781"
+lightclient_lock_typeargs = "0xfbe09e8ff3e5f3d0fab7cc7431feed2131846184d356a9626639f55e7f471846"
+key_name = "relayer_ckb_wallet"
+data_dir = "./ckb_mmr_storage"

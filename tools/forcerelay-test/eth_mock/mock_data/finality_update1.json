@@ -1,0 +1,32 @@
+{
+    "version": "bellatrix",
+    "data": {
+        "attested_header": {
+            "slot": "5787902",
+            "proposer_index": "89348",
+            "parent_root": "0x06ab7d40db218a2a32e1e3c0083345833a9a840679d74efa2971503be80bf6a4",
+            "state_root": "0x331ab30e7707e1470e66abe29823c0194a64265ea53de7bf14cc4dad0c68e60d",
+            "body_root": "0x5c2f60ef006f737dcddb4778eb28d65ebfcfca0e62124022816df0950f0062da"
+        },
+        "finalized_header": {
+            "slot": "5787808",
+            "proposer_index": "283841",
+            "parent_root": "0xaa6a3e795992423b95c8f68e2cba5cf5397645360a4572b99547fd9d4a05d7b3",
+            "state_root": "0x4e1917d69ae15da6e33546db266e3264c4ab7e0412c3633e2893631356b2b4c3",
+            "body_root": "0xadabc0890e10e0a475704e2a144c8f25687b61157c8b239dc1f53ab3c9488f86"
+        },
+        "finality_branch": [
+            "0x85c2020000000000000000000000000000000000000000000000000000000000",
+            "0xe3603a0ee377b0dc7885bcf93f7843543de9577b6f6c431568940d5141eb8cdc",
+            "0x5a6ed87c8948be13e74b1ab481e455c5167f685ac669bcb4f04324e9aba580d9",
+            "0x21d2020d95166addc2c48e936ea450da83ff776bfa763d6baa61291abd824d7c",
+            "0x6461816a137d56dd9341095922d7f5cf77a2b3eb6be13eaa71282248dbeccd36",
+            "0xf9666de887e9969c33aa10eb1e907396c2be668191bee7927043bc511fbb3bc9"
+        ],
+        "sync_aggregate": {
+            "sync_committee_bits": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffffffffffffffffffffffbffffffffffffffffffffffffffffdfffffffffffff7ffff",
+            "sync_committee_signature": "0xa616dd9e17b42f1cb5885fe14d663c68e31e635d4cf5457b1088d11da5a87348e0c72e9a9e2c982eca0de0dc7e82620812d0a1ff4722d063a6ffe67024149b02e6ebcdb54ff3c91854d6fc8615c6ad5e9c64de2f477aa53a31d9a4b54ac0eeb4"
+        },
+        "signature_slot": "5787903"
+    }
+}
