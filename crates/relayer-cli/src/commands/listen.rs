@@ -149,7 +149,7 @@ fn subscribe(
         chain_config.id().clone(),
         match chain_config {
             ChainConfig::Cosmos(_) => chain_config.cosmos().websocket_addr.clone(),
-            ChainConfig::Eth(_) => chain_config.eth().websocket_addr.clone(),
+            ChainConfig::Eth(_) => "".parse().unwrap(),
             ChainConfig::Ckb(_) => "".parse().unwrap(),
         },
         rt,

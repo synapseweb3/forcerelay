@@ -1,24 +1,19 @@
-use std::str::FromStr;
-
 use ibc_relayer_types::{
     clients::ics07_eth::types::{FixedVector, Fork, Forks, H256, U4},
     core::ics24_host::identifier::ChainId,
 };
 use serde_derive::{Deserialize, Serialize};
-use tendermint_rpc::Url;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EthChainConfig {
     pub id: ChainId,
     pub genesis_time: u64,
     pub genesis_root: H256,
-    pub websocket_addr: Url,
     #[serde(deserialize_with = "array_hex_deserialize")]
     pub initial_checkpoint: [u8; 32],
     pub key_name: String,
-    pub rpc_addr: String,
+    pub rpc_addr_pool: Vec<String>,
     pub rpc_port: u16,
-    pub max_checkpoint_age: u64,
     pub forks: Forks,
 }
 
@@ -64,8 +59,7 @@ impl EthChainConfig {
             )
             .unwrap()
             .into(),
-            websocket_addr: Url::from_str("http://www.dummy.com").unwrap(),
-            rpc_addr: Default::default(),
+            rpc_addr_pool: Default::default(),
             rpc_port: 8545,
             forks: Forks {
                 genesis: Fork {
@@ -81,7 +75,6 @@ impl EthChainConfig {
                     fork_version: hex::decode("02001020").unwrap().into(),
                 },
             },
-            max_checkpoint_age: 1_209_600,
             initial_checkpoint: Default::default(),
             key_name: Default::default(),
         }
