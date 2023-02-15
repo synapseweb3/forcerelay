@@ -19,6 +19,7 @@ pub type SignatureBytes = FixedVector<u8, U96>;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Bootstrap {
+    #[serde(deserialize_with = "header_deserialize")]
     pub header: Header,
     pub current_sync_committee: SyncCommittee,
     pub current_sync_committee_branch: Vec<H256>,
@@ -26,7 +27,9 @@ pub struct Bootstrap {
 
 #[derive(serde::Deserialize, Debug, Clone)]
 pub struct FinalityUpdate {
+    #[serde(deserialize_with = "header_deserialize")]
     pub attested_header: Header,
+    #[serde(deserialize_with = "header_deserialize")]
     pub finalized_header: Header,
     pub finality_branch: Vec<H256>,
     pub sync_aggregate: SyncAggregate,
@@ -70,9 +73,11 @@ pub struct SyncAggregate {
 
 #[derive(Clone, PartialEq, Deserialize, Serialize, Default, Debug)]
 pub struct Update {
+    #[serde(deserialize_with = "header_deserialize")]
     pub attested_header: Header,
     pub next_sync_committee: SyncCommittee,
     pub next_sync_committee_branch: Vec<H256>,
+    #[serde(deserialize_with = "header_deserialize")]
     pub finalized_header: Header,
     pub finality_branch: Vec<H256>,
     pub sync_aggregate: SyncAggregate,
@@ -257,4 +262,28 @@ where
         seq.serialize_element(&s)?;
     }
     seq.end()
+}
+
+fn header_deserialize<'de, D>(deserializer: D) -> Result<Header, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let header: LightClientHeader = serde::Deserialize::deserialize(deserializer)?;
+
+    Ok(match header {
+        LightClientHeader::Unwrapped(header) => header,
+        LightClientHeader::Wrapped(header) => header.beacon,
+    })
+}
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum LightClientHeader {
+    Unwrapped(Header),
+    Wrapped(Beacon),
+}
+
+#[derive(serde::Deserialize)]
+struct Beacon {
+    beacon: Header,
 }
