@@ -4,7 +4,7 @@ use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Index;
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
@@ -67,12 +67,12 @@ pub struct ConsensusClient<R: ConsensusRpc> {
 
 impl<R: ConsensusRpc> ConsensusClient<R> {
     pub fn new(
-        rpc: &str,
+        rpc_pool: &[String],
         checkpoint_block_root: &[u8; 32],
         config: Arc<EthChainConfig>,
     ) -> ConsensusClient<R> {
         ConsensusClient {
-            rpc: R::new(rpc),
+            rpc: R::new(rpc_pool),
             store: LightClientStore::default(),
             initial_checkpoint: *checkpoint_block_root,
             last_checkpoint: None,
@@ -124,7 +124,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
     ) -> Result<()> {
         if self.store.next_sync_committee.is_none() {
             warn!(
-                "[eth_light_client] skip finality_update store of slot {}",
+                "skip finality_update store of slot {}",
                 finality_update.finalized_header.slot
             );
             return Ok(());
@@ -168,15 +168,15 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             .cloned();
         if update.is_none() && finality_update_slot < self.store.finalized_header.slot {
             let finalized_header = match self.rpc.get_header(finality_update_slot).await {
-                Ok(header) => header,
-                Err(error) => {
-                    // TODO: need to fallback to another SECURE rpc to ensure the fork status
-                    warn!("slot forked or skipped: {error}");
+                Ok(Some(header)) => header,
+                Ok(None) => {
+                    warn!("slot {finality_update_slot} forked or skipped, replace with empty");
                     Header {
                         slot: finality_update_slot,
                         ..Default::default()
                     }
                 }
+                Err(error) => return Err(eyre!("rpc error: {error}")),
             };
             let new_update = Update::from_finalized_header(finalized_header);
             self.store
@@ -193,11 +193,6 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
             .get_bootstrap(&self.initial_checkpoint)
             .await
             .map_err(|e| eyre!("could not fetch bootstrap: {e}"))?;
-
-        let is_valid = self.is_valid_checkpoint(bootstrap.header.slot);
-        if !is_valid {
-            return Err(ConsensusError::CheckpointTooOld.into());
-        }
 
         let header_hash = bootstrap.header.tree_hash_root();
         let expected_hash = H256::from(&self.initial_checkpoint);
@@ -229,12 +224,12 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         Ok(())
     }
 
-    pub fn duration_until_next_update(&self) -> std::time::Duration {
+    pub fn duration_until_next_update(&self) -> Duration {
         let current_slot = self.expected_current_slot();
         let next_slot = current_slot + 1;
         let next_slot_timestamp = self.slot_timestamp(next_slot);
 
-        let now = std::time::SystemTime::now()
+        let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
@@ -242,7 +237,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         let time_to_next_slot = next_slot_timestamp.saturating_sub(now);
         let next_update = time_to_next_slot + 4;
 
-        std::time::Duration::from_secs(next_update)
+        Duration::from_secs(next_update)
     }
 
     async fn start_emiting_headers(&mut self, start_slot: u64, end_slot: u64) -> Result<()> {
@@ -268,7 +263,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         info!("emiting new headers [{start_slot}, {end_slot})");
         self.new_block_emitors.iter().for_each(|emitor| {
             if let Err(e) = emitor.send(finalized_headers.clone()) {
-                error!("[eth_light_client] new_block emitor error: {e}");
+                error!("new_block emitor error: {e}");
             }
         });
         Ok(())
@@ -297,7 +292,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         if let Some((_, update)) = self.store.finality_updates.first_key_value() {
             self.new_client_emitors.iter().for_each(|emitor| {
                 if let Err(e) = emitor.send(update.finalized_header.clone()) {
-                    error!("[eth_light_client] new_client emitor error: {e}");
+                    error!("new_client emitor error: {e}");
                 }
             });
         }
@@ -512,27 +507,15 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         Ok(compute_signing_root(header, domain))
     }
 
-    fn is_valid_checkpoint(&self, blockhash_slot: u64) -> bool {
-        let current_slot = self.expected_current_slot();
-        let current_slot_timestamp = self.slot_timestamp(current_slot);
-        let blockhash_slot_timestamp = self.slot_timestamp(blockhash_slot);
-
-        let slot_age = current_slot_timestamp - blockhash_slot_timestamp;
-
-        slot_age < self.config.max_checkpoint_age
-    }
-
     fn slot_timestamp(&self, slot: u64) -> u64 {
         slot * 12 + self.config.genesis_time
     }
 
     pub fn expected_current_slot(&self) -> u64 {
-        let now = std::time::SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
         let genesis_time = self.config.genesis_time;
-        let since_genesis = now - std::time::Duration::from_secs(genesis_time);
+        let since_genesis = now.saturating_sub(Duration::from_secs(genesis_time));
 
         since_genesis.as_secs() / 12
     }
@@ -540,11 +523,11 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
 
 #[async_trait]
 pub trait ConsensusRpc {
-    fn new(path: &str) -> Self;
+    fn new(rpcs: &[String]) -> Self;
     async fn get_bootstrap(&self, block_root: &[u8]) -> Result<Bootstrap>;
     async fn get_updates(&self, period: u64, count: u8) -> Result<Vec<Update>>;
     async fn get_finality_update(&self) -> Result<FinalityUpdate>;
-    async fn get_header(&self, slot: u64) -> Result<Header>;
+    async fn get_header(&self, slot: u64) -> Result<Option<Header>>;
 }
 
 #[derive(Default)]
@@ -559,21 +542,38 @@ pub struct LightClientStore {
 }
 
 pub struct NimbusRpc {
-    pub rpc: String,
-    pub client: ClientWithMiddleware,
+    rpc: Vec<String>,
+    client: ClientWithMiddleware,
+}
+
+impl NimbusRpc {
+    async fn get_header_inner(&self, rpc: &str, slot: u64) -> Result<Option<Header>> {
+        let req = format!("{}/eth/v1/beacon/headers/{slot}", rpc);
+        let res = self
+            .client
+            .get(req)
+            .send()
+            .await?
+            .json::<HeaderResponse::Response>()
+            .await
+            .map_err(|e| eyre::eyre!(format!("{e} (slot {slot})")))?;
+
+        Ok(res.header())
+    }
 }
 
 #[async_trait]
 impl ConsensusRpc for NimbusRpc {
-    fn new(rpc: &str) -> Self {
+    fn new(rpcs: &[String]) -> Self {
         let retry_policy = ExponentialBackoff::builder()
             .backoff_exponent(1)
             .build_with_max_retries(3);
         let client = ClientBuilder::new(reqwest::Client::new())
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
+        assert!(!rpcs.is_empty());
         NimbusRpc {
-            rpc: rpc.to_string(),
+            rpc: rpcs.to_owned(),
             client,
         }
     }
@@ -582,7 +582,7 @@ impl ConsensusRpc for NimbusRpc {
         let count = cmp::min(count, MAX_REQUEST_LIGHT_CLIENT_UPDATES);
         let req = format!(
             "{}/eth/v1/beacon/light_client/updates?start_period={period}&count={count}",
-            self.rpc
+            self.rpc[0]
         );
 
         let res = self
@@ -597,7 +597,7 @@ impl ConsensusRpc for NimbusRpc {
     }
 
     async fn get_finality_update(&self) -> Result<FinalityUpdate> {
-        let req = format!("{}/eth/v1/beacon/light_client/finality_update", self.rpc);
+        let req = format!("{}/eth/v1/beacon/light_client/finality_update", self.rpc[0]);
         let res = self
             .client
             .get(req)
@@ -613,7 +613,7 @@ impl ConsensusRpc for NimbusRpc {
         let root_hex = hex::encode(block_root);
         let req = format!(
             "{}/eth/v1/beacon/light_client/bootstrap/0x{root_hex}",
-            self.rpc
+            self.rpc[0]
         );
 
         let res = self
@@ -627,18 +627,34 @@ impl ConsensusRpc for NimbusRpc {
         Ok(res.data)
     }
 
-    async fn get_header(&self, slot: u64) -> Result<Header> {
-        let req = format!("{}/eth/v1/beacon/headers/{slot}", self.rpc);
-        let res = self
-            .client
-            .get(req)
-            .send()
-            .await?
-            .json::<HeaderResponse::Response>()
-            .await
-            .map_err(|e| eyre::eyre!(format!("{e} (slot {slot})")))?;
-
-        Ok(res.data.header.message)
+    async fn get_header(&self, slot: u64) -> Result<Option<Header>> {
+        let result = self.get_header_inner(&self.rpc[0], slot).await;
+        match result {
+            Ok(Some(header)) => Ok(Some(header)),
+            Ok(None) => {
+                for rpc in self.rpc.iter().skip(1) {
+                    if let Ok(Some(header)) = self.get_header_inner(rpc, slot).await {
+                        return Ok(Some(header));
+                    }
+                }
+                Ok(None)
+            }
+            Err(err) => {
+                let mut find_none = false;
+                for rpc in self.rpc.iter().skip(1) {
+                    match self.get_header_inner(rpc, slot).await {
+                        Ok(Some(header)) => return Ok(Some(header)),
+                        Ok(None) => find_none = true,
+                        _ => {}
+                    }
+                }
+                if find_none {
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 }
 
@@ -651,7 +667,7 @@ pub struct LightClient {
 impl LightClient {
     pub fn from_config(config: &EthChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let client = ConsensusClient::<NimbusRpc>::new(
-            &config.rpc_addr,
+            &config.rpc_addr_pool,
             &config.initial_checkpoint,
             Arc::new(config.clone()),
         );
@@ -676,7 +692,7 @@ impl LightClient {
             loop {
                 let res = client.lock().await.advance().await;
                 if let Err(err) = res {
-                    error!("[eth_light_client] consensus error: {err}");
+                    error!("consensus error: {err}");
                 }
 
                 let next_update = client.lock().await.duration_until_next_update();
@@ -801,23 +817,35 @@ struct UpdateData {
 mod HeaderResponse {
     use ibc_relayer_types::clients::ics07_eth::header::Header;
 
-    #[derive(serde::Deserialize, Debug)]
+    #[derive(serde::Deserialize, Debug, Clone)]
     pub struct Message {
         pub message: Header,
         pub signature: String,
     }
 
-    #[derive(serde::Deserialize, Debug)]
+    #[derive(serde::Deserialize, Debug, Clone)]
     pub struct Data {
         pub root: String,
         pub canonical: bool,
         pub header: Message,
     }
 
-    #[derive(serde::Deserialize, Debug)]
+    #[derive(serde::Deserialize, Debug, Clone)]
     pub struct Response {
-        pub execution_optimistic: bool,
-        pub data: Data,
+        pub execution_optimistic: Option<bool>,
+        pub data: Option<Data>,
+        pub code: Option<u64>,
+        pub message: Option<String>,
+    }
+
+    impl Response {
+        pub fn header(self) -> Option<Header> {
+            if let Some(data) = self.data {
+                Some(data.header.message)
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -846,9 +874,9 @@ mod tests {
 
     #[async_trait]
     impl ConsensusRpc for MockRpc {
-        fn new(path: &str) -> Self {
+        fn new(path: &[String]) -> Self {
             MockRpc {
-                testdata: PathBuf::from(path),
+                testdata: PathBuf::from(path.get(0).unwrap()),
             }
         }
 
@@ -867,23 +895,21 @@ mod tests {
             Ok(serde_json::from_str(&finality)?)
         }
 
-        async fn get_header(&self, _slot: u64) -> Result<Header> {
+        async fn get_header(&self, slot: u64) -> Result<Option<Header>> {
             let header = read_to_string(self.testdata.join("header.json"))?;
-            let response: HeaderResponse::Response = serde_json::from_str(&header)?;
-            Ok(response.data.header.message)
+            let response: Vec<HeaderResponse::Response> = serde_json::from_str(&header)?;
+            Ok(response[slot as usize].clone().header())
         }
     }
 
-    async fn get_client(large_checkpoint_age: bool) -> ConsensusClient<MockRpc> {
+    async fn get_client() -> ConsensusClient<MockRpc> {
         let base_config = EthChainConfig::goerli();
         let config = EthChainConfig {
             id: base_config.id,
             genesis_time: base_config.genesis_time,
             genesis_root: base_config.genesis_root,
             forks: base_config.forks,
-            max_checkpoint_age: if large_checkpoint_age { 123123123 } else { 123 },
-            websocket_addr: base_config.websocket_addr,
-            rpc_addr: Default::default(),
+            rpc_addr_pool: Default::default(),
             rpc_port: Default::default(),
             initial_checkpoint: Default::default(),
             key_name: Default::default(),
@@ -894,14 +920,15 @@ mod tests {
                 .try_into()
                 .unwrap();
 
-        let mut client = ConsensusClient::new("src/testdata/", &checkpoint, Arc::new(config));
+        let mut client =
+            ConsensusClient::new(&["src/testdata/".to_owned()], &checkpoint, Arc::new(config));
         client.bootstrap().await.unwrap();
         client
     }
 
     #[tokio::test]
     async fn test_verify_update() {
-        let client = get_client(true).await;
+        let client = get_client().await;
         let period = calc_sync_period(client.store.finalized_header.slot);
         let updates = client
             .rpc
@@ -914,7 +941,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_finality() {
-        let mut client = get_client(true).await;
+        let mut client = get_client().await;
         client.sync().await.unwrap();
 
         let update = client.rpc.get_finality_update().await.unwrap();
@@ -924,7 +951,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_update_invalid_finality() {
-        let client = get_client(true).await;
+        let client = get_client().await;
         let period = calc_sync_period(client.store.finalized_header.slot);
         let updates = client
             .rpc
@@ -944,7 +971,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_finality_invalid_finality() {
-        let mut client = get_client(true).await;
+        let mut client = get_client().await;
         client.sync().await.unwrap();
 
         let mut update = client.rpc.get_finality_update().await.unwrap();
@@ -959,7 +986,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_finality_invalid_sit() {
-        let mut client = get_client(true).await;
+        let mut client = get_client().await;
         client.sync().await.unwrap();
 
         let mut update = client.rpc.get_finality_update().await.unwrap();
@@ -974,7 +1001,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_update_invalid_sig() {
-        let client = get_client(true).await;
+        let client = get_client().await;
         let period = calc_sync_period(client.store.finalized_header.slot);
         let updates = client
             .rpc
@@ -994,7 +1021,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_update_invalid_committee() {
-        let client = get_client(true).await;
+        let client = get_client().await;
         let period = calc_sync_period(client.store.finalized_header.slot);
         let updates = client
             .rpc
@@ -1014,7 +1041,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync() {
-        let mut client = get_client(true).await;
+        let mut client = get_client().await;
         client.sync().await.unwrap();
 
         assert_eq!(client.store.finalized_header.slot, 3818112);
@@ -1022,11 +1049,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_header() {
-        let mut client = get_client(true).await;
-        let update = client.get_finality_update(3781055).await.unwrap();
-
+        let mut client = get_client().await;
+        let update = client.get_finality_update(0).await.unwrap();
         assert!(update.is_some());
         assert_eq!(update.unwrap().finalized_header.slot, 5595002);
+
+        let update = client.get_finality_update(1).await.unwrap();
+        assert!(update.is_some());
+        assert!(update.unwrap().is_finalized_empty());
     }
 
     #[ignore]
@@ -1036,11 +1066,11 @@ mod tests {
         const END_SLOT: u64 = 5687712;
         const URL: &str = "https://www.lightclientdata.org";
 
-        let rpc = NimbusRpc::new(URL);
+        let rpc = NimbusRpc::new(&[URL.to_owned()]);
         let mut headers = vec![];
         for slot in START_SLOT..=END_SLOT {
             let header = rpc.get_header(slot).await.expect("get header");
-            headers.push(header);
+            headers.push(header.unwrap_or_else(|| panic!("empty header {slot}")));
         }
         let path = format!("headers-{START_SLOT}-{END_SLOT}.json");
         let contents = serde_json::to_string_pretty(&headers).expect("jsonify");

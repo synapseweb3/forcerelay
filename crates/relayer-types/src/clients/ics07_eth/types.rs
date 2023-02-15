@@ -173,8 +173,6 @@ pub enum ConsensusError {
     InvalidHeaderHash(H256, H256),
     #[error("payload not found for slot: {0}")]
     PayloadNotFound(u64),
-    #[error("checkpoint is too old")]
-    CheckpointTooOld,
 }
 
 pub fn u64_deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>

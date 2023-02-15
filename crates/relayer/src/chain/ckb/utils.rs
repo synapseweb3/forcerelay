@@ -503,10 +503,12 @@ mod tests {
         let tmp_dir = TempDir::new().unwrap();
         let chain_id = "chain_id".to_owned();
         let testdata_dir = format!("{TESTDATA_DIR}/case-3");
-        let updates = load_updates_from_file(&testdata_dir, "headers-5687681-5687712.json");
+        let updates = load_updates_from_file(&testdata_dir, "headers.json");
         let storage: Storage<MainnetEthSpec> = Storage::new(tmp_dir).unwrap();
-        get_verified_packed_client_and_proof_update(&chain_id, &updates, &storage, None)
-            .expect("verify");
+        let (_, packed_client, _) =
+            get_verified_packed_client_and_proof_update(&chain_id, &updates, &storage, None)
+                .expect("verify");
+        println!("client = {}", hex::encode(packed_client.as_slice()));
     }
 
     #[ignore]

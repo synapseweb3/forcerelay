@@ -1,17 +1,23 @@
-{
-    "execution_optimistic": true,
-    "data": {
-        "root": "0x3f00a700bb5b62d4af635060862d8b846eaa5317ec4130dc811f1b5ed7b3613e",
-        "canonical": true,
-        "header": {
-            "message": {
-                "slot": "5595002",
-                "proposer_index": "353158",
-                "parent_root": "0xf8902dc4da5c9df239e02a300e8e3524b1339b063a2334769929d2e5da08ccb2",
-                "state_root": "0x706eaec53cd35773552c49af68b76899a6e02beb275a189df9f2e5ef871b2b21",
-                "body_root": "0x66055154f25d493e3d098305c5ff92113d14d2288b4886351f6f5a022c9c4da5"
-            },
-            "signature": "0x8ff2ded8dbe5ab2ad61e9c84369ce733b7f7977cbade67846da841f573ad1068047254498d2fa5f46a6fa10d0dc4e9d419a355a1768486401f21ca7262124e44b1c3a0de075d6542ab3c3d3e03186be447b166fcef1263c4a182362263fa0986"
+[
+    {
+        "execution_optimistic": true,
+        "data": {
+            "root": "0x3f00a700bb5b62d4af635060862d8b846eaa5317ec4130dc811f1b5ed7b3613e",
+            "canonical": true,
+            "header": {
+                "message": {
+                    "slot": "5595002",
+                    "proposer_index": "353158",
+                    "parent_root": "0xf8902dc4da5c9df239e02a300e8e3524b1339b063a2334769929d2e5da08ccb2",
+                    "state_root": "0x706eaec53cd35773552c49af68b76899a6e02beb275a189df9f2e5ef871b2b21",
+                    "body_root": "0x66055154f25d493e3d098305c5ff92113d14d2288b4886351f6f5a022c9c4da5"
+                },
+                "signature": "0x8ff2ded8dbe5ab2ad61e9c84369ce733b7f7977cbade67846da841f573ad1068047254498d2fa5f46a6fa10d0dc4e9d419a355a1768486401f21ca7262124e44b1c3a0de075d6542ab3c3d3e03186be447b166fcef1263c4a182362263fa0986"
+            }
         }
+    },
+    {
+        "code": 404,
+        "message": "Block header/data has not been found"
     }
-}
+]
