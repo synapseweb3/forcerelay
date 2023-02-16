@@ -177,6 +177,18 @@ fn get_secp256k1_celldep(network_type: NetworkType) -> packed::CellDep {
                     .build(),
             )
             .build(),
-        _ => celldep, // TODO, setup with your devnet secp256k1_sighash outpoint
+        NetworkType::Dev => celldep
+            .as_builder()
+            .out_point(
+                packed::OutPoint::new_builder()
+                    .tx_hash(
+                        h256!("0x29ed5663501cd171513155f8939ad2c9ffeb92aa4879d39cde987f8eb6274407")
+                            .pack(),
+                    )
+                    .index(0u32.pack())
+                    .build(),
+            )
+            .build(),
+        _ => celldep,
     }
 }

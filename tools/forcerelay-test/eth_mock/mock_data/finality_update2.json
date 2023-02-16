@@ -1,0 +1,32 @@
+{
+    "version": "bellatrix",
+    "data": {
+        "attested_header": {
+            "slot": "5787905",
+            "proposer_index": "66586",
+            "parent_root": "0xe25c1cb97e02c558d5de9d7cb136a5dc608212888424505032f464ca723ed7c7",
+            "state_root": "0xafbd00fd3d0b85490d35a537592d004cce6c84d5690c3ee9849bbd88ab082534",
+            "body_root": "0xdc0aef6ec5d5037ba41967df47f0722f1ac28b43500dd1653136ac45cb02c186"
+        },
+        "finalized_header": {
+            "slot": "5787840",
+            "proposer_index": "157167",
+            "parent_root": "0xd5d43d373474c15856b155877994e551e40477c0a57d0b5abbdcf94904881623",
+            "state_root": "0x0d7d083d77e9778520b14539c0d28ba59f4e67e01fcf686b6efaac3a6c3d7b4c",
+            "body_root": "0x761d8be6c11bc839f176e779460c902300678d624726cab4d5840c5aaeab3612"
+        },
+        "finality_branch": [
+            "0x86c2020000000000000000000000000000000000000000000000000000000000",
+            "0xe3603a0ee377b0dc7885bcf93f7843543de9577b6f6c431568940d5141eb8cdc",
+            "0x5a6ed87c8948be13e74b1ab481e455c5167f685ac669bcb4f04324e9aba580d9",
+            "0xf78c6b1ab9d68cf65cabe7003d69abdc87d6314fdb0fcce0eaa6b2f9882570dc",
+            "0xa9bd474d036c3cd5205ae2ea4279d8d284af5bb0dcc47f81aa090e667539ab76",
+            "0xe6a52afe5972a90dd7dbcdcbc06be68801fbb536b3554e7e3f11c0d14017fe76"
+        ],
+        "sync_aggregate": {
+            "sync_committee_bits": "0xffffffdffffffffffffffffffffffffffffffffffffffffffffffdefffffffffffffffffffffffffbfffff7ffffbfffffffffffffffffdffffffffffffffffff",
+            "sync_committee_signature": "0xa5295a2aae9c542bf7e7f13fbe3f89b847a6641ffd20786b03c9cac5302534e4d1d43a78a31e7a8ff0ba55c58d74c39a0745c91556d2069e7fa86306eba5fdcfa9e3d19bd1a3b25524cf65853b59e76459e1bca0f0884ea7c7f56e9d9333b8d7"
+        },
+        "signature_slot": "5787906"
+    }
+}
