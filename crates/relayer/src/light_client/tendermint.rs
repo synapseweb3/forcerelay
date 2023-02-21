@@ -6,7 +6,6 @@ use tendermint_light_client::{
     state::State as LightClientState,
     store::{memory::MemoryStore, LightStore},
 };
-use tendermint_light_client_verifier::operations;
 use tendermint_light_client_verifier::options::Options as TmOptions;
 use tendermint_light_client_verifier::types::{Height as TMHeight, LightBlock, PeerId, Status};
 use tendermint_light_client_verifier::ProdVerifier;
@@ -26,8 +25,9 @@ use ibc_relayer_types::{
 use tracing::trace;
 
 use crate::{
-    chain::cosmos::CosmosSdkChain, client_state::AnyClientState, config::cosmos::CosmosChainConfig,
-    error::Error, misbehaviour::MisbehaviourEvidence,
+    chain::cosmos::CosmosSdkChain, client_state::AnyClientState,
+    config::cosmos::ChainConfig as CosmosChainConfig, error::Error,
+    misbehaviour::MisbehaviourEvidence,
 };
 
 use super::Verified;
@@ -179,7 +179,6 @@ impl LightClient {
 
     fn prepare_client(&self, client_state: &AnyClientState) -> Result<TmLightClient, Error> {
         let clock = components::clock::SystemClock;
-        let hasher = operations::hasher::ProdHasher;
         let verifier = ProdVerifier::default();
         let scheduler = components::scheduler::basic_bisecting_schedule;
 
@@ -203,7 +202,6 @@ impl LightClient {
             clock,
             scheduler,
             verifier,
-            hasher,
             self.io.clone(),
         ))
     }

@@ -26,7 +26,7 @@ use crate::{
     },
     client_state::IdentifiedAnyClientState,
     config::{
-        filter::{ChannelFilters, PacketFilter},
+        filter::{ChannelFilters, ChannelPolicy},
         ChainConfig, Config,
     },
     path::PathIdentifiers,
@@ -581,8 +581,8 @@ impl<'a, Chain: ChainHandle> ChainScanner<'a, Chain> {
         if !matches!(chain_config, ChainConfig::Cosmos(_)) {
             return None;
         }
-        match chain_config.packet_filter() {
-            PacketFilter::Allow(ref filters) if filters.is_exact() => Some(filters),
+        match chain_config.packet_filter().channel_policy {
+            ChannelPolicy::Allow(ref filters) if filters.is_exact() => Some(filters),
             _ => None,
         }
     }

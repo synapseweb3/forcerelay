@@ -11,3 +11,6 @@ This section includes everything you need to know to configure Forcerelay.
 
 * **[Description of the parameters](./description.md)**
     * Detailed description of every parameter of Forcerelay
+
+* **[Filter incentivized packets](./filter-incentivized.md)**
+    * Examples on how to configure Forcerelay in order to filter incentivized packets

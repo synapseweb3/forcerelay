@@ -33,6 +33,7 @@
               gaia6
               gaia7
               gaia8
+              gaia9
               ica
               osmosis
               wasmd
@@ -42,8 +43,10 @@
               ibc-go-v4-simapp
               ibc-go-v5-simapp
               ibc-go-v6-simapp
+              ibc-go-v7-simapp
               apalache
               evmos
+              stride
               stride-no-admin
             ;
 

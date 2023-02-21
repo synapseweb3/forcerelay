@@ -1,3 +1,6 @@
+use ibc_proto::ibc::apps::fee::v1::{
+    QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse,
+};
 use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_eth::{
     client_state::ClientState as EthClientState,
@@ -440,6 +443,13 @@ impl ChainEndpoint for EthChain {
 
         let subscription = tx_monitor_cmd.subscribe().map_err(Error::event_monitor)?;
         Ok(subscription)
+    }
+
+    fn query_incentivized_packet(
+        &self,
+        _: QueryIncentivizedPacketRequest,
+    ) -> Result<QueryIncentivizedPacketResponse, Error> {
+        todo!()
     }
 }
 

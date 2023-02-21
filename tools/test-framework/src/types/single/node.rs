@@ -8,10 +8,12 @@ use eyre::eyre;
 use eyre::Report as Error;
 use ibc_relayer::chain::ChainType;
 use ibc_relayer::config;
+use ibc_relayer::config::cosmos::gas_multiplier::GasMultiplier;
 use ibc_relayer::keyring::Store;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use std::sync::{Arc, RwLock};
 use tendermint_rpc::Url;
+use tendermint_rpc::WebSocketClientUrl;
 
 use crate::chain::chain_type::ChainType as TestedChainType;
 use crate::chain::driver::ChainDriver;
@@ -123,11 +125,11 @@ impl FullNode {
         &self,
         chain_type: &TestedChainType,
     ) -> Result<config::ChainConfig, Error> {
-        let cosmos_config = config::cosmos::CosmosChainConfig {
+        let cosmos_config = config::cosmos::ChainConfig {
             id: self.chain_driver.chain_id.clone(),
             r#type: ChainType::CosmosSdk,
             rpc_addr: Url::from_str(&self.chain_driver.rpc_address())?,
-            websocket_addr: Url::from_str(&self.chain_driver.websocket_address())?,
+            websocket_addr: WebSocketClientUrl::from_str(&self.chain_driver.websocket_address())?,
             grpc_addr: Url::from_str(&self.chain_driver.grpc_address())?,
             rpc_timeout: Duration::from_secs(10),
             account_prefix: self.chain_driver.account_prefix.clone(),
@@ -142,15 +144,16 @@ impl FullNode {
             default_gas: None,
             max_gas: Some(3000000),
             gas_adjustment: None,
-            gas_multiplier: Default::default(),
+            gas_multiplier: Some(GasMultiplier::unsafe_new(1.2)),
             fee_granter: None,
             max_msg_num: Default::default(),
             max_tx_size: Default::default(),
             max_block_time: Duration::from_secs(30),
             clock_drift: Duration::from_secs(5),
             trusting_period: Some(Duration::from_secs(14 * 24 * 3600)),
+            unbonding_period: None,
             trust_threshold: Default::default(),
-            gas_price: config::GasPrice::new(0.001, "stake".to_string()),
+            gas_price: config::GasPrice::new(0.003, "stake".to_string()),
             packet_filter: Default::default(),
             address_type: chain_type.address_type(),
             memo_prefix: Default::default(),
