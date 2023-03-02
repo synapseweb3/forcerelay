@@ -347,6 +347,33 @@ impl ChainEndpoint for CkbChain {
         let rpc_client = Arc::new(RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc));
         let storage = Storage::new(&config.data_dir)?;
 
+        // check contract and lock type_id_args wether are on-chain deployed
+        #[cfg(not(test))]
+        {
+            use ckb_sdk::constants::TYPE_ID_CODE_HASH;
+            use ckb_types::prelude::Pack;
+            use prelude::CellSearcher;
+
+            let contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
+                &TYPE_ID_CODE_HASH.pack(),
+                &config.lightclient_contract_typeargs.as_bytes().to_owned(),
+            ))?;
+            if contract_cell.is_none() {
+                return Err(Error::other_error(
+                    "invalid `lightclient_contract_typeargs` option".to_owned(),
+                ));
+            }
+            let lock_cell = rt.block_on(rpc_client.search_cell_by_typescript(
+                &TYPE_ID_CODE_HASH.pack(),
+                &config.lightclient_lock_typeargs.as_bytes().to_owned(),
+            ))?;
+            if lock_cell.is_none() {
+                return Err(Error::other_error(
+                    "invalid `lightclient_lock_typeargs` conig".to_owned(),
+                ));
+            }
+        }
+
         #[cfg(test)]
         let keybase = KeyRing::new(Store::Memory, "ckb", &config.id).map_err(Error::key_base)?;
 

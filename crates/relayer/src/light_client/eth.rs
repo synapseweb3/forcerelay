@@ -50,6 +50,7 @@ use self::utils::is_next_committee_proof_valid;
 
 pub const MAX_REQUEST_LIGHT_CLIENT_UPDATES: u8 = 128;
 pub const MAX_CACHED_UPDATES: usize = 32 * 1024;
+pub const MAX_REQUEST_UPDATES: u64 = 64;
 
 fn calc_epoch(slot: u64) -> u64 {
     slot / 32
@@ -157,10 +158,7 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
         Ok(())
     }
 
-    pub async fn get_finality_update(
-        &mut self,
-        finality_update_slot: u64,
-    ) -> Result<Option<Update>> {
+    pub async fn get_finality_update(&self, finality_update_slot: u64) -> Result<Option<Update>> {
         let mut update = self
             .store
             .finality_updates
@@ -178,13 +176,15 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
                 }
                 Err(error) => return Err(eyre!("rpc error: {error}")),
             };
-            let new_update = Update::from_finalized_header(finalized_header);
-            self.store
-                .finality_updates
-                .insert(finality_update_slot, new_update.clone());
-            update = Some(new_update);
+            update = Some(Update::from_finalized_header(finalized_header));
         }
         Ok(update)
+    }
+
+    pub fn cache_finality_update(&mut self, update: &Update) {
+        self.store
+            .finality_updates
+            .insert(update.finalized_header.slot, update.clone());
     }
 
     async fn bootstrap(&mut self) -> Result<()> {
@@ -703,33 +703,59 @@ impl LightClient {
     }
 
     pub fn get_finality_update(&self, finality_slot: u64) -> Result<Option<Update>, Error> {
+        let mut consensus_client = self.rt.block_on(self.consensus_client.lock());
         let update = self
             .rt
-            .block_on(
-                self.rt
-                    .block_on(self.consensus_client.lock())
-                    .get_finality_update(finality_slot),
-            )
+            .block_on(consensus_client.get_finality_update(finality_slot))
             .map_err(|e| Error::rpc_response(e.to_string()))?;
+        if let Some(update) = &update {
+            consensus_client.cache_finality_update(update);
+        }
         Ok(update)
     }
 
     pub fn get_finality_updates_from(
         &self,
         mut finality_slot: u64,
-        limit: u64,
+        mut limit: u64,
     ) -> Result<Vec<Update>, Error> {
         let mut updates = vec![];
-        let is_limit = limit != 0;
-        let mut count = 0;
-        while let Some(update) = self.get_finality_update(finality_slot)? {
-            updates.push(update);
-            finality_slot += 1;
-            count += 1;
-            if is_limit && count == limit {
-                break;
+        let mut consensus_client = self.rt.block_on(self.consensus_client.lock());
+        let fetch_updates = |end, slot| {
+            let futures = (0..end)
+                .map(|i| consensus_client.get_finality_update(slot + i))
+                .collect::<Vec<_>>();
+            self.rt
+                .block_on(futures::future::join_all(futures))
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+        };
+        while limit >= MAX_REQUEST_UPDATES {
+            let mut partial_updates = fetch_updates(MAX_REQUEST_UPDATES, finality_slot)
+                .map_err(|e| Error::rpc_response(e.to_string()))?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            if partial_updates.len() != MAX_REQUEST_UPDATES as usize {
+                updates.append(&mut partial_updates);
+                return Ok(updates);
+            } else {
+                updates.append(&mut partial_updates);
+                finality_slot += MAX_REQUEST_UPDATES;
+                limit -= MAX_REQUEST_UPDATES;
             }
         }
+        if limit > 0 {
+            let mut partial_updates = fetch_updates(limit, finality_slot)
+                .map_err(|e| Error::rpc_response(e.to_string()))?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            updates.append(&mut partial_updates);
+        }
+        updates
+            .iter()
+            .for_each(|update| consensus_client.cache_finality_update(update));
         Ok(updates)
     }
 }
@@ -1049,7 +1075,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_header() {
-        let mut client = get_client().await;
+        let client = get_client().await;
         let update = client.get_finality_update(0).await.unwrap();
         assert!(update.is_some());
         assert_eq!(update.unwrap().finalized_header.slot, 5595002);

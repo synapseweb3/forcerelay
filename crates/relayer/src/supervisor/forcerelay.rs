@@ -11,9 +11,9 @@ use crate::client_state::IdentifiedAnyClientState;
 use crate::config::ChainConfig;
 use crate::error::{Error, ErrorDetail::LightClientVerification};
 use crate::event::monitor::EventBatch;
-use tendermint_light_client::errors::ErrorDetail::MissingLastBlockId;
+use tendermint_light_client::errors::ErrorDetail;
 
-const MAX_HEADERS_IN_BATCH: u64 = 128;
+const MAX_HEADERS_IN_BATCH: u64 = 256;
 const MAX_SLEEP_SECONDS: u64 = 5;
 const MAX_RETRY_NUMBER: u8 = 5;
 
@@ -214,8 +214,16 @@ fn send_messages<Chain: ChainHandle>(
 
 fn extract_missing_slot_from_error(error: &Error) -> Option<u64> {
     if let LightClientVerification(verify_error) = error.detail() {
-        if let MissingLastBlockId(height) = &verify_error.source {
-            return Some(height.height.into());
+        match &verify_error.source {
+            ErrorDetail::MissingLastBlockId(detail) => return Some(detail.height.into()),
+            ErrorDetail::TargetLowerThanTrustedState(detail) => panic!(
+                "base slot mismatch: on-chain base slot {}, native base slot {}",
+                detail.target_height, detail.trusted_height
+            ),
+            _ => panic!(
+                "unsupported LightClientVerification error: {}",
+                verify_error.source
+            ),
         }
     }
     error!("unexpected error: {error}");
