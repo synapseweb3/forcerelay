@@ -19,7 +19,7 @@ use crate::conclude::Output;
 use crate::prelude::*;
 
 #[derive(Clone, Command, Debug, Parser, PartialEq, Eq)]
-pub struct ForcerelayCmd {
+pub struct EthCkbCmd {
     #[clap(
         long = "ethereum-chain-id",
         required = true,
@@ -35,7 +35,7 @@ pub struct ForcerelayCmd {
     ckb_chain: ChainId,
 }
 
-impl Runnable for ForcerelayCmd {
+impl Runnable for EthCkbCmd {
     fn run(&self) {
         let config = (*app_config()).clone();
         let registry = SharedRegistry::<CachingChainHandle>::new(config);

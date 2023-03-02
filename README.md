@@ -68,7 +68,7 @@ lightclient_contract_typeargs = "0x81e682d4d6db6b6e552f5ae9db6fcba6dfc395930ff62
 key_name = "ckb_key_name"
 ```
 
-Run command `hermes forcerelay --ethereum-chain-id ibc-eth-0 --ckb-chain-id ibc-ckb-0` to start up relay of ETH headers to CKB network.
+Run command `forcerelay eth_ckb --ethereum-chain-id ibc-eth-0 --ckb-chain-id ibc-ckb-0` to start up relay of ETH headers to CKB network.
 
 Warn: relayer is still under rapid development and the configuration example and command above may be outdated.
 

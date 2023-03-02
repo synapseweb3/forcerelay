@@ -19,9 +19,9 @@ mod version;
 
 use self::{
     clear::ClearCmds, completions::CompletionsCmd, config::ConfigCmd, create::CreateCmds,
-    fee::FeeCmd, forcerelay::ForcerelayCmd, health::HealthCheckCmd, keys::KeysCmd,
-    listen::ListenCmd, misbehaviour::MisbehaviourCmd, query::QueryCmd, start::StartCmd, tx::TxCmd,
-    update::UpdateCmds, upgrade::UpgradeCmds, version::VersionCmd,
+    fee::FeeCmd, forcerelay::EthCkbCmd, health::HealthCheckCmd, keys::KeysCmd, listen::ListenCmd,
+    misbehaviour::MisbehaviourCmd, query::QueryCmd, start::StartCmd, tx::TxCmd, update::UpdateCmds,
+    upgrade::UpgradeCmds, version::VersionCmd,
 };
 
 use core::time::Duration;
@@ -100,7 +100,7 @@ pub enum CliCmd {
     Completions(CompletionsCmd),
 
     /// Relay ETH headers to CKB and maintain them in CKB contract
-    Forcerelay(ForcerelayCmd),
+    EthCkb(EthCkbCmd),
 }
 
 /// This trait allows you to define how application configuration is loaded.

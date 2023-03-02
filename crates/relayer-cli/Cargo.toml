@@ -12,10 +12,10 @@ rust-version = "1.65"
 description  = """
   Hermes is an IBC Relayer written in Rust
 """
-default-run = "hermes"
+default-run = "forcerelay"
 
 [[bin]]
-name = "hermes"
+name = "forcerelay"
 
 [features]
 default     = ["telemetry", "rest-server", "std", "eyre_tracer",]

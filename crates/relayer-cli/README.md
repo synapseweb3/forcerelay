@@ -1,4 +1,4 @@
-# Hermes: IBC Relayer CLI
+# Forcerelay: IBC Relayer CLI
 
 [![Crate][crate-image]][crate-link]
 [![Docs][docs-image]][docs-link]
@@ -9,11 +9,10 @@
 ![Rust 1.51+][rustc-version]
 
 This is the repository for the CLI of the IBC Relayer built in Rust, called
-`hermes`.
+`Forcerelay`. Forcerelay is based on `hermes`.
 
 For any information about the relayer binary, please read the comprehensive
 guide available at [hermes.informal.systems](https://hermes.informal.systems).
-
 
 ## License
 

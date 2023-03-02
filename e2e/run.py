@@ -209,9 +209,9 @@ def main():
                         type=Path)
 
     parser.add_argument('--cmd',
-                        help='command to run the relayer (default: cargo run --bin hermes --)',
+                        help='command to run the relayer (default: cargo run --bin forcerelay --)',
                         metavar='CMD',
-                        default='cargo run --bin hermes --')
+                        default='cargo run --bin forcerelay --')
 
     parser.add_argument('--log-level',
                         help='minimum log level (default: debug)',
