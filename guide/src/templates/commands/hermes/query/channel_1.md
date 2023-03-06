@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] query channel [[#SUBCOMMAND]]
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] query channel [[#SUBCOMMAND]]

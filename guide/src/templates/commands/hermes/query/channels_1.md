@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] query channels[[#OPTIONS]] --chain [[#CHAIN_ID]]
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] query channels[[#OPTIONS]] --chain [[#CHAIN_ID]]

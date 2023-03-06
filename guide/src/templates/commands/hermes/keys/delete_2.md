@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] keys delete --chain [[#CHAIN_ID]] --all
+-n hermes keys delete --chain [[#CHAIN_ID]] --all

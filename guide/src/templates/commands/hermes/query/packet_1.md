@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] query packet [[#SUBCOMMAND]]
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] query packet [[#SUBCOMMAND]]

@@ -3,7 +3,7 @@ Clear outstanding packets (i.e., packet-recv and packet-ack) on a given channel 
 The channel is identified by the chain, port, and channel IDs at one of its ends
 
 USAGE:
-    hermes clear packets [OPTIONS] --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID>
+    forcerelay clear packets [OPTIONS] --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID>
 
 OPTIONS:
         --counterparty-key-name <COUNTERPARTY_KEY_NAME>

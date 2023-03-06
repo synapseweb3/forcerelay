@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] clear packets[[#OPTIONS]] --chain [[#CHAIN_ID]] --port [[#PORT_ID]] --channel [[#CHANNEL_ID]]
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] clear packets[[#OPTIONS]] --chain [[#CHAIN_ID]] --port [[#PORT_ID]] --channel [[#CHANNEL_ID]]

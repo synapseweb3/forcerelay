@@ -2,7 +2,7 @@ DESCRIPTION:
 Validate Hermes configuration file
 
 USAGE:
-    hermes config <SUBCOMMAND>
+    forcerelay config <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

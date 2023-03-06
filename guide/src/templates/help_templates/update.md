@@ -2,7 +2,7 @@ DESCRIPTION:
 Update objects (clients) on chains
 
 USAGE:
-    hermes update <SUBCOMMAND>
+    forcerelay update <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

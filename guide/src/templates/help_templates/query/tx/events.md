@@ -2,7 +2,7 @@ DESCRIPTION:
 Query the events emitted by transaction
 
 USAGE:
-    hermes query tx events --chain <CHAIN_ID> --hash <HASH>
+    forcerelay query tx events --chain <CHAIN_ID> --hash <HASH>
 
 OPTIONS:
     -h, --help    Print help information

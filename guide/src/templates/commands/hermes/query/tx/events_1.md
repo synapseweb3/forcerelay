@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] query tx events --chain [[#CHAIN_ID]] --hash [[#HASH]]
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] query tx events --chain [[#CHAIN_ID]] --hash [[#HASH]]

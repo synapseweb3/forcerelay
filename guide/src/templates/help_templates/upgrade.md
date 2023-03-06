@@ -2,7 +2,7 @@ DESCRIPTION:
 Upgrade objects (clients) after chain upgrade
 
 USAGE:
-    hermes upgrade <SUBCOMMAND>
+    forcerelay upgrade <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

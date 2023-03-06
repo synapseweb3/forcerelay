@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] completions --shell [[#SHELL]]
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] completions --shell [[#SHELL]]

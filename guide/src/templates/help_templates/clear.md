@@ -2,7 +2,7 @@ DESCRIPTION:
 Clear objects, such as outstanding packets on a channel
 
 USAGE:
-    hermes clear <SUBCOMMAND>
+    forcerelay clear <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

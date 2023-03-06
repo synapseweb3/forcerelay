@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] keys list --chain [[#CHAIN_ID]]
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] keys list --chain [[#CHAIN_ID]]

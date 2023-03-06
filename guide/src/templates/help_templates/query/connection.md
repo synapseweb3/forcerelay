@@ -2,7 +2,7 @@ DESCRIPTION:
 Query information about connections
 
 USAGE:
-    hermes query connection <SUBCOMMAND>
+    forcerelay query connection <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

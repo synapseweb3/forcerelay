@@ -2,7 +2,7 @@ DESCRIPTION:
 Query the client consensus state
 
 USAGE:
-    hermes query client consensus [OPTIONS] --chain <CHAIN_ID> --client <CLIENT_ID>
+    forcerelay query client consensus [OPTIONS] --chain <CHAIN_ID> --client <CLIENT_ID>
 
 OPTIONS:
         --consensus-height <CONSENSUS_HEIGHT>

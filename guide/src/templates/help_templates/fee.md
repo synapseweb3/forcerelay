@@ -2,7 +2,7 @@ DESCRIPTION:
 Interact with the fee middleware
 
 USAGE:
-    hermes fee <SUBCOMMAND>
+    forcerelay fee <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

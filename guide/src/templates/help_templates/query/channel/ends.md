@@ -2,7 +2,7 @@ DESCRIPTION:
 Query channel ends and underlying connection and client objects
 
 USAGE:
-    hermes query channel ends [OPTIONS] --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID>
+    forcerelay query channel ends [OPTIONS] --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID>
 
 OPTIONS:
     -h, --help               Print help information

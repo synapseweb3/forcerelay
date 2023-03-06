@@ -2,7 +2,7 @@ DESCRIPTION:
 Update an IBC client
 
 USAGE:
-    hermes update client [OPTIONS] --host-chain <HOST_CHAIN_ID> --client <CLIENT_ID>
+    forcerelay update client [OPTIONS] --host-chain <HOST_CHAIN_ID> --client <CLIENT_ID>
 
 OPTIONS:
     -h, --help

@@ -2,7 +2,7 @@ DESCRIPTION:
 Create and send IBC transactions
 
 USAGE:
-    hermes tx <SUBCOMMAND>
+    forcerelay tx <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

@@ -2,7 +2,7 @@ DESCRIPTION:
 Validate the relayer configuration
 
 USAGE:
-    hermes config validate
+    forcerelay config validate
 
 OPTIONS:
     -h, --help    Print help information

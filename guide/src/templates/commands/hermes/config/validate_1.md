@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] config validate
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] config validate

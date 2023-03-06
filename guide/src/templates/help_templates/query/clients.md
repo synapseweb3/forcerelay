@@ -2,7 +2,7 @@ DESCRIPTION:
 Query the identifiers of all clients on a chain
 
 USAGE:
-    hermes query clients [OPTIONS] --host-chain <HOST_CHAIN_ID>
+    forcerelay query clients [OPTIONS] --host-chain <HOST_CHAIN_ID>
 
 OPTIONS:
     -h, --help

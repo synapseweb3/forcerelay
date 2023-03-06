@@ -2,7 +2,7 @@ DESCRIPTION:
 Query information about packets
 
 USAGE:
-    hermes query packet <SUBCOMMAND>
+    forcerelay query packet <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

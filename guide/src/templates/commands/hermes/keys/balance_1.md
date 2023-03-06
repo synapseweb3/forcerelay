@@ -1,1 +1,1 @@
-[[#BINARY hermes]][[#GLOBALOPTIONS]] keys balance[[#OPTIONS]] --chain [[#CHAIN_ID]]
+-n [[#BINARY forcerelay]][[#GLOBALOPTIONS]] keys balance[[#OPTIONS]] --chain [[#CHAIN_ID]]
