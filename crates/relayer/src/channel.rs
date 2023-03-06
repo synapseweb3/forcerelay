@@ -42,7 +42,7 @@ pub mod error;
 pub mod version;
 use version::Version;
 
-mod handshake_retry {
+pub mod channel_handshake_retry {
     //! Provides utility methods and constants to configure the retry behavior
     //! for the channel handshake algorithm.
 
@@ -702,23 +702,26 @@ impl<ChainA: ChainHandle, ChainB: ChainHandle> Channel<ChainA, ChainB> {
     fn handshake(&mut self) -> Result<(), ChannelError> {
         let max_block_times = self.max_block_times()?;
 
-        retry_with_index(handshake_retry::default_strategy(max_block_times), |_| {
-            if let Err(e) = self.do_chan_open_handshake() {
-                if e.is_expired_or_frozen_error() {
-                    RetryResult::Err(e)
+        retry_with_index(
+            channel_handshake_retry::default_strategy(max_block_times),
+            |_| {
+                if let Err(e) = self.do_chan_open_handshake() {
+                    if e.is_expired_or_frozen_error() {
+                        RetryResult::Err(e)
+                    } else {
+                        RetryResult::Retry(e)
+                    }
                 } else {
-                    RetryResult::Retry(e)
+                    RetryResult::Ok(())
                 }
-            } else {
-                RetryResult::Ok(())
-            }
-        })
+            },
+        )
         .map_err(|err| {
             error!("failed to open channel after {} retries", err.tries);
 
-            handshake_retry::from_retry_error(
+            channel_handshake_retry::from_retry_error(
                 err,
-                format!("failed to finish channel handshake for {:?}", self),
+                format!("failed to finish channel handshake for {self:?}"),
             )
         })?;
 
@@ -748,6 +751,7 @@ impl<ChainA: ChainHandle, ChainB: ChainHandle> Channel<ChainA, ChainB> {
         state: State,
     ) -> Result<(Option<IbcEvent>, Next), ChannelError> {
         let event = match (state, self.counterparty_state()?) {
+            // Open handshake steps
             (State::Init, State::Uninitialized) => Some(self.build_chan_open_try_and_send()?),
             (State::Init, State::Init) => Some(self.build_chan_open_try_and_send()?),
             (State::TryOpen, State::Init) => Some(self.build_chan_open_ack_and_send()?),
@@ -759,14 +763,19 @@ impl<ChainA: ChainHandle, ChainB: ChainHandle> Channel<ChainA, ChainB> {
             // return anyway as the final step is to be done by the counterparty worker.
             (State::TryOpen, State::Open) => return Ok((None, Next::Abort)),
 
+            // Close handshake steps
+            (State::Closed, State::Closed) => return Ok((None, Next::Abort)),
+            (State::Closed, _) => Some(self.build_chan_close_confirm_and_send()?),
+
             _ => None,
         };
 
-        // Abort if the channel is at OpenAck or OpenConfirm stage, as there is nothing more for the worker to do
+        // Abort if the channel is at OpenAck, OpenConfirm or CloseConfirm stage, as there is
+        // nothing more for the worker to do
         match event {
-            Some(IbcEvent::OpenConfirmChannel(_)) | Some(IbcEvent::OpenAckChannel(_)) => {
-                Ok((event, Next::Abort))
-            }
+            Some(IbcEvent::OpenConfirmChannel(_))
+            | Some(IbcEvent::OpenAckChannel(_))
+            | Some(IbcEvent::CloseConfirmChannel(_)) => Ok((event, Next::Abort)),
             _ => Ok((event, Next::Continue)),
         }
     }
@@ -799,6 +808,7 @@ impl<ChainA: ChainHandle, ChainB: ChainHandle> Channel<ChainA, ChainB> {
             IbcEvent::OpenTryChannel(_) => State::TryOpen,
             IbcEvent::OpenAckChannel(_) => State::Open,
             IbcEvent::OpenConfirmChannel(_) => State::Open,
+            IbcEvent::CloseInitChannel(_) => State::Closed,
             _ => State::Uninitialized,
         };
 

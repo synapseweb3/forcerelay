@@ -110,6 +110,7 @@ impl CkbReader for RpcClient {
         let resp = TransactionWithStatusResponse {
             transaction: Some(transaction),
             tx_status: TxStatus::committed(hash.clone()),
+            cycles: None,
         };
         Box::pin(async { Ok(Some(resp)) })
     }

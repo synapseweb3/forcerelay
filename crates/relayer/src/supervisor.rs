@@ -337,6 +337,7 @@ fn relay_on_object<Chain: ChainHandle>(
         Object::Channel(chan) => client_state_filter.control_chan_object(registry, chan),
         Object::Packet(packet) => client_state_filter.control_packet_object(registry, packet),
         Object::Wallet(_wallet) => Ok(Permission::Allow),
+        Object::CrossChainQuery(_) => Ok(Permission::Allow),
     };
 
     match client_filter_outcome {
@@ -450,7 +451,12 @@ pub fn collect_events(
                             .clone()
                             .channel_attributes()
                             .and_then(|attr| {
-                                Object::channel_from_chan_open_events(&attr, src_chain).ok()
+                                Object::channel_from_chan_open_events(
+                                    &attr,
+                                    src_chain,
+                                    mode.connections.enabled,
+                                )
+                                .ok()
                             })
                     },
                 );
@@ -470,7 +476,14 @@ pub fn collect_events(
                     &mut collected,
                     event_with_height.clone(),
                     mode.channels.enabled,
-                    || Object::channel_from_chan_open_events(&attributes, src_chain).ok(),
+                    || {
+                        Object::channel_from_chan_open_events(
+                            &attributes,
+                            src_chain,
+                            mode.connections.enabled,
+                        )
+                        .ok()
+                    },
                 );
             }
             IbcEvent::OpenConfirmChannel(open_confirm) => {
@@ -513,6 +526,14 @@ pub fn collect_events(
                     event_with_height.clone(),
                     mode.packets.enabled,
                     || Object::for_close_init_channel(packet, src_chain).ok(),
+                );
+            }
+            IbcEvent::CrossChainQueryPacket(ref packet) => {
+                collect_event(
+                    &mut collected,
+                    event_with_height.clone(),
+                    mode.packets.enabled,
+                    || Object::for_cross_chain_query_packet(packet, src_chain).ok(),
                 );
             }
             _ => (),

@@ -12,6 +12,7 @@ pub mod client_refresh;
 pub mod client_settings;
 pub mod client_upgrade;
 pub mod connection_delay;
+pub mod consensus_states;
 pub mod denom_trace;
 pub mod error_events;
 pub mod execute_schedule;
@@ -44,3 +45,6 @@ pub mod example;
 
 #[cfg(any(doc, feature = "forward-packet"))]
 pub mod forward;
+
+#[cfg(any(doc, feature = "ics31"))]
+pub mod ics31;

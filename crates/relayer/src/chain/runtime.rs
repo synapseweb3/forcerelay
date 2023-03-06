@@ -6,6 +6,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{error, Span};
 
 use ibc_relayer_types::{
+    applications::ics31_icq::response::CrossChainQueryResponse,
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::{
@@ -30,7 +31,7 @@ use crate::{
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::ChainConfig,
     connection::ConnectionMsgType,
-    consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight},
+    consensus_state::AnyConsensusState,
     denom::DenomTrace,
     error::Error,
     event::IbcEventWithHeight,
@@ -238,8 +239,8 @@ where
                             self.query_client_state(request, include_proof, reply_to)?
                         },
 
-                        ChainRequest::QueryConsensusStates { request, reply_to } => {
-                            self.query_consensus_states(request, reply_to)?
+                        ChainRequest::QueryConsensusStateHeights { request, reply_to } => {
+                            self.query_consensus_state_heights(request, reply_to)?
                         },
 
                         ChainRequest::QueryConsensusState { request, include_proof, reply_to } => {
@@ -336,6 +337,10 @@ where
 
                         ChainRequest::MaybeRegisterCounterpartyPayee { channel_id, port_id, counterparty_payee, reply_to } => {
                             self.maybe_register_counterparty_payee(&channel_id, &port_id, &counterparty_payee, reply_to)?
+                        }
+
+                        ChainRequest::CrossChainQuery { request, reply_to } => {
+                            self.cross_chain_query(request, reply_to)?
                         }
                     }
                 },
@@ -559,13 +564,13 @@ where
         reply_to.send(result).map_err(Error::send)
     }
 
-    fn query_consensus_states(
+    fn query_consensus_state_heights(
         &self,
-        request: QueryConsensusStatesRequest,
-        reply_to: ReplyTo<Vec<AnyConsensusStateWithHeight>>,
+        request: QueryConsensusStateHeightsRequest,
+        reply_to: ReplyTo<Vec<Height>>,
     ) -> Result<(), Error> {
-        let consensus_states = self.chain.query_consensus_states(request);
-        reply_to.send(consensus_states).map_err(Error::send)
+        let heights = self.chain.query_consensus_state_heights(request);
+        reply_to.send(heights).map_err(Error::send)
     }
 
     fn query_consensus_state(
@@ -812,6 +817,17 @@ where
             self.chain
                 .maybe_register_counterparty_payee(channel_id, port_id, counterparty_payee);
 
+        reply_to.send(result).map_err(Error::send)?;
+
+        Ok(())
+    }
+
+    fn cross_chain_query(
+        &self,
+        request: Vec<CrossChainQueryRequest>,
+        reply_to: ReplyTo<Vec<CrossChainQueryResponse>>,
+    ) -> Result<(), Error> {
+        let result = self.chain.cross_chain_query(request);
         reply_to.send(result).map_err(Error::send)?;
 
         Ok(())

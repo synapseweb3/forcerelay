@@ -3,6 +3,7 @@ use core::convert::TryFrom;
 
 use tokio::runtime::Runtime as TokioRuntime;
 
+use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::core::ics02_client::client_state::ClientState;
 use ibc_relayer_types::core::ics02_client::consensus_state::ConsensusState;
 use ibc_relayer_types::core::ics02_client::events::UpdateClient;
@@ -35,9 +36,9 @@ use crate::chain::tracking::TrackedMsgs;
 use crate::client_state::{AnyClientState, IdentifiedAnyClientState};
 use crate::config::ChainConfig;
 use crate::connection::ConnectionMsgType;
-use crate::consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight};
+use crate::consensus_state::AnyConsensusState;
 use crate::denom::DenomTrace;
-use crate::error::{Error, QUERY_PROOF_EXPECT_MSG};
+use crate::error::Error;
 use crate::event::IbcEventWithHeight;
 use crate::keyring::{AnySigningKeyPair, KeyRing, SigningKeyPairSized};
 use crate::light_client::AnyHeader;
@@ -202,20 +203,18 @@ pub trait ChainEndpoint: Sized {
         include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error>;
 
-    /// Performs a query to retrieve the consensus state for a specified height
-    /// `consensus_height` that the specified light client stores.
+    /// Query the consensus state at the specified height for a given client.
     fn query_consensus_state(
         &self,
         request: QueryConsensusStateRequest,
         include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error>;
 
-    /// Performs a query to retrieve all the consensus states that the specified
-    /// light client stores.
-    fn query_consensus_states(
+    /// Query the heights of every consensus state for a given client.
+    fn query_consensus_state_heights(
         &self,
-        request: QueryConsensusStatesRequest,
-    ) -> Result<Vec<AnyConsensusStateWithHeight>, Error>;
+        request: QueryConsensusStateHeightsRequest,
+    ) -> Result<Vec<ICSHeight>, Error>;
 
     fn query_upgraded_client_state(
         &self,
@@ -401,7 +400,10 @@ pub trait ChainEndpoint: Sized {
             },
             IncludeProof::Yes,
         )?;
-        let connection_proof = maybe_connection_proof.expect(QUERY_PROOF_EXPECT_MSG);
+
+        let Some(connection_proof) = maybe_connection_proof else {
+            return Err(Error::queried_proof_not_found());
+        };
 
         // Check that the connection state is compatible with the message
         match message_type {
@@ -439,7 +441,10 @@ pub trait ChainEndpoint: Sized {
                     },
                     IncludeProof::Yes,
                 )?;
-                let client_state_proof = maybe_client_state_proof.expect(QUERY_PROOF_EXPECT_MSG);
+
+                let Some(client_state_proof) = maybe_client_state_proof else {
+                    return Err(Error::queried_proof_not_found());
+                };
 
                 client_proof = Some(
                     CommitmentProofBytes::try_from(client_state_proof)
@@ -456,7 +461,11 @@ pub trait ChainEndpoint: Sized {
                         IncludeProof::Yes,
                     )?;
 
-                    maybe_consensus_state_proof.expect(QUERY_PROOF_EXPECT_MSG)
+                    let Some(consensus_state_proof) = maybe_consensus_state_proof else {
+                        return Err(Error::queried_proof_not_found());
+                    };
+
+                    consensus_state_proof
                 };
 
                 consensus_proof = Option::from(
@@ -502,7 +511,11 @@ pub trait ChainEndpoint: Sized {
             },
             IncludeProof::Yes,
         )?;
-        let channel_proof = maybe_channel_proof.expect(QUERY_PROOF_EXPECT_MSG);
+
+        let Some(channel_proof) = maybe_channel_proof else {
+            return Err(Error::queried_proof_not_found());
+        };
+
         let channel_proof_bytes =
             CommitmentProofBytes::try_from(channel_proof).map_err(Error::malformed_proof)?;
 
@@ -571,7 +584,7 @@ pub trait ChainEndpoint: Sized {
 
                 (maybe_packet_proof, None)
             }
-            PacketMsgType::TimeoutOnClose => {
+            PacketMsgType::TimeoutOnCloseUnordered => {
                 let channel_proof = {
                     let (_, maybe_channel_proof) = self.query_channel(
                         QueryChannelRequest {
@@ -581,12 +594,17 @@ pub trait ChainEndpoint: Sized {
                         },
                         IncludeProof::Yes,
                     )?;
-                    let channel_merkle_proof = maybe_channel_proof.expect(QUERY_PROOF_EXPECT_MSG);
+
+                    let Some(channel_merkle_proof) = maybe_channel_proof else {
+                        return Err(Error::queried_proof_not_found());
+                    };
+
                     Some(
                         CommitmentProofBytes::try_from(channel_merkle_proof)
                             .map_err(Error::malformed_proof)?,
                     )
                 };
+
                 let (_, maybe_packet_proof) = self.query_packet_receipt(
                     QueryPacketReceiptRequest {
                         port_id,
@@ -599,9 +617,42 @@ pub trait ChainEndpoint: Sized {
 
                 (maybe_packet_proof, channel_proof)
             }
+            PacketMsgType::TimeoutOnCloseOrdered => {
+                let channel_proof = {
+                    let (_, maybe_channel_proof) = self.query_channel(
+                        QueryChannelRequest {
+                            port_id: port_id.clone(),
+                            channel_id: channel_id.clone(),
+                            height: QueryHeight::Specific(height),
+                        },
+                        IncludeProof::Yes,
+                    )?;
+
+                    let Some(channel_merkle_proof) = maybe_channel_proof else {
+                        return Err(Error::queried_proof_not_found());
+                    };
+
+                    Some(
+                        CommitmentProofBytes::try_from(channel_merkle_proof)
+                            .map_err(Error::malformed_proof)?,
+                    )
+                };
+                let (_, maybe_packet_proof) = self.query_next_sequence_receive(
+                    QueryNextSequenceReceiveRequest {
+                        port_id,
+                        channel_id,
+                        height: QueryHeight::Specific(height),
+                    },
+                    IncludeProof::Yes,
+                )?;
+
+                (maybe_packet_proof, channel_proof)
+            }
         };
 
-        let packet_proof = maybe_packet_proof.expect(QUERY_PROOF_EXPECT_MSG);
+        let Some(packet_proof) = maybe_packet_proof else {
+            return Err(Error::queried_proof_not_found());
+        };
 
         let proofs = Proofs::new(
             CommitmentProofBytes::try_from(packet_proof).map_err(Error::malformed_proof)?,
@@ -621,4 +672,9 @@ pub trait ChainEndpoint: Sized {
         port_id: &PortId,
         counterparty_payee: &Signer,
     ) -> Result<(), Error>;
+
+    fn cross_chain_query(
+        &self,
+        requests: Vec<CrossChainQueryRequest>,
+    ) -> Result<Vec<CrossChainQueryResponse>, Error>;
 }

@@ -49,7 +49,7 @@ impl FromStr for EventFilter {
         match s {
             "NewBlock" => Ok(Self::NewBlock),
             "Tx" => Ok(Self::Tx),
-            invalid => Err(format!("unrecognized event type: {}", invalid).into()),
+            invalid => Err(format!("unrecognized event type: {invalid}").into()),
         }
     }
 }
@@ -97,18 +97,10 @@ impl Runnable for ListenCmd {
 }
 
 /// Listen to events
-
 #[instrument(skip_all, level = "error", fields(chain = %config.id()))]
 pub fn listen(config: &ChainConfig, filters: &[EventFilter]) -> eyre::Result<()> {
     let rt = Arc::new(TokioRuntime::new()?);
-    let (event_monitor, rx) = subscribe(config, rt)?;
-
-    info!(
-        "listening for queries: {}",
-        event_monitor.queries().iter().format(", "),
-    );
-
-    thread::spawn(|| event_monitor.run());
+    let rx = subscribe(config, rt)?;
 
     while let Ok(event_batch) = rx.recv() {
         match event_batch.as_ref() {
@@ -141,10 +133,7 @@ fn event_match(event: &IbcEvent, filters: &[EventFilter]) -> bool {
     filters.iter().any(|f| f.matches(event))
 }
 
-fn subscribe(
-    chain_config: &ChainConfig,
-    rt: Arc<TokioRuntime>,
-) -> eyre::Result<(EventMonitor, Subscription)> {
+fn subscribe(chain_config: &ChainConfig, rt: Arc<TokioRuntime>) -> eyre::Result<Subscription> {
     let (mut event_monitor, tx_cmd) = EventMonitor::new(
         chain_config.id().clone(),
         match chain_config {
@@ -160,9 +149,13 @@ fn subscribe(
         .init_subscriptions()
         .map_err(|e| eyre!("could not initialize subscriptions: {}", e))?;
 
-    let subscription = tx_cmd.subscribe()?;
+    let queries = event_monitor.queries();
+    info!("listening for queries: {}", queries.iter().format(", "),);
 
-    Ok((event_monitor, subscription))
+    thread::spawn(|| event_monitor.run());
+
+    let subscription = tx_cmd.subscribe()?;
+    Ok(subscription)
 }
 
 #[cfg(test)]
