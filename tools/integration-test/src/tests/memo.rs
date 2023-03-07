@@ -1,4 +1,11 @@
-use ibc_relayer::config::{cosmos::types::Memo, Config};
+//! This test asserts that transactions preserve the value of
+//! the `memo_prefix` field of the receiving chain.
+//!
+//! You can find a more thorough walkthrough of this test at
+//! `tools/test-framework/src/docs/walkthroughs/memo.rs`.
+
+use ibc_relayer::config::cosmos::types::Memo;
+use ibc_relayer::config::Config;
 use serde_json as json;
 
 use ibc_test_framework::ibc::denom::derive_ibc_denom;

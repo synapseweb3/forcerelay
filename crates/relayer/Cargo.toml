@@ -1,6 +1,6 @@
 [package]
 name         = "ibc-relayer"
-version      = "0.21.0"
+version      = "0.22.0"
 edition      = "2021"
 license      = "Apache-2.0"
 readme       = "README.md"
@@ -21,9 +21,9 @@ profiling = []
 telemetry = ["ibc-telemetry"]
 
 [dependencies]
-ibc-proto           = { version = "0.24.0" }
-ibc-telemetry       = { version = "0.21.0", path = "../telemetry", optional = true }
-ibc-relayer-types   = { version = "0.21.0", path = "../relayer-types", features = ["mocks"] }
+ibc-proto           = { version = "0.24.1" }
+ibc-telemetry       = { version = "0.22.0", path = "../telemetry", optional = true }
+ibc-relayer-types   = { version = "0.22.0", path = "../relayer-types", features = ["mocks"] }
 ibc-relayer-storage = { version = "0.1.0",  path = "../relayer-storage" }
 
 eth2_types       = { git = "https://github.com/synapseweb3/lighthouse", rev = "307ade9", package = "types" }
@@ -44,7 +44,7 @@ serde_json = { version = "1" }
 bytes = "1.3.0"
 prost = { version = "0.11" }
 tonic = { version = "0.8", features = ["tls", "tls-roots"] }
-futures = "0.3.25"
+futures = "0.3.26"
 crossbeam-channel = "0.5.5"
 hex = "0.4"
 bitcoin = { version = "0.29.1", features = ["serde"] }
@@ -64,8 +64,8 @@ signature = "1.6.0"
 anyhow = "1.0"
 semver = "1.0"
 humantime = "2.1.0"
-regex = "1.5.5"
-moka = "0.9.4"
+regex = "1.7.1"
+moka = "0.9.7"
 uuid = { version = "1.2.1", features = ["v4"] }
 bs58 = "0.4.0"
 digest = "0.10.6"
@@ -82,10 +82,10 @@ eyre = "0.6"
 ethers = { version = "1.0.0", features = ["rustls", "ws"] }
 ethers-contract = { version = "1.0.0" }
 ethers-providers = { version = "1.0.0" }
-ckb-sdk = "2.3.1"
-ckb-hash = "0.105.1"
-ckb-types = "0.105.1"
-ckb-jsonrpc-types = "0.105.1"
+ckb-sdk = "2.4.0"
+ckb-hash = "0.106.0"
+ckb-types = "0.106.0"
+ckb-jsonrpc-types = "0.106.0"
 jsonrpc-core = "18.0"
 strum = { version = "0.24.1", features = ["derive"] }
 
@@ -115,8 +115,8 @@ version = "0.28.0"
 default-features = false
 
 [dev-dependencies]
-ibc-relayer-types = { version = "0.21.0", path = "../relayer-types", features = ["mocks"] }
-serial_test = "0.9.0"
+ibc-relayer-types = { version = "0.22.0", path = "../relayer-types", features = ["mocks"] }
+serial_test = "1.0.0"
 env_logger = "0.10.0"
 tracing-subscriber = { version = "0.3.14", features = ["fmt", "env-filter", "json"] }
 test-log = { version = "0.2.10", features = ["trace"] }

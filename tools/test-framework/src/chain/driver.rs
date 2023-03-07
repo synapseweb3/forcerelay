@@ -12,6 +12,7 @@ use ibc_relayer::chain::cosmos::types::config::TxConfig;
 use ibc_relayer_types::applications::transfer::amount::Amount;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 
+use crate::chain::chain_type::ChainType;
 use crate::chain::cli::query::query_balance;
 use crate::error::Error;
 use crate::ibc::denom::Denom;
@@ -20,8 +21,6 @@ use crate::relayer::tx::new_tx_config_for_test;
 use crate::types::env::{EnvWriter, ExportEnv};
 use crate::types::wallet::WalletAddress;
 use crate::util::retry::assert_eventually_succeed;
-
-use super::chain_type::ChainType;
 
 /**
    Number of times (seconds) to try and query a wallet to reach the
@@ -118,8 +117,8 @@ impl ChainDriver {
     ) -> Result<Self, Error> {
         let tx_config = new_tx_config_for_test(
             chain_id.clone(),
-            format!("http://localhost:{}", rpc_port),
-            format!("http://localhost:{}", grpc_port),
+            format!("http://localhost:{rpc_port}"),
+            format!("http://localhost:{grpc_port}"),
             chain_type.address_type(),
         )?;
 
@@ -198,7 +197,7 @@ impl ChainDriver {
         token: &Token,
     ) -> Result<(), Error> {
         assert_eventually_succeed(
-            &format!("wallet reach {} amount {}", wallet, token),
+            &format!("wallet reach {wallet} amount {token}"),
             WAIT_WALLET_AMOUNT_ATTEMPTS,
             Duration::from_secs(1),
             || {

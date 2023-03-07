@@ -24,7 +24,9 @@ use tonic::{
 
 use ibc_relayer_storage::error::Error as StorageError;
 use ibc_relayer_types::{
-    applications::ics29_fee::error::Error as FeeError,
+    applications::{
+        ics29_fee::error::Error as FeeError, ics31_icq::error::Error as CrossChainQueryError,
+    },
     clients::ics07_tendermint::error as tendermint_error,
     core::{
         ics02_client::{client_type::ClientType, error as client_error},
@@ -290,6 +292,10 @@ define_error! {
         StorageError
             { inner: StorageError }
             |e| { format!("storage error {}", e.inner) },
+
+        Ics31
+            [ CrossChainQueryError ]
+            | _ | {"ICS 31 error"},
 
         InvalidUri
             { uri: String }
@@ -567,7 +573,10 @@ define_error! {
 
         OtherError
             { error: String }
-            |e| { e.error.clone() }
+            |e| { e.error.clone() },
+
+        QueriedProofNotFound
+            |_| { "Requested proof with query but no proof was returned." },
     }
 }
 
@@ -687,9 +696,6 @@ fn parse_sequences_in_mismatch_error_message(message: &str) -> Option<(u64, u64)
         },
     }
 }
-
-pub const QUERY_PROOF_EXPECT_MSG: &str =
-    "Internal error. Requested proof with query but no proof was returned.";
 
 #[cfg(test)]
 mod tests {

@@ -8,6 +8,7 @@ use eth_light_client_in_ckb_verification::types::{
 };
 use ibc_relayer_storage::prelude::{StorageAsMMRStore as _, StorageReader as _};
 use ibc_relayer_storage::Storage;
+use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_ckb::{
     client_state::ClientState as CkbClientState,
     consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
@@ -28,7 +29,7 @@ use ibc_relayer_types::{
         ics24_host::identifier::{ChannelId, ConnectionId, PortId},
     },
     signer::Signer,
-    Height,
+    Height as ICSHeight,
 };
 use semver::Version;
 use std::sync::{Arc, RwLock};
@@ -47,7 +48,7 @@ use crate::{
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::ckb::ChainConfig as CkbChainConfig,
     config::ChainConfig,
-    consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight},
+    consensus_state::AnyConsensusState,
     denom::DenomTrace,
     error::Error,
     event::IbcEventWithHeight,
@@ -55,6 +56,7 @@ use crate::{
     misbehaviour::MisbehaviourEvidence,
 };
 
+use super::requests::{CrossChainQueryRequest, QueryConsensusStateHeightsRequest};
 use super::tracking::{NonCosmosTrackingId as NonCosmos, TrackedMsgs, TrackingId};
 use super::{
     client::ClientSettings,
@@ -62,11 +64,10 @@ use super::{
         IncludeProof, QueryChannelClientStateRequest, QueryChannelRequest, QueryChannelsRequest,
         QueryClientConnectionsRequest, QueryClientStateRequest, QueryClientStatesRequest,
         QueryConnectionRequest, QueryConnectionsRequest, QueryConsensusStateRequest,
-        QueryConsensusStatesRequest, QueryHostConsensusStateRequest,
-        QueryNextSequenceReceiveRequest, QueryPacketAcknowledgementRequest,
-        QueryPacketAcknowledgementsRequest, QueryPacketCommitmentsRequest,
-        QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest, QueryUpgradedClientStateRequest,
-        QueryUpgradedConsensusStateRequest,
+        QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
+        QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
+        QueryPacketCommitmentsRequest, QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest,
+        QueryUpgradedClientStateRequest, QueryUpgradedConsensusStateRequest,
     },
 };
 
@@ -459,8 +460,8 @@ impl ChainEndpoint for CkbChain {
 
     fn verify_header(
         &mut self,
-        _trusted: Height,
-        _target: Height,
+        _trusted: ICSHeight,
+        _target: ICSHeight,
         _client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
         todo!()
@@ -531,10 +532,10 @@ impl ChainEndpoint for CkbChain {
         todo!()
     }
 
-    fn query_consensus_states(
+    fn query_consensus_state_heights(
         &self,
-        _request: QueryConsensusStatesRequest,
-    ) -> Result<Vec<AnyConsensusStateWithHeight>, Error> {
+        _request: QueryConsensusStateHeightsRequest,
+    ) -> Result<Vec<ICSHeight>, Error> {
         todo!()
     }
 
@@ -614,7 +615,7 @@ impl ChainEndpoint for CkbChain {
     fn query_packet_commitments(
         &self,
         _request: QueryPacketCommitmentsRequest,
-    ) -> Result<(Vec<Sequence>, Height), Error> {
+    ) -> Result<(Vec<Sequence>, ICSHeight), Error> {
         todo!()
     }
 
@@ -644,7 +645,7 @@ impl ChainEndpoint for CkbChain {
     fn query_packet_acknowledgements(
         &self,
         _request: QueryPacketAcknowledgementsRequest,
-    ) -> Result<(Vec<Sequence>, Height), Error> {
+    ) -> Result<(Vec<Sequence>, ICSHeight), Error> {
         todo!()
     }
 
@@ -686,7 +687,7 @@ impl ChainEndpoint for CkbChain {
 
     fn build_client_state(
         &self,
-        _height: Height,
+        _height: ICSHeight,
         _settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
         todo!()
@@ -701,8 +702,8 @@ impl ChainEndpoint for CkbChain {
 
     fn build_header(
         &mut self,
-        _trusted_height: Height,
-        _target_height: Height,
+        _trusted_height: ICSHeight,
+        _target_height: ICSHeight,
         _client_state: &AnyClientState,
     ) -> Result<(Self::Header, Vec<Self::Header>), Error> {
         todo!()
@@ -714,6 +715,13 @@ impl ChainEndpoint for CkbChain {
         _port_id: &PortId,
         _counterparty_payee: &Signer,
     ) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn cross_chain_query(
+        &self,
+        _requests: Vec<CrossChainQueryRequest>,
+    ) -> Result<Vec<CrossChainQueryResponse>, Error> {
         todo!()
     }
 

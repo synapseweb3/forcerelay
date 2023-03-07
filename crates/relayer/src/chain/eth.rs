@@ -1,3 +1,4 @@
+use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_eth::{
     client_state::ClientState as EthClientState,
     consensus_state::ConsensusState as EthConsensusState, header::Header as EthHeader,
@@ -17,7 +18,7 @@ use ibc_relayer_types::{
         ics24_host::identifier::{ChainId, ChannelId, ConnectionId, PortId},
     },
     signer::Signer,
-    Height,
+    Height as ICSHeight,
 };
 use semver::Version;
 use std::sync::Arc;
@@ -35,7 +36,7 @@ use crate::{
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::eth::EthChainConfig,
     config::ChainConfig,
-    consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight},
+    consensus_state::AnyConsensusState,
     denom::DenomTrace,
     error::Error,
     event::IbcEventWithHeight,
@@ -43,6 +44,7 @@ use crate::{
     misbehaviour::MisbehaviourEvidence,
 };
 
+use super::requests::{CrossChainQueryRequest, QueryConsensusStateHeightsRequest};
 use super::tracking::TrackedMsgs;
 use super::{
     client::ClientSettings,
@@ -50,11 +52,10 @@ use super::{
         IncludeProof, QueryChannelClientStateRequest, QueryChannelRequest, QueryChannelsRequest,
         QueryClientConnectionsRequest, QueryClientStateRequest, QueryClientStatesRequest,
         QueryConnectionRequest, QueryConnectionsRequest, QueryConsensusStateRequest,
-        QueryConsensusStatesRequest, QueryHostConsensusStateRequest,
-        QueryNextSequenceReceiveRequest, QueryPacketAcknowledgementRequest,
-        QueryPacketAcknowledgementsRequest, QueryPacketCommitmentsRequest,
-        QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest, QueryUpgradedClientStateRequest,
-        QueryUpgradedConsensusStateRequest,
+        QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
+        QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
+        QueryPacketCommitmentsRequest, QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest,
+        QueryUpgradedClientStateRequest, QueryUpgradedConsensusStateRequest,
     },
 };
 
@@ -135,8 +136,8 @@ impl ChainEndpoint for EthChain {
 
     fn verify_header(
         &mut self,
-        trusted: Height,
-        target: Height,
+        trusted: ICSHeight,
+        target: ICSHeight,
         client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
         self.light_client
@@ -221,10 +222,10 @@ impl ChainEndpoint for EthChain {
         todo!()
     }
 
-    fn query_consensus_states(
+    fn query_consensus_state_heights(
         &self,
-        _request: QueryConsensusStatesRequest,
-    ) -> Result<Vec<AnyConsensusStateWithHeight>, Error> {
+        _request: QueryConsensusStateHeightsRequest,
+    ) -> Result<Vec<ICSHeight>, Error> {
         todo!()
     }
 
@@ -304,7 +305,7 @@ impl ChainEndpoint for EthChain {
     fn query_packet_commitments(
         &self,
         _request: QueryPacketCommitmentsRequest,
-    ) -> Result<(Vec<Sequence>, Height), Error> {
+    ) -> Result<(Vec<Sequence>, ICSHeight), Error> {
         todo!()
     }
 
@@ -334,7 +335,7 @@ impl ChainEndpoint for EthChain {
     fn query_packet_acknowledgements(
         &self,
         _request: QueryPacketAcknowledgementsRequest,
-    ) -> Result<(Vec<Sequence>, Height), Error> {
+    ) -> Result<(Vec<Sequence>, ICSHeight), Error> {
         todo!()
     }
 
@@ -376,7 +377,7 @@ impl ChainEndpoint for EthChain {
 
     fn build_client_state(
         &self,
-        slot: Height,
+        slot: ICSHeight,
         _settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
         if let Some(update) = self
@@ -404,8 +405,8 @@ impl ChainEndpoint for EthChain {
 
     fn build_header(
         &mut self,
-        _trusted_height: Height,
-        _target_height: Height,
+        _trusted_height: ICSHeight,
+        _target_height: ICSHeight,
         _client_state: &AnyClientState,
     ) -> Result<(Self::Header, Vec<Self::Header>), Error> {
         todo!()
@@ -417,6 +418,13 @@ impl ChainEndpoint for EthChain {
         _port_id: &PortId,
         _counterparty_payee: &Signer,
     ) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn cross_chain_query(
+        &self,
+        _requests: Vec<CrossChainQueryRequest>,
+    ) -> Result<Vec<CrossChainQueryResponse>, Error> {
         todo!()
     }
 

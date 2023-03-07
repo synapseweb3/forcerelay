@@ -38,6 +38,7 @@ impl Settings {
                 user_value
             }
         };
+
         let trust_threshold = options
             .trust_threshold
             .unwrap_or_else(|| src_chain_config.cosmos().trust_threshold.into());

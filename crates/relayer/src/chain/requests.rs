@@ -15,6 +15,7 @@ use ibc_proto::ibc::core::channel::v1::{
 };
 use ibc_proto::ibc::core::client::v1::{
     QueryClientStatesRequest as RawQueryClientStatesRequest,
+    QueryConsensusStateHeightsRequest as RawQueryConsensusStateHeightsRequest,
     QueryConsensusStatesRequest as RawQueryConsensusStatesRequest,
 };
 use ibc_proto::ibc::core::connection::v1::{
@@ -22,7 +23,9 @@ use ibc_proto::ibc::core::connection::v1::{
     QueryConnectionsRequest as RawQueryConnectionsRequest,
 };
 use ibc_relayer_types::core::ics04_channel::packet::Sequence;
-use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
+use ibc_relayer_types::core::ics24_host::identifier::{
+    ChainId, ChannelId, ClientId, ConnectionId, PortId,
+};
 use ibc_relayer_types::events::WithBlockDataType;
 use ibc_relayer_types::Height;
 
@@ -70,7 +73,7 @@ impl Display for QueryHeight {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             QueryHeight::Latest => write!(f, "latest height"),
-            QueryHeight::Specific(height) => write!(f, "{}", height),
+            QueryHeight::Specific(height) => write!(f, "{height}"),
         }
     }
 }
@@ -106,9 +109,12 @@ pub struct PageRequest {
 }
 
 impl PageRequest {
-    pub fn all() -> PageRequest {
+    pub fn all() -> Self {
+        // Note: do not use u64::MAX as the limit, as it may have unintended consequences
+        // See https://github.com/informalsystems/hermes/pull/2950#issuecomment-1373733744
+
         PageRequest {
-            limit: u64::MAX,
+            limit: u32::MAX as u64,
             ..Default::default()
         }
     }
@@ -173,6 +179,21 @@ pub struct QueryConsensusStatesRequest {
 impl From<QueryConsensusStatesRequest> for RawQueryConsensusStatesRequest {
     fn from(request: QueryConsensusStatesRequest) -> Self {
         RawQueryConsensusStatesRequest {
+            client_id: request.client_id.to_string(),
+            pagination: request.pagination.map(|pagination| pagination.into()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct QueryConsensusStateHeightsRequest {
+    pub client_id: ClientId,
+    pub pagination: Option<PageRequest>,
+}
+
+impl From<QueryConsensusStateHeightsRequest> for RawQueryConsensusStateHeightsRequest {
+    fn from(request: QueryConsensusStateHeightsRequest) -> Self {
+        RawQueryConsensusStateHeightsRequest {
             client_id: request.client_id.to_string(),
             pagination: request.pagination.map(|pagination| pagination.into()),
         }
@@ -464,4 +485,14 @@ pub struct QueryClientEventRequest {
     pub event_id: WithBlockDataType,
     pub client_id: ClientId,
     pub consensus_height: Height,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct CrossChainQueryRequest {
+    pub chain_id: ChainId,
+    pub query_id: String,
+    pub query_type: String,
+    /// hex encoded query request
+    pub request: String,
+    pub height: TMBlockHeight,
 }

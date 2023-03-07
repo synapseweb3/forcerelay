@@ -6,6 +6,7 @@ use core::{
     str::FromStr,
     time::Duration,
 };
+use futures::future::join_all;
 use num_bigint::BigInt;
 use std::{cmp::Ordering, thread};
 
@@ -16,6 +17,7 @@ use tracing::{error, instrument, trace, warn};
 use ibc_proto::cosmos::base::node::v1beta1::ConfigResponse;
 use ibc_proto::cosmos::staking::v1beta1::Params as StakingParams;
 use ibc_proto::protobuf::Protobuf;
+use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_tendermint::client_state::{
     AllowUpdate, ClientState as TmClientState,
 };
@@ -51,7 +53,6 @@ use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tendermint_rpc::endpoint::status;
 use tendermint_rpc::{Client, HttpClient, Order};
 
-use crate::account::Balance;
 use crate::chain::client::ClientSettings;
 use crate::chain::cosmos::batch::{
     send_batched_messages_and_wait_check_tx, send_batched_messages_and_wait_commit,
@@ -62,6 +63,8 @@ use crate::chain::cosmos::fee::maybe_register_counterparty_payee;
 use crate::chain::cosmos::gas::{calculate_fee, mul_ceil};
 use crate::chain::cosmos::query::account::get_or_fetch_account;
 use crate::chain::cosmos::query::balance::{query_all_balances, query_balance};
+use crate::chain::cosmos::query::consensus_state::query_consensus_state_heights;
+use crate::chain::cosmos::query::custom::cross_chain_query_via_rpc;
 use crate::chain::cosmos::query::denom_trace::query_denom_trace;
 use crate::chain::cosmos::query::status::query_status;
 use crate::chain::cosmos::query::tx::{
@@ -78,9 +81,8 @@ use crate::chain::handle::Subscription;
 use crate::chain::requests::*;
 use crate::chain::tracking::TrackedMsgs;
 use crate::client_state::{AnyClientState, IdentifiedAnyClientState};
-use crate::config::cosmos::CosmosChainConfig;
 use crate::config::{parse_gas_prices, ChainConfig, GasPrice};
-use crate::consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight};
+use crate::consensus_state::AnyConsensusState;
 use crate::denom::DenomTrace;
 use crate::error::Error;
 use crate::event::monitor::{EventMonitor, TxMonitorCmd};
@@ -90,9 +92,9 @@ use crate::light_client::tendermint::LightClient as TmLightClient;
 use crate::light_client::{LightClient, Verified};
 use crate::misbehaviour::MisbehaviourEvidence;
 use crate::util::pretty::{
-    PrettyConsensusStateWithHeight, PrettyIdentifiedChannel, PrettyIdentifiedClientState,
-    PrettyIdentifiedConnection,
+    PrettyIdentifiedChannel, PrettyIdentifiedClientState, PrettyIdentifiedConnection,
 };
+use crate::{account::Balance, config::cosmos::CosmosChainConfig};
 
 pub mod batch;
 pub mod client;
@@ -335,7 +337,7 @@ impl CosmosSdkChain {
     ///     - `Err` for any other error.
     pub fn query_config_params(&self) -> Result<Option<ConfigResponse>, Error> {
         crate::time!("query_config_params");
-        crate::telemetry!(query, self.chain_id(), "query_config_params");
+        crate::telemetry!(query, &self.id(), "query_config_params");
 
         // Helper function to diagnose if the node config query is unimplemented
         // by matching on the error details.
@@ -1083,46 +1085,15 @@ impl ChainEndpoint for CosmosSdkChain {
         Ok((consensus_state, proof))
     }
 
-    /// Performs a query to retrieve the identifiers of all connections.
-    fn query_consensus_states(
+    fn query_consensus_state_heights(
         &self,
-        request: QueryConsensusStatesRequest,
-    ) -> Result<Vec<AnyConsensusStateWithHeight>, Error> {
-        crate::time!("query_consensus_states");
-        crate::telemetry!(query, self.chain_id(), "query_consensus_states");
-
-        let mut client = self
-            .block_on(
-                ibc_proto::ibc::core::client::v1::query_client::QueryClient::connect(
-                    self.grpc_addr.clone(),
-                ),
-            )
-            .map_err(Error::grpc_transport)?;
-
-        let request = tonic::Request::new(request.into());
-        let response = self
-            .block_on(client.consensus_states(request))
-            .map_err(Error::grpc_status)?
-            .into_inner();
-
-        let mut consensus_states: Vec<AnyConsensusStateWithHeight> = response
-            .consensus_states
-            .into_iter()
-            .filter_map(|cs| {
-                TryFrom::try_from(cs.clone())
-                    .map_err(|e| {
-                        warn!(
-                            "failed to parse consensus state {}. Error: {}",
-                            PrettyConsensusStateWithHeight(&cs),
-                            e
-                        )
-                    })
-                    .ok()
-            })
-            .collect();
-        consensus_states.sort_by(|a, b| a.height.cmp(&b.height));
-        consensus_states.reverse();
-        Ok(consensus_states)
+        request: QueryConsensusStateHeightsRequest,
+    ) -> Result<Vec<ICSHeight>, Error> {
+        self.block_on(query_consensus_state_heights(
+            &self.id(),
+            &self.grpc_addr,
+            request,
+        ))
     }
 
     fn query_consensus_state(
@@ -1904,6 +1875,25 @@ impl ChainEndpoint for CosmosSdkChain {
             &address,
             counterparty_payee,
         ))
+    }
+
+    fn cross_chain_query(
+        &self,
+        requests: Vec<CrossChainQueryRequest>,
+    ) -> Result<Vec<CrossChainQueryResponse>, Error> {
+        let tasks = requests
+            .into_iter()
+            .map(|req| cross_chain_query_via_rpc(&self.rpc_client, req))
+            .collect::<Vec<_>>();
+
+        let joined_tasks = join_all(tasks);
+        let results: Vec<Result<CrossChainQueryResponse, _>> = self.rt.block_on(joined_tasks);
+        let responses = results
+            .into_iter()
+            .filter_map(|req| req.ok())
+            .collect::<Vec<CrossChainQueryResponse>>();
+
+        Ok(responses)
     }
 }
 

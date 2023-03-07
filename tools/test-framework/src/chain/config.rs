@@ -17,10 +17,7 @@ pub fn set_rpc_port(config: &mut Value, port: u16) -> Result<(), Error> {
         .ok_or_else(|| eyre!("expect rpc section"))?
         .as_table_mut()
         .ok_or_else(|| eyre!("expect object"))?
-        .insert(
-            "laddr".to_string(),
-            format!("tcp://0.0.0.0:{}", port).into(),
-        );
+        .insert("laddr".to_string(), format!("tcp://0.0.0.0:{port}").into());
 
     Ok(())
 }
@@ -31,7 +28,7 @@ pub fn set_grpc_port(config: &mut Value, port: u16) -> Result<(), Error> {
         .ok_or_else(|| eyre!("expect grpc section"))?
         .as_table_mut()
         .ok_or_else(|| eyre!("expect object"))?
-        .insert("address".to_string(), format!("0.0.0.0:{}", port).into());
+        .insert("address".to_string(), format!("0.0.0.0:{port}").into());
 
     Ok(())
 }
@@ -65,10 +62,7 @@ pub fn set_p2p_port(config: &mut Value, port: u16) -> Result<(), Error> {
         .ok_or_else(|| eyre!("expect p2p section"))?
         .as_table_mut()
         .ok_or_else(|| eyre!("expect object"))?
-        .insert(
-            "laddr".to_string(),
-            format!("tcp://0.0.0.0:{}", port).into(),
-        );
+        .insert("laddr".to_string(), format!("tcp://0.0.0.0:{port}").into());
 
     Ok(())
 }
@@ -156,6 +150,81 @@ pub fn set_max_deposit_period(genesis: &mut serde_json::Value, period: &str) -> 
             serde_json::Value::String(period.to_string()),
         )
         .ok_or_else(|| eyre!("failed to update max_deposit_period in genesis file"))?;
+
+    Ok(())
+}
+
+pub fn set_staking_bond_denom(genesis: &mut serde_json::Value, denom: &str) -> Result<(), Error> {
+    let bond_denom = genesis
+        .get_mut("app_state")
+        .and_then(|app_state| app_state.get_mut("staking"))
+        .and_then(|staking| staking.get_mut("params"))
+        .and_then(|params| params.as_object_mut())
+        .ok_or_else(|| eyre!("failed to update bond_denom in genesis file"))?;
+
+    bond_denom
+        .insert(
+            "bond_denom".to_owned(),
+            serde_json::Value::String(denom.to_string()),
+        )
+        .ok_or_else(|| eyre!("failed to update bond_denom in genesis file"))?;
+
+    Ok(())
+}
+
+pub fn set_staking_max_entries(
+    genesis: &mut serde_json::Value,
+    entries: &str,
+) -> Result<(), Error> {
+    let max_entries = genesis
+        .get_mut("app_state")
+        .and_then(|app_state| app_state.get_mut("staking"))
+        .and_then(|staking| staking.get_mut("params"))
+        .and_then(|params| params.as_object_mut())
+        .ok_or_else(|| eyre!("failed to update max_entries in genesis file"))?;
+
+    max_entries
+        .insert(
+            "max_entries".to_owned(),
+            serde_json::Value::String(entries.to_string()),
+        )
+        .ok_or_else(|| eyre!("failed to update max_entries in genesis file"))?;
+
+    Ok(())
+}
+
+pub fn set_mint_mint_denom(genesis: &mut serde_json::Value, denom: &str) -> Result<(), Error> {
+    let mint_denom = genesis
+        .get_mut("app_state")
+        .and_then(|app_state| app_state.get_mut("mint"))
+        .and_then(|mint| mint.get_mut("params"))
+        .and_then(|params| params.as_object_mut())
+        .ok_or_else(|| eyre!("failed to update mint_denom in genesis file"))?;
+
+    mint_denom
+        .insert(
+            "mint_denom".to_owned(),
+            serde_json::Value::String(denom.to_string()),
+        )
+        .ok_or_else(|| eyre!("failed to update mint_denom in genesis file"))?;
+
+    Ok(())
+}
+
+pub fn set_crisis_denom(genesis: &mut serde_json::Value, crisis_denom: &str) -> Result<(), Error> {
+    let denom = genesis
+        .get_mut("app_state")
+        .and_then(|app_state| app_state.get_mut("crisis"))
+        .and_then(|crisis| crisis.get_mut("constant_fee"))
+        .and_then(|constant_fee| constant_fee.as_object_mut())
+        .ok_or_else(|| eyre!("failed to update denom in genesis file"))?;
+
+    denom
+        .insert(
+            "denom".to_owned(),
+            serde_json::Value::String(crisis_denom.to_string()),
+        )
+        .ok_or_else(|| eyre!("failed to update denom in genesis file"))?;
 
     Ok(())
 }

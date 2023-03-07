@@ -4,6 +4,7 @@ use crossbeam_channel as channel;
 use tracing::Span;
 
 use ibc_relayer_types::{
+    applications::ics31_icq::response::CrossChainQueryResponse,
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::connection::{ConnectionEnd, IdentifiedConnectionEnd},
@@ -26,7 +27,7 @@ use crate::{
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::ChainConfig,
     connection::ConnectionMsgType,
-    consensus_state::{AnyConsensusState, AnyConsensusStateWithHeight},
+    consensus_state::AnyConsensusState,
     denom::DenomTrace,
     error::Error,
     event::IbcEventWithHeight,
@@ -195,11 +196,11 @@ impl ChainHandle for BaseChainHandle {
         self.send(|reply_to| ChainRequest::QueryClientConnections { request, reply_to })
     }
 
-    fn query_consensus_states(
+    fn query_consensus_state_heights(
         &self,
-        request: QueryConsensusStatesRequest,
-    ) -> Result<Vec<AnyConsensusStateWithHeight>, Error> {
-        self.send(|reply_to| ChainRequest::QueryConsensusStates { request, reply_to })
+        request: QueryConsensusStateHeightsRequest,
+    ) -> Result<Vec<Height>, Error> {
+        self.send(|reply_to| ChainRequest::QueryConsensusStateHeights { request, reply_to })
     }
 
     fn query_consensus_state(
@@ -496,5 +497,12 @@ impl ChainHandle for BaseChainHandle {
             counterparty_payee,
             reply_to,
         })
+    }
+
+    fn cross_chain_query(
+        &self,
+        request: Vec<CrossChainQueryRequest>,
+    ) -> Result<Vec<CrossChainQueryResponse>, Error> {
+        self.send(|reply_to| ChainRequest::CrossChainQuery { request, reply_to })
     }
 }
