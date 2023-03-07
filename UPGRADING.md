@@ -1,8 +1,8 @@
-# Upgrading Hermes to a newer version
+# Upgrading Forcerelay to a newer version
 
 ## v1.0.0
 
-> These instructions assume that you are running Hermes v1.0.0-rc.2.
+> These instructions assume that you are running Forcerelay v1.0.0-rc.2.
 > If you are running an older version, please refer to the upgrading instructions
 > for the older release candidates in reverse chronological order to update to
 > v1.0.0-rc.2 first and then follow these instructions.
@@ -32,12 +32,12 @@ the relayer and the networks it is connected to.
 
 ## v1.0.0-rc.2
 
-This release is backward compatible with Hermes v1.0.0-rc.1 🎉
+This release is backward compatible with Forcerelay v1.0.0-rc.1 🎉
 
 
 ## v1.0.0-rc.1
 
-> These instructions assume that you are running Hermes v1.0.0-rc.0.
+> These instructions assume that you are running Forcerelay v1.0.0-rc.0.
 > If you are running an older version, please refer the corresponding
 > in reverse chronological order to update to v1.0.0-rc.0 first and then
 > follow these instructions.
@@ -45,7 +45,7 @@ This release is backward compatible with Hermes v1.0.0-rc.1 🎉
 ### Default value of `tx_confirmation` setting has changed
 
 The default value of the configuration `tx_confirmation`
-in Hermes `config.toml` has been changed from `true` to `false`.
+in Forcerelay `config.toml` has been changed from `true` to `false`.
 
 If you previously did not specify a value for this setting, you will
 have to set `tx_confirmation = true` in `config.toml` under
@@ -86,14 +86,14 @@ Please check the commands help or [ADR 010][adr-010] for the full updated list o
 
 ## v1.0.0-rc.0
 
-> These instructions assume that you are running Hermes v0.15.0.
+> These instructions assume that you are running Forcerelay v0.15.0.
 > If you are running an older version, please refer the corresponding
 > in reverse chronological order to update to v0.15.0 first and then
 > follow these instructions.
 
 ### Commands now use flags instead of positional arguments
 
-From this version forward, all Hermes commands now use flags exclusively instead
+From this version forward, all Forcerelay commands now use flags exclusively instead
 of positional arguments.
 
 For example, in version 0.15.0 the `create client` command would be invoked

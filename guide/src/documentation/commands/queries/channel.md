@@ -15,7 +15,7 @@ __Example__
 Query all channels on `ibc-1`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/query/channels_1.md CHAIN_ID=ibc-1}}
+{{#template ../../../templates/commands/forcerelay/query/channels_1.md CHAIN_ID=ibc-1}}
 ```
 
 ```json
@@ -60,7 +60,7 @@ __Example__
 Query the channel end of channel `channel-1` on port `transfer` on `ibc-1`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/query/channel/end_1.md CHAIN_ID=ibc-1 PORT_ID=transfer CHANNEL_ID=channel-1}}
+{{#template ../../../templates/commands/forcerelay/query/channel/end_1.md CHAIN_ID=ibc-1 PORT_ID=transfer CHANNEL_ID=channel-1}}
 ```
 
 ```json
@@ -100,7 +100,7 @@ __Example__
 Query the channel end of channel `channel-1` on port `transfer` on `ibc-0`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/query/channel/ends_1.md CHAIN_ID=ibc-0 PORT_ID=transfer CHANNEL_ID=channel-1}}
+{{#template ../../../templates/commands/forcerelay/query/channel/ends_1.md CHAIN_ID=ibc-0 PORT_ID=transfer CHANNEL_ID=channel-1}}
 ```
 
 ```json
@@ -257,7 +257,7 @@ Success: Some(
 **JSON output:**
 
 ```shell
-{{#template ../../../templates/commands/hermes/query/channel/client_1.md CHAIN_ID=<CHAIN_ID> PORT_ID=<PORT_ID> CHANNEL_ID=<CHANNEL_ID> GLOBALOPTIONS=  --json}}
+{{#template ../../../templates/commands/forcerelay/query/channel/client_1.md CHAIN_ID=<CHAIN_ID> PORT_ID=<PORT_ID> CHANNEL_ID=<CHANNEL_ID> GLOBALOPTIONS=  --json}}
 ```
 
 If the command is successful a message with the following format will be displayed:

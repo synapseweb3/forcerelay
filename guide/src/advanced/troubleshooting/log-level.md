@@ -18,15 +18,15 @@ Valid options for `log_level` are: 'error', 'warn', 'info', 'debug', 'trace'.
 These levels correspond to the tracing subcomponent of the relayer-cli,
 [see here](https://docs.rs/tracing-core/0.1.17/tracing_core/struct.Level.html).
 
-Hermes will _always_ print a last line summarizing the result of its
+Forcerelay will _always_ print a last line summarizing the result of its
 operation for queries or transactions. In addition to this last line,
 arbitrary debug, info, or other outputs may be produced.
 
 
 ## Overriding the tracing filter using `RUST_LOG`
 
-For debugging purposes, we may want to inspect which RPC queries Hermes is making.
-Hermes makes use of the `tendermint-rpc` library to issue RPC queries, but
+For debugging purposes, we may want to inspect which RPC queries Forcerelay is making.
+Forcerelay makes use of the `tendermint-rpc` library to issue RPC queries, but
 the output of this library is by default turned off in order to keep the logs more
 readable.
 
@@ -38,7 +38,7 @@ RUST_LOG=tendermint-rpc=debug,info hermes start
 ```
 
 Setting the `RUST_LOG` environment variable to `tendermint_rpc=debug,info` instructs
-Hermes to set the log level of the `tendermint_rpc` crate to `debug` and otherwise
+Forcerelay to set the log level of the `tendermint_rpc` crate to `debug` and otherwise
 use the `info` log level.
 
 > **Note:** While the `tendermint-rpc` contains a dash in its name, the logging filter

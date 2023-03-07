@@ -3,7 +3,7 @@ In addition to everything that's included in v0.8.0-pre.1, this release updates 
 and contains various bug fixes and performance improvements which make the relayer more reliable.
 
 #### Notice for operators
-A new setting was added to the Hermes configuration: `max_block_time`.
+A new setting was added to the Forcerelay configuration: `max_block_time`.
 This setting specifies the maximum time per block for this chain.
 The block time together with the clock drift are added to the source drift to estimate
 the maximum clock drift when creating a client on this chain.

@@ -10,7 +10,7 @@ homepage     = "https://hermes.informal.systems/"
 repository   = "https://github.com/informalsystems/hermes"
 rust-version = "1.65"
 description  = """
-  Rust implementation of a RESTful API server for Hermes
+  Rust implementation of a RESTful API server for Forcerelay
 """
 
 [dependencies]

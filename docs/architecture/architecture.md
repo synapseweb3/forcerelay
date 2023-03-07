@@ -10,13 +10,13 @@ Some important terms and acronyms that are commonly used include:
  * **ICS**: Refers to **I**nter**C**hain **S**tandards, which are stadardization documents that capture the specifications of the IBC protocol across multiple documents. For example, ICS02 captures the client abstraction of the IBC protocol.
  * **IBC module**: Refers to a piece of on-chain logic on an IBC-enabled chain.
  * **Relayer**: Refers to an off-chain process that is responsible for relaying packets between chains.
- * **Hermes**: Refers to the `ibc-rs` crate's particular relayer implementation. 
+ * **Forcerelay**: Refers to the `ibc-rs` crate's particular relayer implementation. 
 
 ## Bird's Eye View
 
 ![][layout-image]
 
-At its highest level, `ibc-rs` implements the InterBlockchain Communication protocol which is captured in [specifications in a separate repository][ibc-specs]. `ibc-rs` exposes modules that implement the specified protocol logic. The IBC protocol can be understood as having two separate components: on-chain and off-chain logic. The relayer, which is the main off-chain component, is a standalone process, of which Hermes is an implementation. On-chain components can be thought of as modules or smart contracts that run as part of a chain. The main on-chain components deal with the abstractions of clients, connections, and channels. 
+At its highest level, `ibc-rs` implements the InterBlockchain Communication protocol which is captured in [specifications in a separate repository][ibc-specs]. `ibc-rs` exposes modules that implement the specified protocol logic. The IBC protocol can be understood as having two separate components: on-chain and off-chain logic. The relayer, which is the main off-chain component, is a standalone process, of which Forcerelay is an implementation. On-chain components can be thought of as modules or smart contracts that run as part of a chain. The main on-chain components deal with the abstractions of clients, connections, and channels. 
 
 ## Code Map 
 
@@ -72,7 +72,7 @@ The Tendermint client implements a client verification algorithm for blockchains
 
 #### Relayer
 
-Contains utilities for testing the `ibc` crate against the Hermes IBC relayer. It acts as scaffolding for gluing the `ibc` crate with Hermes for testing purposes. 
+Contains utilities for testing the `ibc` crate against the Forcerelay IBC relayer. It acts as scaffolding for gluing the `ibc` crate with Forcerelay for testing purposes. 
 
 ##### ICS 18 - Relayer
 
@@ -84,11 +84,11 @@ This crate provides the logic for relaying datagrams between chains. The process
 
 ### `relayer-cli`
 
-A CLI wrapper around the `relayer` crate for running and issuing commands to a chain via a relayer. This crate exposes the Hermes binary. 
+A CLI wrapper around the `relayer` crate for running and issuing commands to a chain via a relayer. This crate exposes the Forcerelay binary. 
 
 ### `relayer-rest`
 
-An add-on to the CLI mainly for exposing some internal runtime details of Hermes for debugging and observability reasons. 
+An add-on to the CLI mainly for exposing some internal runtime details of Forcerelay for debugging and observability reasons. 
 
 ### `proto`
 
@@ -98,11 +98,11 @@ Consists of protobuf-generated Rust types which are necessary for interacting wi
 
 ### `proto-compiler`
 
-CLI tool to automate the compilation of proto buffers, which allows Hermes developers to go from a type specified in proto files to generate client gRPC code or server gRPC code.
+CLI tool to automate the compilation of proto buffers, which allows Forcerelay developers to go from a type specified in proto files to generate client gRPC code or server gRPC code.
 
 ### `telemetry`
 
-Used by Hermes to gather telemetry data and expose it via a Prometheus endpoint.
+Used by Forcerelay to gather telemetry data and expose it via a Prometheus endpoint.
 
 ## Cross-Cutting Concerns
 

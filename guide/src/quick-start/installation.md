@@ -1,19 +1,19 @@
-# Install Hermes
+# Install Forcerelay
 
-There are two main approaches for obtaining Hermes:
+There are two main approaches for obtaining Forcerelay:
 
 1. Installation:
    1. If you are running on a Unix machine (Linux/macOS), then the simplest
       option is to [download the latest binary](#install-by-downloading).
    2. You can also install via [Cargo](#install-via-cargo).
 
-2. Alternatively, [build Hermes directly from source](#build-from-source).
+2. Alternatively, [build Forcerelay directly from source](#build-from-source).
 
 
 ## Install by downloading
 
 Simply head to the GitHub [Releases][releases] page and download the latest
-version of Hermes binary matching your platform:
+version of Forcerelay binary matching your platform:
 - macOS: `hermes-{{#include ../templates/version.md}}-x86_64-apple-darwin.tar.gz` (or .zip),
 - Linux: `hermes-{{#include ../templates/version.md}}-x86_64-unknown-linux-gnu.tar.gz` (or .zip).
 
@@ -40,10 +40,10 @@ The step-by-step instruction below should carry you through the whole process:
 > See the ["Open Anyway" instructions from this support forum][developer-app]
 > if that is the case.
 
-You should now be able to run Hermes by invoking the `hermes` executable.
+You should now be able to run Forcerelay by invoking the `hermes` executable.
 
 ```shell
-{{#template ../templates/commands/hermes/version_1.md}}
+{{#template ../templates/commands/forcerelay/version_1.md}}
 ```
 
 Which should be:
@@ -57,8 +57,8 @@ hermes {{#include ../templates/version.md}}
 > NOTE: This approach assumes you have installed all
 > the [prerequisites](./pre-requisites.md) on your machine.
 
-Hermes is packaged in the `ibc-relayer-cli` Rust crate.
-To install the latest release of Hermes, run the following command in a terminal:
+Forcerelay is packaged in the `ibc-relayer-cli` Rust crate.
+To install the latest release of Forcerelay, run the following command in a terminal:
 
 ```shell
 cargo install ibc-relayer-cli --bin hermes --locked
@@ -76,10 +76,10 @@ This will download and build the crate `ibc-relayer-cli`, and install the
 > export PATH="$HOME/.cargo/bin:$PATH"
 > ```
 
-You should now be able to run Hermes by invoking the `hermes` executable.
+You should now be able to run Forcerelay by invoking the `hermes` executable.
 
 ```shell
-{{#template ../templates/commands/hermes/version_1.md}}
+{{#template ../templates/commands/forcerelay/version_1.md}}
 ```
 
 Which should be:
@@ -124,8 +124,8 @@ cargo build --release --bin hermes
 
 <a name="telemetry-support"></a>
 
-> By default, Hermes bundles a [telemetry service and server](../documentation/telemetry/index.md).
-> To build Hermes without telemetry support, and get a smaller executable,
+> By default, Forcerelay bundles a [telemetry service and server](../documentation/telemetry/index.md).
+> To build Forcerelay without telemetry support, and get a smaller executable,
 > supply the `--no-default-features flag` to `cargo build`:
 >
 > ```shell
@@ -168,7 +168,7 @@ alias hermes='cargo run --manifest-path $IBCFOLDER/Cargo.toml --release --bin he
 
 ## Shell auto-completions
 
-The `completions` sub-command of Hermes can be used to output a completion script
+The `completions` sub-command of Forcerelay can be used to output a completion script
 for a choice of widely used command-line shells.
 Refer to `hermes completions --help` for the list. Some shell-specific examples
 of setting up auto-completion with this command are provided below; check your
@@ -178,19 +178,19 @@ and any further necessary modifications to the shell's startup files.
 ### Bash
 
 ```sh
-{{#template ../templates/commands/hermes/completions_1.md SHELL=bash}} > ~/.local/share/bash-completion/completions/hermes
+{{#template ../templates/commands/forcerelay/completions_1.md SHELL=bash}} > ~/.local/share/bash-completion/completions/hermes
 ```
 
 On a macOS installation with Homebrew `bash-completion` formula installed, use 
 
 ```sh
-{{#template ../templates/commands/hermes/completions_1.md SHELL=bash}} > $(brew --prefix)/etc/bash_completion.d/hermes.bash-completion
+{{#template ../templates/commands/forcerelay/completions_1.md SHELL=bash}} > $(brew --prefix)/etc/bash_completion.d/hermes.bash-completion
 ```
 
 ### Zsh
 
 ```sh
-{{#template ../templates/commands/hermes/completions_1.md SHELL=zsh}} > ~/.zfunc/_hermes
+{{#template ../templates/commands/forcerelay/completions_1.md SHELL=zsh}} > ~/.zfunc/_hermes
 ```
 
 To make the shell load the script on initialization, add the directory to `fpath`
@@ -202,7 +202,7 @@ fpath+=~/.zfunc
 
 ## Next Steps
 
-Go to the [`Tutorials`](../tutorials/index.md) section to learn the basics of Hermes.
+Go to the [`Tutorials`](../tutorials/index.md) section to learn the basics of Forcerelay.
 
 
 [releases]: https://github.com/informalsystems/hermes/releases

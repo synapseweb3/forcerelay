@@ -25,11 +25,11 @@ It is possible for two chains to use the same identifier to designate two differ
 
 A relay path refers to a specific channel used to interconnect two chains and over which packets are being sent.
 
-Hermes can be started to listen for packet events on the two ends of multiple paths and relay packets over these paths.
+Forcerelay can be started to listen for packet events on the two ends of multiple paths and relay packets over these paths.
 This can be done over a new path or over existing paths.
 
 >__NOTE__: The following steps decompose every step from the creation of the clients to the channel handshake for educational purposes. 
-> More realistically, you'd use the command `{{#template ../../templates/commands/hermes/create/channel_2.md A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1 A_PORT_ID=transfer B_PORT_ID=transfer}}` in order to create a new client on each chain, establish a connection, and open a channel, all with a single command.
+> More realistically, you'd use the command `{{#template ../../templates/commands/forcerelay/create/channel_2.md A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1 A_PORT_ID=transfer B_PORT_ID=transfer}}` in order to create a new client on each chain, establish a connection, and open a channel, all with a single command.
 
 You will need to first create a client on both chains and then establish a connection between them. It is possible to have multiple connections between clients, which can be useful in order to support multiple versions of IBC. Finally, you need to create channels over a connection to identify the source and destination modules. You can learn more in the [cosmos academy tutorial](https://tutorials.cosmos.network/academy/3-ibc/1-what-is-ibc.html).
 
@@ -38,7 +38,7 @@ You will need to first create a client on both chains and then establish a conne
 First, create a client on `ibc-1` tracking the state of `ibc-0`. It will be assigned `07-tendermint-0` as its identifier:
 
 ```shell
-{{#template ../../templates/commands/hermes/create/client_1.md HOST_CHAIN_ID=ibc-1 REFERENCE_CHAIN_ID=ibc-0}}
+{{#template ../../templates/commands/forcerelay/create/client_1.md HOST_CHAIN_ID=ibc-1 REFERENCE_CHAIN_ID=ibc-0}}
 ```
 
 If the command is successful, the output should be similar to:
@@ -62,7 +62,7 @@ SUCCESS CreateClient(
 Now, create a client on `ibc-0` tracking `ibc-1`:
 
 ```shell
-{{#template ../../templates/commands/hermes/create/client_1.md HOST_CHAIN_ID=ibc-0 REFERENCE_CHAIN_ID=ibc-1}}
+{{#template ../../templates/commands/forcerelay/create/client_1.md HOST_CHAIN_ID=ibc-0 REFERENCE_CHAIN_ID=ibc-1}}
 ```
 If the command is successful, the output should be similar to:
 ```json
@@ -90,7 +90,7 @@ As you can see, the identifier is also `07-tendermint-0` because the client-id i
 After creating clients on both chains, you have to establish a connection between them. Both chains will assign `connection-0` as the identifier of their first connection:
 
 ```shell
-{{#template ../../templates/commands/hermes/create/connection_2.md A_CHAIN_ID=ibc-0 A_CLIENT_ID=07-tendermint-0 B_CLIENT_ID=07-tendermint-0}}
+{{#template ../../templates/commands/forcerelay/create/connection_2.md A_CHAIN_ID=ibc-0 A_CLIENT_ID=07-tendermint-0 B_CLIENT_ID=07-tendermint-0}}
 ```
 >__NOTE__: The command does not take `--b-chain` as argument as `--a-client` can only track one chain (`ibc-1`). 
 
@@ -304,7 +304,7 @@ SUCCESS Connection {
 Finally, after the connection has been established, you can now open a new channel on top of it. Both chains will assign `channel-0` as the identifier of their first channel:
 
 ```shell
-{{#template ../../templates/commands/hermes/create/channel_1.md A_CHAIN_ID=ibc-0 A_CONNECTION_ID=connection-0 A_PORT_ID=transfer B_PORT_ID=transfer}}
+{{#template ../../templates/commands/forcerelay/create/channel_1.md A_CHAIN_ID=ibc-0 A_CONNECTION_ID=connection-0 A_PORT_ID=transfer B_PORT_ID=transfer}}
 ```
 >__NOTE__: Again, you do not need to specify the counterparty chain as a connection can only be established with a single counterparty. The `port` specifies the protocol which will be used on this channel. 
 
@@ -547,7 +547,7 @@ SUCCESS Channel {
 You can visualize the topology of the current network with: 
 
 ```shell
-{{#template ../../templates/commands/hermes/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-0}}
+{{#template ../../templates/commands/forcerelay/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-0}}
 ```
 
 If all the commands were successful, this command should output : 

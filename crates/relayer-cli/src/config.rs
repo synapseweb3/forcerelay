@@ -1,4 +1,4 @@
-//! Validation code for the Hermes configuration file.
+//! Validation code for the Forcerelay configuration file.
 //!
 //! See instructions in `commands.rs` to specify the path to your
 //! application's configuration file and/or command-line options
@@ -22,7 +22,7 @@ pub fn config_path() -> Option<PathBuf> {
 }
 
 // Specifies all the possible syntactic errors
-// that a Hermes configuration file could contain.
+// that a Forcerelay configuration file could contain.
 define_error! {
     Error {
         ZeroChain
@@ -114,7 +114,7 @@ pub fn validate_config(config: &Config) -> Result<(), Diagnostic<Error>> {
 fn validate_mode(mode: &ModeConfig) -> Result<(), Diagnostic<Error>> {
     if mode.all_disabled() {
         return Err(Diagnostic::Warning(Error::invalid_mode(
-            "all operation modes of Hermes are disabled, relayer won't perform any action aside from subscribing to events".to_string(),
+            "all operation modes of Forcerelay are disabled, relayer won't perform any action aside from subscribing to events".to_string(),
         )));
     }
 

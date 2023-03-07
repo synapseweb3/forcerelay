@@ -1,4 +1,4 @@
-This release notably speeds up the startup time of Hermes,
+This release notably speeds up the startup time of Forcerelay,
 adds options to the `create client` command to customize the client parameters,
 makes the deposit denomination configurable in `tx raw upgrade-chain` via a new `--denom` flag,
 and adds a `completions` CLI command to generate shell auto-completion scripts.
@@ -8,7 +8,7 @@ and adds a `completions` CLI command to generate shell auto-completion scripts.
 This release includes a breaking change, which requires the configuration file to be edited.
 The `mode.packets.filter` configuration option has been removed and is now enabled by default.
 
-Before running Hermes v0.11.0, make sure you remove the `mode.packets.filter` option from the configuration file.
+Before running Forcerelay v0.11.0, make sure you remove the `mode.packets.filter` option from the configuration file.
 
 ```diff
 --- a/config.toml
@@ -19,7 +19,7 @@ Before running Hermes v0.11.0, make sure you remove the `mode.packets.filter` op
 
 -# Enable or disable the filtering mechanism.
 -# Valid options are 'true', 'false'.
--# Currently Hermes supports two filters:
+-# Currently Forcerelay supports two filters:
 -# 1. Packet filtering on a per-chain basis; see the chain-specific
 -#   filter specification below in [chains.packet_filter].
 -# 2. Filter for all activities based on client state trust threshold; this filter

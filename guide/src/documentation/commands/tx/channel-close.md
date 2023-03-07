@@ -17,7 +17,7 @@ Use the `chan-close-init` command to initialize the closure of a channel.
 __Example__
 
 ```shell
-{{#template ../../../templates/commands/hermes/tx/chan-close-init_1.md DST_CHAIN_ID=ibc-0 SRC_CHAIN_ID=ibc-1 DST_CONNECTION_ID=connection-0 DST_PORT_ID=transfer SRC_PORT_ID=transfer DST_CHANNEL_ID=channel-0 SRC_CHANNEL_ID=channel-1}}
+{{#template ../../../templates/commands/forcerelay/tx/chan-close-init_1.md DST_CHAIN_ID=ibc-0 SRC_CHAIN_ID=ibc-1 DST_CONNECTION_ID=connection-0 DST_PORT_ID=transfer SRC_PORT_ID=transfer DST_CHANNEL_ID=channel-0 SRC_CHANNEL_ID=channel-1}}
 ```
 
 ```json
@@ -63,7 +63,7 @@ Use the `chan-close-confirm` command to confirm the closure of a channel.
 __Example__
 
 ```shell
-{{#template ../../../templates/commands/hermes/tx/chan-close-confirm_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 DST_CONNECTION_ID=connection-1 DST_PORT_ID=transfer SRC_PORT_ID=transfer DST_CHANNEL_ID=channel-1 SRC_CHANNEL_ID=channel-0}}
+{{#template ../../../templates/commands/forcerelay/tx/chan-close-confirm_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 DST_CONNECTION_ID=connection-1 DST_PORT_ID=transfer SRC_PORT_ID=transfer DST_CHANNEL_ID=channel-1 SRC_CHANNEL_ID=channel-0}}
 ```
 
 ```json

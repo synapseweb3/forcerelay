@@ -169,7 +169,7 @@ async fn refresh_account_and_retry_send_tx_with_account_sequence(
 }
 
 /// Determine whether the given error yielded by `tx_simulate`
-/// indicates that the current account sequence number cached in Hermes
+/// indicates that the current account sequence number cached in Forcerelay
 /// is smaller than the full node's version of the sequence number and therefore
 /// the account needs to be refreshed.
 fn mismatch_account_sequence_number_error_requires_refresh(e: &Error) -> bool {

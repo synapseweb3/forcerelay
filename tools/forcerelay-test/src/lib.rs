@@ -86,7 +86,7 @@ mod tests {
             .arg("--")
             .arg("--config")
             .arg("./tools/forcerelay-test/config.toml")
-            .arg("forcerelay")
+            .arg("eth-ckb")
             .arg("--ethereum-chain-id")
             .arg("ibc-eth-0")
             .arg("--ckb-chain-id")

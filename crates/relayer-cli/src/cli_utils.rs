@@ -1,4 +1,4 @@
-//! Various utilities for the Hermes CLI
+//! Various utilities for the Forcerelay CLI
 
 use alloc::sync::Arc;
 use eyre::eyre;

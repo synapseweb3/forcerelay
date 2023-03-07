@@ -1,9 +1,9 @@
-//! Hermes: IBC Relayer CLI built in Rust
+//! Forcerelay: IBC Relayer CLI built in Rust
 //!
-//! The Hermes binary is a wrapper over the [ibc-relayer] library. This binary builds on
+//! The Forcerelay binary is a wrapper over the [ibc-relayer] library. This binary builds on
 //! the [Abscissa] framework.
 //!
-//! For a comprehensive guide to using Hermes, the authoritative resource is
+//! For a comprehensive guide to using Forcerelay, the authoritative resource is
 //! at [hermes.informal.systems].
 //!
 //! [ibc-relayer]: https://docs.rs/ibc-relayer

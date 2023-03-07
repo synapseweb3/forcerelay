@@ -1,6 +1,6 @@
 *March 28th, 2022*
 
-Hermes v0.13.0 improves performance by lowering the pressure
+Forcerelay v0.13.0 improves performance by lowering the pressure
 on the full nodes by adding a caching layer for some queries.
 It also fixes a bug which could cause an exponential slowdown
 when relaying between many chains with a low average block time.
@@ -13,10 +13,10 @@ Additionally, the IBC Protocol Buffers definitions can now be used from CosmWasm
 
 ## Note for operators
 
-As of version 0.13.0, Hermes supports relaying on [Interchain Accounts][ica] channels.
+As of version 0.13.0, Forcerelay supports relaying on [Interchain Accounts][ica] channels.
 
 If the `packet_filter` option in the chain configuration is disabled, then
-Hermes will relay on all existing and future channels, including ICA channels.
+Forcerelay will relay on all existing and future channels, including ICA channels.
 
 There are two kinds of ICA channels:
 
@@ -52,7 +52,7 @@ list = [
 ]
 ```
 
-This information can also be found in the [Hermes guide][guide-ica].
+This information can also be found in the [Forcerelay guide][guide-ica].
 
 [ica]: https://github.com/cosmos/ibc/blob/master/spec/app/ics-027-interchain-accounts/README.md
 [guide-ica]: https://hermes.informal.systems/documentation/configuration/configure-hermes.html#support-for-interchain-accounts

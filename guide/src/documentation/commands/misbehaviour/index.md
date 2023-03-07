@@ -45,7 +45,7 @@ __Example__
 The `misbehaviour` command outputs an error message displaying `MISBEHAVIOUR DETECTED`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/misbehaviour_1.md CHAIN_ID=ibc-0 CLIENT_ID=07-tendermint-0}}
+{{#template ../../../templates/commands/forcerelay/misbehaviour_1.md CHAIN_ID=ibc-0 CLIENT_ID=07-tendermint-0}}
 ```
 
 ```json
@@ -77,7 +77,7 @@ Success: Some(
 
 Querying client state from this point will show the client is in frozen state, with `frozen_height` indicating the height at which the client was frozen:
 ```shell
-{{#template ../../../templates/commands/hermes/query/client/state_1.md CHAIN_ID=ibc-0 CLIENT_ID=07-tendermint-0}} | jq
+{{#template ../../../templates/commands/forcerelay/query/client/state_1.md CHAIN_ID=ibc-0 CLIENT_ID=07-tendermint-0}} | jq
 ```
 Which should output:
 ```json

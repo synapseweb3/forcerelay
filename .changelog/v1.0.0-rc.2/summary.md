@@ -1,1 +1,1 @@
-This is the third release candidate for Hermes v1.0.0 🎉
+This is the third release candidate for Forcerelay v1.0.0 🎉

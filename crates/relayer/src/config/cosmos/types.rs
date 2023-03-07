@@ -189,7 +189,7 @@ pub mod memo {
 
     /// A memo domain-type.
     ///
-    /// Hermes uses this type to populate the `tx.memo` field for
+    /// Forcerelay uses this type to populate the `tx.memo` field for
     /// each transaction it submits.
     /// The memo can be configured on a per-chain basis.
     ///

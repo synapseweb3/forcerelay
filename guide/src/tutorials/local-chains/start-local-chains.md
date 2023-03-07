@@ -1,13 +1,13 @@
 # Start the local chains
 
-In this chapter, you will learn how to spawn two Gaia chains, and use Hermes to relay packets between them. The topology of the network will look like this:
+In this chapter, you will learn how to spawn two Gaia chains, and use Forcerelay to relay packets between them. The topology of the network will look like this:
 
 ```mermaid
 flowchart LR
     A((ibc-0))---B((ibc-1))
 ```
 
-To spawn the chains and configure Hermes accordingly, we will make use of Gaiad Manager `gm` that we installed in the last section [Install Gaiad Manager](../pre-requisites/gaiad-manager.md).
+To spawn the chains and configure Forcerelay accordingly, we will make use of Gaiad Manager `gm` that we installed in the last section [Install Gaiad Manager](../pre-requisites/gaiad-manager.md).
 
 ---
 
@@ -176,7 +176,7 @@ SUCCESS Added key 'wallet1' (cosmos1dsrj2uqjvtssenkwperuvfkgkg2xvmydvpzswy) on c
 ```
 
 > __TROUBLESHOOTING__: 
-> - If the command does not out output anything, make sure the path to Hermes' binary is set in `$HOME/.gm/gm.toml`.
+> - If the command does not out output anything, make sure the path to Forcerelay' binary is set in `$HOME/.gm/gm.toml`.
 
 ### The `$HOME/.gm` directory
 

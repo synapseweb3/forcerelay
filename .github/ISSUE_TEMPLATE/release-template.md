@@ -1,6 +1,6 @@
 ---
 name: New Release Request
-about: Create a proposal to track the release of a new version of Hermes
+about: Create a proposal to track the release of a new version of Forcerelay
 ---
 
 <!-- < < < < < < < < < < < < < < < < < < < < < < < < < < < < < < < < < ☺ 
@@ -11,7 +11,7 @@ v                     without deliberation
 ☺ > > > > > > > > > > > > > > > > > > > > > > > > > > > > > > > > >  -->
 
 
-# Release Hermes v.X.Y.Z 
+# Release Forcerelay v.X.Y.Z 
 
 ⚡
 

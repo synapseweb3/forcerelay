@@ -1,14 +1,14 @@
 *August 22nd, 2022*
 
-After more than 2 years in the works, this is the first stable release of the Hermes relayer! 🎉
+After more than 2 years in the works, this is the first stable release of the Forcerelay relayer! 🎉
 
-For reaching this milestone, we thank the valuable contributions of over 50 individuals, spread across more than 800 documented & resolved issues. Beside Cosmos-SDK and Tendermint, we are fortunate to maintain some of the most active and intense repository in the Cosmos ecosystem. Most importantly, we thank the relentless work of relayer operators that have already relayed billions worth of value in IBC production networks, and have provided us with invaluable feedback on improving Hermes and raising the overall stability of IBC. Kudos to everyone!
+For reaching this milestone, we thank the valuable contributions of over 50 individuals, spread across more than 800 documented & resolved issues. Beside Cosmos-SDK and Tendermint, we are fortunate to maintain some of the most active and intense repository in the Cosmos ecosystem. Most importantly, we thank the relentless work of relayer operators that have already relayed billions worth of value in IBC production networks, and have provided us with invaluable feedback on improving Forcerelay and raising the overall stability of IBC. Kudos to everyone!
 
 
 ### Note for operators
 
-> ⚠️  If upgrading from Hermes v0.15.0, be aware that this release contains multiple breaking
-> ⚠️  changes to the Hermes command-line interface and configuration.
+> ⚠️  If upgrading from Forcerelay v0.15.0, be aware that this release contains multiple breaking
+> ⚠️  changes to the Forcerelay command-line interface and configuration.
 > ⚠️  Please consult the UPGRADING document for instructions for more details.
 
 ### Highlights
@@ -37,12 +37,12 @@ For reaching this milestone, we thank the valuable contributions of over 50 indi
 
 ### Change to the versioning scheme
 
-As of v1.0.0-rc.0, the Hermes CLI is now versioned separately from
+As of v1.0.0-rc.0, the Forcerelay CLI is now versioned separately from
 the other crates in the project. As such, the top-level version
-designates the version of the Hermes CLI, but the other crates in
+designates the version of the Forcerelay CLI, but the other crates in
 the repository do not necessarily match this version. For example,
 the `ibc` and `ibc-relayer` crates are released under version 0.19.0
-for Hermes v1.0.0.
+for Forcerelay v1.0.0.
 
 The structure of this changelog has therefore changed as well.
 Changes are now grouped first by crate and then by the type of change,

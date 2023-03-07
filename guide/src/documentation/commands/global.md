@@ -1,6 +1,6 @@
 # Global options
 
-Hermes accepts _global_ options which affect all commands.
+Forcerelay accepts _global_ options which affect all commands.
 
 ```shell
 hermes {{#include ../../templates/version.md}}
@@ -23,16 +23,16 @@ hermes [GLOBAL_OPTIONS] <SUBCOMMAND> [OPTIONS]
 
 __Example__
 
-To `start` Hermes using the configuration file at `/home/my_chain.toml` and enable JSON output:
+To `start` Forcerelay using the configuration file at `/home/my_chain.toml` and enable JSON output:
 
 ```shell
-{{#template ../../templates/commands/hermes/start_1.md GLOBALOPTIONS=  --config $HOME/my_chain.toml --json}}
+{{#template ../../templates/commands/forcerelay/start_1.md GLOBALOPTIONS=  --config $HOME/my_chain.toml --json}}
 ```
 
 To `query` all clients on a chain while enabling JSON output:
 
 ```shell
-{{#template ../../templates/commands/hermes/query/clients_1.md HOST_CHAIN_ID=ibc-1 GLOBALOPTIONS=  --json}}
+{{#template ../../templates/commands/forcerelay/query/clients_1.md HOST_CHAIN_ID=ibc-1 GLOBALOPTIONS=  --json}}
 ```
 
 ## JSON output
@@ -47,7 +47,7 @@ To process all the output using `jq`, one can redirect `stderr` to `stdout` with
 __Example__
 
 ```shell
-{{#template ../../templates/commands/hermes/create/client_1.md HOST_CHAIN_ID=ibc-0 REFERENCE_CHAIN_ID=ibc-1 GLOBALOPTIONS=  --json}}
+{{#template ../../templates/commands/forcerelay/create/client_1.md HOST_CHAIN_ID=ibc-0 REFERENCE_CHAIN_ID=ibc-1 GLOBALOPTIONS=  --json}}
 ```
 
 ```json
@@ -64,7 +64,7 @@ __Example__
 To improve the readability, pipe all the output to `jq`:
 
 ```
-{{#template ../../templates/commands/hermes/create/client_1.md HOST_CHAIN_ID=ibc-0 REFERENCE_CHAIN_ID=ibc-1 GLOBALOPTIONS=  --json}} 2>&1 | jq
+{{#template ../../templates/commands/forcerelay/create/client_1.md HOST_CHAIN_ID=ibc-0 REFERENCE_CHAIN_ID=ibc-1 GLOBALOPTIONS=  --json}} 2>&1 | jq
 ```
 
 ```json
@@ -118,7 +118,7 @@ __Example__
 To extract the identifier of the newly created client above:
 
 ```
-{{#template ../../templates/commands/hermes/create/client_1.md HOST_CHAIN_ID=ibc-0 REFERENCE_CHAIN_ID=ibc-1 GLOBALOPTIONS=  --json}} | jq '.result.CreateClient.client_id'
+{{#template ../../templates/commands/forcerelay/create/client_1.md HOST_CHAIN_ID=ibc-0 REFERENCE_CHAIN_ID=ibc-1 GLOBALOPTIONS=  --json}} | jq '.result.CreateClient.client_id'
 ```
 
 Which should output:

@@ -42,7 +42,7 @@ __Example__
 First, let's initialize the channel on `ibc-0` using an existing connection identified by `connection-0`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/tx/chan-open-init_1.md DST_CHAIN_ID=ibc-0 SRC_CHAIN_ID=ibc-1 DST_CONNECTION_ID=connection-0 DST_PORT_ID=transfer SRC_PORT_ID=transfer}}
+{{#template ../../../templates/commands/forcerelay/tx/chan-open-init_1.md DST_CHAIN_ID=ibc-0 SRC_CHAIN_ID=ibc-1 DST_CONNECTION_ID=connection-0 DST_PORT_ID=transfer SRC_PORT_ID=transfer}}
 ```
 
 ```json
@@ -91,7 +91,7 @@ __Example__
 Let's now create the counterparty to `channel-0` on chain `ibc-1`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/tx/chan-open-try_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 DST_CONNECTION_ID=connection-1 DST_PORT_ID=transfer SRC_PORT_ID=transfer SRC_CHANNEL_ID=channel-0}}
+{{#template ../../../templates/commands/forcerelay/tx/chan-open-try_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 DST_CONNECTION_ID=connection-1 DST_PORT_ID=transfer SRC_PORT_ID=transfer SRC_CHANNEL_ID=channel-0}}
 ```
 
 ```json
@@ -144,7 +144,7 @@ __Example__
 We can now acknowledge on `ibc-0` that `ibc-1` has accepted the opening of the channel:
 
 ```shell
-{{#template ../../../templates/commands/hermes/tx/chan-open-ack_1.md DST_CHAIN_ID=ibc-0 SRC_CHAIN_ID=ibc-1 DST_CONNECTION_ID=connection-0 DST_PORT_ID=transfer SRC_PORT_ID=transfer DST_CHANNEL_ID=channel-0 SRC_CHANNEL_ID=channel-1}}
+{{#template ../../../templates/commands/forcerelay/tx/chan-open-ack_1.md DST_CHAIN_ID=ibc-0 SRC_CHAIN_ID=ibc-1 DST_CONNECTION_ID=connection-0 DST_PORT_ID=transfer SRC_PORT_ID=transfer DST_CHANNEL_ID=channel-0 SRC_CHANNEL_ID=channel-1}}
 ```
 
 ```json
@@ -197,7 +197,7 @@ Confirm on `ibc-1` that `ibc-0` has accepted the opening of the channel,
 after which the channel is open on both chains.
 
 ```shell
-{{#template ../../../templates/commands/hermes/tx/chan-open-confirm_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 DST_CONNECTION_ID=connection-1 DST_PORT_ID=transfer SRC_PORT_ID=transfer DST_CHANNEL_ID=channel-1 SRC_CHANNEL_ID=channel-0}}
+{{#template ../../../templates/commands/forcerelay/tx/chan-open-confirm_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 DST_CONNECTION_ID=connection-1 DST_PORT_ID=transfer SRC_PORT_ID=transfer DST_CHANNEL_ID=channel-1 SRC_CHANNEL_ID=channel-0}}
 ```
 
 ```json

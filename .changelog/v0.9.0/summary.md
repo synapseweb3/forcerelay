@@ -6,12 +6,12 @@
 
 #### Notice for operators
 
-This release requires operators to update their Hermes configuration.
+This release requires operators to update their Forcerelay configuration.
 The `mode` configuration section now replaces the `strategy` option.
 
 ##### `strategy = 'packets'`
 
-If Hermes was configured with `strategy = 'packets'`, then the configuration needs to be changed in the following way:
+If Forcerelay was configured with `strategy = 'packets'`, then the configuration needs to be changed in the following way:
 
 ```diff
  [global]
@@ -43,7 +43,7 @@ If Hermes was configured with `strategy = 'packets'`, then the configuration nee
 
 ##### `strategy = 'all'`
 
-If Hermes was configured to complete connection and channel handshakes as well, ie. with `strategy = 'all'`,
+If Forcerelay was configured to complete connection and channel handshakes as well, ie. with `strategy = 'all'`,
 then on top of the changes above, `mode.connections.enabled` and `mode.chhanels.enabled` must be set to `true`.
 
 [See the relevant section][config-mode-toml] of the documented `config.toml` file in the repository for more details.

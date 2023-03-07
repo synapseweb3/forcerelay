@@ -13,9 +13,9 @@
 
 //! IBC Relayer implementation as a library.
 //!
-//! For the IBC relayer binary, please see [Hermes] (`ibc-relayer-cli` crate).
+//! For the IBC relayer binary, please see [Forcerelay] (`ibc-relayer-cli` crate).
 //!
-//! [Hermes]: https://docs.rs/ibc-relayer-cli/0.2.0/
+//! [Forcerelay]: https://docs.rs/ibc-relayer-cli/0.2.0/
 
 extern crate alloc;
 

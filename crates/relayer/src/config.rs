@@ -529,7 +529,7 @@ pub struct TelemetryConfig {
 
 /// Default values for the telemetry configuration.
 ///
-/// # IMPORTANT: Remember to update the Hermes guide & the default config.toml whenever these values change.
+/// # IMPORTANT: Remember to update the Forcerelay guide & the default config.toml whenever these values change.
 impl Default for TelemetryConfig {
     fn default() -> Self {
         Self {

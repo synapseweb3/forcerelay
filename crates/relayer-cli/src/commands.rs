@@ -1,4 +1,4 @@
-//! Definition of all the Hermes subcommands
+//! Definition of all the Forcerelay subcommands
 
 mod clear;
 mod completions;
@@ -140,7 +140,7 @@ impl Configurable<Config> for CliCmd {
     /// This can be safely deleted if you don't want to override config
     /// settings from command-line options.
     fn process_config(&self, mut config: Config) -> Result<Config, FrameworkError> {
-        // Alter the memo for all chains to include a suffix with Hermes build details
+        // Alter the memo for all chains to include a suffix with Forcerelay build details
         let web = "https://hermes.informal.systems";
         let suffix = format!("{} {} ({})", CliCmd::name(), clap::crate_version!(), web);
         for ccfg in config.chains.iter_mut() {
@@ -149,7 +149,7 @@ impl Configurable<Config> for CliCmd {
             }
         }
 
-        // For all commands except for `start` Hermes retries
+        // For all commands except for `start` Forcerelay retries
         // for a prolonged period of time.
         if !matches!(self, CliCmd::Start(_)) {
             for c in config.chains.iter_mut() {

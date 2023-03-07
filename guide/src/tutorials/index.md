@@ -10,6 +10,6 @@ This section includes tutorials to learn the basics of relaying and the main com
 - **[Two Local Chains](./local-chains/index.md)**
     * Start two local [`Cosmos Gaia`](https://github.com/cosmos/gaia) chains that support the `IBC` protocol and learn the fundamentals of IBC.
 - **[More Local Chains](./more-chains/index.md)**
-    * Learn how to relay on an arbitrary topology of more than two chains by using packet filters and to run multiple instances of Hermes.
+    * Learn how to relay on an arbitrary topology of more than two chains by using packet filters and to run multiple instances of Forcerelay.
 - **[Relaying in production](./production/index.md)**
     * Learn how to set up, configure and run `hermes` on IBC-enabled chains in production.

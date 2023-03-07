@@ -1,6 +1,6 @@
-//! This crate verifies the correctness of every Hermes command in the guide by:
+//! This crate verifies the correctness of every Forcerelay command in the guide by:
 //! 1. Extracting every line in the guide with '{{#template *templates/commands/hermes*}}', a macro call for mdbook template.
-//! 2. Replace every template call with the content of the template. It will replace the macro call with what should be a Hermes command.
+//! 2. Replace every template call with the content of the template. It will replace the macro call with what should be a Forcerelay command.
 //! 3. Check that an `EntryPoint` can be created from the command.
 
 use clap::Parser;
@@ -73,7 +73,7 @@ fn verify_line(line: &str, path: &Path, line_number: i32) -> i32 {
     errors_found
 }
 
-/// Verifies that every template macro call in the file can be replaced by a valid Hermes command.
+/// Verifies that every template macro call in the file can be replaced by a valid Forcerelay command.
 /// Returns the number of invalid commands found.
 fn verify_file(path: &Path) -> i32 {
     let mut errors_found = 0;
@@ -104,7 +104,7 @@ fn main() {
         }) // Filter out the excluded directories
         .map(|e| e.expect("Failed to get an entry."))
         .filter(|e| e.file_type().is_file() && e.path().extension() == Some(OsStr::new("md"))) // Keep only markdown files
-        .map(|e| verify_file(e.path())) // Verify that all command templates can be parsed to a Hermes command and return the number of errors
+        .map(|e| verify_file(e.path())) // Verify that all command templates can be parsed to a Forcerelay command and return the number of errors
         .sum::<i32>(); // Sum the number of errors
     if number_of_errors > 0 {
         panic!("{number_of_errors} errors found.");

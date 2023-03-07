@@ -510,7 +510,7 @@ define_error! {
                 cause: String
             }
             |e| {
-                format!("Hermes health check failed while verifying the application compatibility for chain {0}:{1}; caused by: {2}",
+                format!("Forcerelay health check failed while verifying the application compatibility for chain {0}:{1}; caused by: {2}",
                     e.chain_id, e.address, e.cause)
             },
 
@@ -541,7 +541,7 @@ define_error! {
 
         GasPriceTooLow
             { chain_id: ChainId }
-            |e| { format!("Hermes gas price is lower than the minimum gas price set by node operator'{}'", e.chain_id) },
+            |e| { format!("Forcerelay gas price is lower than the minimum gas price set by node operator'{}'", e.chain_id) },
 
         TxIndexingDisabled
             { chain_id: ChainId }

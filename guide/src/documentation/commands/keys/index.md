@@ -1,10 +1,10 @@
-# Adding Keys to Hermes
+# Adding Keys to Forcerelay
 
-> __WARNING__: Currently Hermes does NOT support a `keyring` store to securely
+> __WARNING__: Currently Forcerelay does NOT support a `keyring` store to securely
 > store the private key file. The key file will be stored on the local file system
 > in the user __$HOME__ folder under `$HOME/.hermes/keys/`
 
-> __BREAKING__: As of Hermes v1.0.0, the sub-command `keys restore` has been removed.
+> __BREAKING__: As of Forcerelay v1.0.0, the sub-command `keys restore` has been removed.
 > Please use the sub-command `keys add` in order to restore a key.
 
 ---
@@ -27,7 +27,7 @@ The available sub-commands are the following:
 
 ### Key Seed file (Private Key)
 
-In order to execute the command below you need a private key file (JSON). Hermes uses the private key file to sign the transactions submitted to the chain.
+In order to execute the command below you need a private key file (JSON). Forcerelay uses the private key file to sign the transactions submitted to the chain.
 
 The private key file can be obtained by using the `keys add` on a Cosmos chain. For example, the command for `gaiad` is:
 
@@ -49,7 +49,7 @@ The command outputs a JSON similar to the one below.
 }
 ```
 
-You can save this to a file (e.g. `key_seed.json`) and use it to add to Hermes with `{{#template ../../../templates/commands/hermes/keys/add_1.md CHAIN_ID=<CHAIN_ID> KEY_FILE=key_seed.json}}`. See the `Adding Keys` section for more details.
+You can save this to a file (e.g. `key_seed.json`) and use it to add to Forcerelay with `{{#template ../../../templates/commands/forcerelay/keys/add_1.md CHAIN_ID=<CHAIN_ID> KEY_FILE=key_seed.json}}`. See the `Adding Keys` section for more details.
 
 ### Adding and restoring Keys
 
@@ -63,7 +63,7 @@ If a key with the same `key_name` already exists, the flag `--overwrite` must be
 #### Add a private key to a chain from a key file
 
 ```shell
-{{#template ../../../templates/commands/hermes/keys/add_1.md CHAIN_ID=<CHAIN_ID> KEY_FILE=<PRIVATE_KEY_FILE>}}
+{{#template ../../../templates/commands/forcerelay/keys/add_1.md CHAIN_ID=<CHAIN_ID> KEY_FILE=<PRIVATE_KEY_FILE>}}
 ```
 
 The content of the file key should have the same format as the output of the `gaiad keys add` command:
@@ -89,13 +89,13 @@ Success: Added key testkey (<ADDRESS>) on <CHAIN_ID> chain
 > To use a different key name, specify the `--key-name` option when invoking `keys add`.
 >
 > ```
-> {{#template ../../../templates/commands/hermes/keys/add_1.md CHAIN_ID=<CHAIN_ID> KEY_FILE=<PRIVATE_KEY_FILE> OPTIONS= --key-name [KEY_NAME]}}
+> {{#template ../../../templates/commands/forcerelay/keys/add_1.md CHAIN_ID=<CHAIN_ID> KEY_FILE=<PRIVATE_KEY_FILE> OPTIONS= --key-name [KEY_NAME]}}
 > ```
 
 #### Restore a private key to a chain from a mnemonic
 
 ```shell
-{{#template ../../../templates/commands/hermes/keys/add_2.md CHAIN_ID=<CHAIN_ID> MNEMONIC_FILE=<MNEMONIC_FILE>}}
+{{#template ../../../templates/commands/forcerelay/keys/add_2.md CHAIN_ID=<CHAIN_ID> MNEMONIC_FILE=<MNEMONIC_FILE>}}
 ```
 
 or using an explicit [derivation path](https://github.com/satoshilabs/slips/blob/master/slip-0044.md), for example
@@ -103,7 +103,7 @@ an Ethereum coin type (used for Evmos, Injective, Umee, Cronos, and
 possibly other networks):
 
 ```shell
-{{#template ../../../templates/commands/hermes/keys/add_2.md CHAIN_ID=<CHAIN_ID> MNEMONIC_FILE=<MNEMONIC_FILE> OPTIONS= --hd-path "m/44'/60'/0'/0/0"}}
+{{#template ../../../templates/commands/forcerelay/keys/add_2.md CHAIN_ID=<CHAIN_ID> MNEMONIC_FILE=<MNEMONIC_FILE> OPTIONS= --hd-path "m/44'/60'/0'/0/0"}}
 ```
 
 The mnemonic file needs to have the 24 mnemonic words on the same line, separated by a white space. So the content should have the following format:
@@ -122,7 +122,7 @@ Success: Restore key testkey (<ADDRESS>) on <CHAIN_ID> chain
 > To use a different key name, specify the `--key-name` option when invoking `keys add`.
 >
 > ```
-> {{#template ../../../templates/commands/hermes/keys/add_2.md CHAIN_ID=<CHAIN_ID> MNEMONIC_FILE=<MNEMONIC_FILE> OPTIONS= --key-name <KEY_NAME>}}
+> {{#template ../../../templates/commands/forcerelay/keys/add_2.md CHAIN_ID=<CHAIN_ID> MNEMONIC_FILE=<MNEMONIC_FILE> OPTIONS= --key-name <KEY_NAME>}}
 > ```
 
 ### Delete keys
@@ -138,7 +138,7 @@ In order to delete the private keys added to chains use the `keys delete` comman
 To delete a single private key by name:
 
 ```shell
-{{#template ../../../templates/commands/hermes/keys/delete_1.md CHAIN_ID=<CHAIN_ID> KEY_NAME=<KEY_NAME>}}
+{{#template ../../../templates/commands/forcerelay/keys/delete_1.md CHAIN_ID=<CHAIN_ID> KEY_NAME=<KEY_NAME>}}
 ```
 
 Alternatively, to delete all private keys added to a chain:
@@ -160,7 +160,7 @@ In order to list the private keys added to chains use the `keys list` command
 To list the private key file that was added to a chain:
 
 ```shell
-{{#template ../../../templates/commands/hermes/keys/list_1.md CHAIN_ID=<CHAIN_ID>}}
+{{#template ../../../templates/commands/forcerelay/keys/list_1.md CHAIN_ID=<CHAIN_ID>}}
 ```
 
 If the command is successful a message similar to the one below will be displayed:
@@ -174,7 +174,7 @@ Success:
 **JSON:**
 
 ```shell
-{{#template ../../../templates/commands/hermes/keys/list_1.md CHAIN_ID=<CHAIN_ID> GLOBALOPTIONS=  --json}} | jq
+{{#template ../../../templates/commands/forcerelay/keys/list_1.md CHAIN_ID=<CHAIN_ID> GLOBALOPTIONS=  --json}} | jq
 ```
 
 If the command is successful a message similar to the one below will be displayed:
@@ -217,7 +217,7 @@ Success: balance for key `KEY_NAME`: 100000000000 stake
 **JSON:**
 
 ```shell
-{{#template ../../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=<CHAIN_ID> GLOBALOPTIONS=  --json}}
+{{#template ../../../templates/commands/forcerelay/keys/balance_1.md CHAIN_ID=<CHAIN_ID> GLOBALOPTIONS=  --json}}
 ```
 
 If the command is successful a message with the following format will be displayed:

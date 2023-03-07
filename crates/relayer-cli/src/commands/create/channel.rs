@@ -22,7 +22,7 @@ use crate::conclude::{exit_with_unrecoverable_error, Output};
 use crate::prelude::*;
 use ibc_relayer::config::default::connection_delay;
 
-static PROMPT: &str = "Are you sure you want a new connection & clients to be created? Hermes will use default security parameters.";
+static PROMPT: &str = "Are you sure you want a new connection & clients to be created? Forcerelay will use default security parameters.";
 static HINT: &str = "Consider using the default invocation\n\nhermes create channel --a-port <PORT-ID> --b-port <PORT-ID> --a-chain <CHAIN-A-ID> --a-connection <CONNECTION-A-ID>\n\nto re-use a pre-existing connection.";
 
 /// The data structure that represents all the possible options when invoking

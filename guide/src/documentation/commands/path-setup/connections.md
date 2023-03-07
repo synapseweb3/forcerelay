@@ -18,7 +18,7 @@ Use the `create connection` command to create a new connection.
 Create a new connection between `ibc-0` and `ibc-1` over new clients:
 
 ```shell
-{{#template ../../../templates/commands/hermes/create/connection_1.md A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1}}
+{{#template ../../../templates/commands/forcerelay/create/connection_1.md A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1}}
 ```
 
 ```json
@@ -189,10 +189,10 @@ Create a new connection between `ibc-0` and `ibc-1` over existing clients,
 both with client id `07-tendermint-0`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/create/connection_2.md A_CHAIN_ID=ibc-0 A_CLIENT_ID=07-tendermint-0 B_CLIENT_ID=07-tendermint-0}}
+{{#template ../../../templates/commands/forcerelay/create/connection_2.md A_CHAIN_ID=ibc-0 A_CLIENT_ID=07-tendermint-0 B_CLIENT_ID=07-tendermint-0}}
 ```
 
-Notice that one can omit the destination chain parameter, as Hermes will automatically
+Notice that one can omit the destination chain parameter, as Forcerelay will automatically
 figure it out by looking up the given client on `ibc-0`.
 
 ## Non-zero Delay Connection

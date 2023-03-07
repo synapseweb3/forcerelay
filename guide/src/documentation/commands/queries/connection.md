@@ -15,7 +15,7 @@ __Example__
 Query all connections on `ibc-1`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/query/connections_1.md CHAIN_ID=ibc-1}}
+{{#template ../../../templates/commands/forcerelay/query/connections_1.md CHAIN_ID=ibc-1}}
 ```
 
 ```json
@@ -50,7 +50,7 @@ __Example__
 Query the connection end of connection `connection-1` on `ibc-1`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/query/connection/end_1.md CHAIN_ID=ibc-1 CONNECTION_ID=connection-1}}
+{{#template ../../../templates/commands/forcerelay/query/connection/end_1.md CHAIN_ID=ibc-1 CONNECTION_ID=connection-1}}
 ```
 
 ```json
@@ -96,7 +96,7 @@ __Example__
 Query the channels associated with connection `connection-1` on `ibc-1`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/query/connection/channels_1.md CHAIN_ID=ibc-1 CONNECTION_ID=connection-1}}
+{{#template ../../../templates/commands/forcerelay/query/connection/channels_1.md CHAIN_ID=ibc-1 CONNECTION_ID=connection-1}}
 ```
 
 ```json

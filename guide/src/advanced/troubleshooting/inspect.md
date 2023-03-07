@@ -1,18 +1,18 @@
 # Inspecting the relayer state
 
-To get some insight into the state of Hermes,
-Hermes will react to a `SIGUSR1` signal by dumping its state to
-the console, either in plain text form or as a JSON object if Hermes
+To get some insight into the state of Forcerelay,
+Forcerelay will react to a `SIGUSR1` signal by dumping its state to
+the console, either in plain text form or as a JSON object if Forcerelay
 was started with the `--json` option.
 
-To send a `SIGUSR1` signal to Hermes, look up its process ID (below PID)
+To send a `SIGUSR1` signal to Forcerelay, look up its process ID (below PID)
 and use the following command:
 
 ```shell
 kill -SIGUSR1 PID
 ```
 
-Hermes will print some information about the workers which are currently running.
+Forcerelay will print some information about the workers which are currently running.
 
 For example, with three chains configured and one channel between each pair of chains:
 

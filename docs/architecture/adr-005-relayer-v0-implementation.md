@@ -9,7 +9,7 @@
 
 This ADR documents the implementation of the `v0.1` [relayer lib crate]
 [ibc-relayer].
-This library is instantiated in the [Hermes][hermes] binary of the 
+This library is instantiated in the [Forcerelay][hermes] binary of the 
 [ibc-relayer-cli crate][ibc-relayer-cli] (which is not the focus of this discussion).
 
 As a main design goal, `v0.1` is meant to lay a foundation upon which we can 
@@ -153,7 +153,7 @@ Some of the notation from this figure has the following meaning.
 
 At the top of this diagram, there is a chain consisting of multiple full nodes.
 The deeper (i.e., lower) we go into this sketch, the closer we get to the user, or 
-Hermes (the relayer CLI).
+Forcerelay (the relayer CLI).
 To understand the relayer architecture intuitively, we can break down the 
 levels of abstraction as follows:
 
@@ -177,7 +177,7 @@ levels of abstraction as follows:
   any chain(s);
 - The runtime is universal for all possible chains, i.e., does _not_ contain any 
      chain-specific code;
-- Accepts as input requests from the application (Hermes, the CLI), in the form of 
+- Accepts as input requests from the application (Forcerelay, the CLI), in the form of 
      [`ChainRequest`][chain-req] via a crossbeam channel
 - Responds to the application via a crossbeam channel
 - Has objects which implement the three interfaces named above 
@@ -192,7 +192,7 @@ levels of abstraction as follows:
   two `ForeignClient`s (one per chain), a `Connection` (which contains the 
   two clients), a `Channel` (containing the connection), and on top of that 
   a `Link`.
-- The code here is part of the Hermes (relayer CLI) binary.
+- The code here is part of the Forcerelay (relayer CLI) binary.
 
 ##### Threads
 

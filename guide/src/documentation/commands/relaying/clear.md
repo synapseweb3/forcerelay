@@ -14,9 +14,9 @@ and [packet-acks](../tx/packet.md#relay-acknowledgment-packets).
 
 ### Example
 
-1. Without Hermes running, send 3 packets over a channel, here `channel-13`:
+1. Without Forcerelay running, send 3 packets over a channel, here `channel-13`:
 ```shell
-{{#template ../../../templates/commands/hermes/tx/ft-transfer_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 SRC_PORT_ID=transfer SRC_CHANNEL_ID=channel-13 AMOUNT=9999 OPTIONS= --timeout-height-offset 1000 --number-msgs 3}}
+{{#template ../../../templates/commands/forcerelay/tx/ft-transfer_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 SRC_PORT_ID=transfer SRC_CHANNEL_ID=channel-13 AMOUNT=9999 OPTIONS= --timeout-height-offset 1000 --number-msgs 3}}
 ```
 
 Which should output something similar to:
@@ -127,11 +127,11 @@ Success: [
 ]
 ```
 
-2. Because Hermes is not running these packets won't be relayed,
+2. Because Forcerelay is not running these packets won't be relayed,
 as can be seen with the `query packet pending-sends` command:
 
 ```
-{{#template ../../../templates/commands/hermes/query/packet/pending-sends_1.md CHAIN_ID=ibc-1 PORT_ID=transfer CHANNEL_ID=channel-13}}
+{{#template ../../../templates/commands/forcerelay/query/packet/pending-sends_1.md CHAIN_ID=ibc-1 PORT_ID=transfer CHANNEL_ID=channel-13}}
 ```
 
 Which should output something similar to:
@@ -147,7 +147,7 @@ Success: [
 3. We can clear them manually using the `clear packets` command:
 
 ```
-{{#template ../../../templates/commands/hermes/clear/packets_1.md CHAIN_ID=ibc-0 PORT_ID=transfer CHANNEL_ID=channel-13}}
+{{#template ../../../templates/commands/forcerelay/clear/packets_1.md CHAIN_ID=ibc-0 PORT_ID=transfer CHANNEL_ID=channel-13}}
 ```
 
 Which should output something similar to:
@@ -433,7 +433,7 @@ Success: [
 4. The packets have now been successfully relayed:
 
 ```
-{{#template ../../../templates/commands/hermes/query/packet/pending-sends_1.md CHAIN_ID=ibc-1 PORT_ID=transfer CHANNEL_ID=channel-13}}
+{{#template ../../../templates/commands/forcerelay/query/packet/pending-sends_1.md CHAIN_ID=ibc-1 PORT_ID=transfer CHANNEL_ID=channel-13}}
 ```
 
 

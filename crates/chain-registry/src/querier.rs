@@ -77,7 +77,7 @@ pub trait QueryContext: QueryTypes {
 /// and returns the result of the first endpoint to answer.
 pub struct SimpleHermesRpcQuerier;
 
-/// Data which must be retrieved from RPC endpoints for Hermes
+/// Data which must be retrieved from RPC endpoints for Forcerelay
 #[derive(Clone, Debug)]
 pub struct HermesConfigData {
     pub rpc_address: Url,

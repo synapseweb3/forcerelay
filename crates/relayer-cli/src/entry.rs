@@ -1,4 +1,4 @@
-//! Definition of the entrypoint for the Hermes CLI.
+//! Definition of the entrypoint for the Forcerelay CLI.
 
 use std::path::PathBuf;
 use std::process;
@@ -10,7 +10,7 @@ use ibc_relayer::config::Config;
 
 use crate::commands::CliCmd;
 
-/// Entry point for Hermes CLI.
+/// Entry point for Forcerelay CLI.
 #[derive(Command, Debug, Parser)]
 #[clap(author, about, version)]
 pub struct EntryPoint {

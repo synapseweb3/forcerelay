@@ -1,4 +1,4 @@
-# Hermes: IBC Relayer CLI
+# Forcerelay: IBC Relayer CLI
 
 [![Crate][crate-image]][crate-link]
 [![Docs][docs-image]][docs-link]

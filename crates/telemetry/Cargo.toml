@@ -9,7 +9,7 @@ repository   = "https://github.com/informalsystems/hermes"
 authors      = ["Informal Systems <hello@informal.systems>"]
 rust-version = "1.65"
 description  = """
-    Telemetry service for the Hermes IBC relayer
+    Telemetry service for the Forcerelay IBC relayer
 """
 
 [dependencies]

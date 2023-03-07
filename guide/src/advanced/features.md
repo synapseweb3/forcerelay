@@ -1,12 +1,12 @@
 # Features
 
-This section includes a summary of the supported and planned features. It also includes a feature matrix which compares `hermes` to the [cosmos-go-relayer].
+This section includes a summary of the supported and planned features. It also includes a feature matrix which compares `forcerelay` to the [cosmos-go-relayer].
 
 > **Cosmos SDK & IBC compatibility:**
-> Hermes supports Cosmos SDK chains implementing the [IBC protocol v1][ibcv1-proto] protocol specification.
+> Forcerelay supports Cosmos SDK chains implementing the [IBC protocol v1][ibcv1-proto] protocol specification.
 > Cosmos SDK versions `0.41.3` through `0.45.x` are officially supported.
 > IBC-go versions `1.1.*` thorough `3.*` are officially supported.
-> In case Hermes finds an incompatible SDK or IBC-go version, it will output a log warning upon initialization as part of the `start` command or upon `health-check` command.
+> In case Forcerelay finds an incompatible SDK or IBC-go version, it will output a log warning upon initialization as part of the `start` command or upon `health-check` command.
 
 ---
 
@@ -32,7 +32,7 @@ This section includes a summary of the supported and planned features. It also i
     - Establish path over non-zero delay connection.
     - Relay all packets with the specified delay.
 - Interchain Accounts & Interchain Security
-    > Relaying between Interchain Security-enabled chains requires Hermes v1.2+.
+    > Relaying between Interchain Security-enabled chains requires Forcerelay v1.2+.
 - Monitor and submit misbehaviour for clients
     - Monitor client updates for misbehaviour (fork and BFT time violation).
     - Submit misbehaviour evidence to the on-chain IBC client.
@@ -78,9 +78,9 @@ __Legend__:
 | `.._<msg>_P`      | building and sending `msg` from IBC event; doesn't apply to `.._Init` and `FT_Transfer` features |
 
 --- 
-__Feature comparison between Hermes and the Go relayer__ 
+__Feature comparison between Forcerelay and the Go relayer__ 
 
-| Features \      Status | Hermes | Cosmos Go | Feature Details  |
+| Features \      Status | Forcerelay | Cosmos Go | Feature Details  |
 | ---------------------- | :---: | :----: |:-------|
 | Restart                | ✅    | ✅     | replays any IBC events that happened before restart
 | Multiple_Paths         | ✅    | ✅     | relays on multiple paths concurrently

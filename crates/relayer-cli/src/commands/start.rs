@@ -31,7 +31,7 @@ impl Runnable for StartCmd {
 
         let supervisor_handle = make_supervisor::<CachingChainHandle>(config, self.full_scan)
             .unwrap_or_else(|e| {
-                Output::error(format!("Hermes failed to start, last error: {e}")).exit()
+                Output::error(format!("Forcerelay failed to start, last error: {e}")).exit()
             });
 
         match crate::config::config_path() {
@@ -45,7 +45,7 @@ impl Runnable for StartCmd {
             }
         };
 
-        info!("Hermes has started");
+        info!("Forcerelay has started");
 
         supervisor_handle.wait();
     }
@@ -123,8 +123,8 @@ fn spawn_rest_server(config: &Config) -> Option<rest::Receiver> {
 
     if rest.enabled {
         warn!(
-            "REST server enabled in the config but Hermes was built without REST support, \
-             build Hermes with --features=rest-server to enable REST support."
+            "REST server enabled in the config but Forcerelay was built without REST support, \
+             build Forcerelay with --features=rest-server to enable REST support."
         );
 
         None
@@ -162,8 +162,8 @@ fn spawn_telemetry_server(config: &Config) -> Result<(), Box<dyn Error + Send + 
 fn spawn_telemetry_server(config: &Config) -> Result<(), Box<dyn Error + Send + Sync>> {
     if config.telemetry.enabled {
         warn!(
-            "telemetry enabled in the config but Hermes was built without telemetry support, \
-             build Hermes with --features=telemetry to enable telemetry support."
+            "telemetry enabled in the config but Forcerelay was built without telemetry support, \
+             build Forcerelay with --features=telemetry to enable telemetry support."
         );
     }
 
