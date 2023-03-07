@@ -2,7 +2,7 @@ DESCRIPTION:
 Query information about token transfers
 
 USAGE:
-    hermes query transfer <SUBCOMMAND>
+    forcerelay query transfer <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

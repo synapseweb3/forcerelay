@@ -2,7 +2,7 @@ DESCRIPTION:
 Query the identifiers of all connections on a chain
 
 USAGE:
-    hermes query connections [OPTIONS] --chain <CHAIN_ID>
+    forcerelay query connections [OPTIONS] --chain <CHAIN_ID>
 
 OPTIONS:
         --counterparty-chain <COUNTERPARTY_CHAIN_ID>

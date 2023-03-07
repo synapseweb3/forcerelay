@@ -2,9 +2,9 @@ DESCRIPTION:
 Adds key to a configured chain or restores a key to a configured chain using a mnemonic
 
 USAGE:
-    hermes keys add [OPTIONS] --chain <CHAIN_ID> --key-file <KEY_FILE>
+    forcerelay keys add [OPTIONS] --chain <CHAIN_ID> --key-file <KEY_FILE>
 
-    hermes keys add [OPTIONS] --chain <CHAIN_ID> --mnemonic-file <MNEMONIC_FILE>
+    forcerelay keys add [OPTIONS] --chain <CHAIN_ID> --mnemonic-file <MNEMONIC_FILE>
 
 OPTIONS:
     -h, --help                   Print help information

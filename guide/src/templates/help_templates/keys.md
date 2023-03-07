@@ -2,7 +2,7 @@ DESCRIPTION:
 Manage keys in the relayer for each chain
 
 USAGE:
-    hermes keys <SUBCOMMAND>
+    forcerelay keys <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

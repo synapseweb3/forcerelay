@@ -2,7 +2,7 @@ DESCRIPTION:
 Register a payee for a channel
 
 USAGE:
-    hermes fee register-payee --chain <CHAIN_ID> --channel <CHANNEL_ID> --port <PORT_ID> --payee <PAYEE_ADDRESS>
+    forcerelay fee register-payee --chain <CHAIN_ID> --channel <CHANNEL_ID> --port <PORT_ID> --payee <PAYEE_ADDRESS>
 
 OPTIONS:
     -h, --help    Print help information

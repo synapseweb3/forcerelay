@@ -4,7 +4,7 @@ chains exists in the _IBC folder of the chain-registry then a corresponding pack
 to the configuration
 
 USAGE:
-    hermes config auto [OPTIONS] --output <PATH> --chains <CHAIN_NAME:OPTIONAL_KEY_NAME>
+    forcerelay config auto [OPTIONS] --output <PATH> --chains <CHAIN_NAME:OPTIONAL_KEY_NAME>
 
 OPTIONS:
         --commit <COMMIT_HASH>    Commit hash from which the chain configs will be generated. If

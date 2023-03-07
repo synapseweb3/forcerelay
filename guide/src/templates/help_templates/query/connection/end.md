@@ -2,7 +2,7 @@ DESCRIPTION:
 Query connection end
 
 USAGE:
-    hermes query connection end [OPTIONS] --chain <CHAIN_ID> --connection <CONNECTION_ID>
+    forcerelay query connection end [OPTIONS] --chain <CHAIN_ID> --connection <CONNECTION_ID>
 
 OPTIONS:
     -h, --help               Print help information

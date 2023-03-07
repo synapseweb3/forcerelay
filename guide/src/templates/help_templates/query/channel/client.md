@@ -2,7 +2,7 @@ DESCRIPTION:
 Query channel's client state
 
 USAGE:
-    hermes query channel client --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID>
+    forcerelay query channel client --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID>
 
 OPTIONS:
     -h, --help    Print help information

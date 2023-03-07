@@ -1,8 +1,8 @@
 DESCRIPTION:
-Validate Hermes configuration file
+Validate Forcerelay configuration file
 
 USAGE:
-    hermes config <SUBCOMMAND>
+    forcerelay config <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

@@ -2,7 +2,7 @@ DESCRIPTION:
 Query connection channels
 
 USAGE:
-    hermes query connection channels --chain <CHAIN_ID> --connection <CONNECTION_ID>
+    forcerelay query connection channels --chain <CHAIN_ID> --connection <CONNECTION_ID>
 
 OPTIONS:
     -h, --help    Print help information

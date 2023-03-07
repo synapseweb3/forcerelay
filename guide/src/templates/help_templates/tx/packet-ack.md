@@ -2,7 +2,7 @@ DESCRIPTION:
 Relay acknowledgment packets
 
 USAGE:
-    hermes tx packet-ack [OPTIONS] --dst-chain <DST_CHAIN_ID> --src-chain <SRC_CHAIN_ID> --src-port <SRC_PORT_ID> --src-channel <SRC_CHANNEL_ID>
+    forcerelay tx packet-ack [OPTIONS] --dst-chain <DST_CHAIN_ID> --src-chain <SRC_CHAIN_ID> --src-port <SRC_PORT_ID> --src-channel <SRC_CHANNEL_ID>
 
 OPTIONS:
     -h, --help

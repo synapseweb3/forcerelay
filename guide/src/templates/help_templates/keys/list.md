@@ -2,7 +2,7 @@ DESCRIPTION:
 List keys configured on a chain
 
 USAGE:
-    hermes keys list --chain <CHAIN_ID>
+    forcerelay keys list --chain <CHAIN_ID>
 
 OPTIONS:
     -h, --help    Print help information

@@ -44,8 +44,8 @@ if [ "$MODE" != "check" ] && [ "$MODE" != "update" ]; then
 fi
 
 HELP_DIR="./guide/src/templates/help_templates/"
-COMMAND_DIR="./guide/src/templates/commands/hermes/"
-TMP_PATH="/tmp/hermes_mdbook_templates"
+COMMAND_DIR="./guide/src/templates/commands/forcerelay/"
+TMP_PATH="/tmp/forcerelay_mdbook_templates"
 OUTPUT=0
 
 function print_array_with_prefix() {
@@ -72,7 +72,7 @@ function print_array() {
 }
 
 function generate_commands_rec(){
-    # Called by generate_commands to generate every command or Hermes.
+    # Called by generate_commands to generate every command or Forcerelay.
     # Echo all the subcommands of the commands given by $2.
     # Args :
     # - $1: Command prefix with whitespaces replaced by '/'
@@ -93,7 +93,7 @@ function generate_commands_rec(){
 
         # if command is not help and not empty then echo its subcommands and call the function recursively
         if [ "$command" != "help" ] && [ ! -z "$command" ]; then
-            local new_commands=$(cargo run -q --bin hermes $cmd_prefix $command --help | $SED '0,/^SUBCOMMANDS:.*/d' | cut -c 1-$cut | $SED '/^\s*$/d ; s/\s\+\(\S\+\)\s*.*/\1/')
+            local new_commands=$(cargo run -q --bin forcerelay $cmd_prefix $command --help | $SED '0,/^SUBCOMMANDS:.*/d' | cut -c 1-$cut | $SED '/^\s*$/d ; s/\s\+\(\S\+\)\s*.*/\1/')
             if [ -z "$cmd_prefix" ]; then
                 local new_cmd_prefix=$command
             else
@@ -109,9 +109,9 @@ function generate_commands_rec(){
 }
 
 function generate_commands(){
-    # Generates the list of every commands of Hermes
+    # Generates the list of every commands of Forcerelay
     echo "version"  # Special case
-    local new_commands=$(cargo run -q --bin hermes help | $SED '0,/^SUBCOMMANDS:.*/d ; s/\s\+\(\S\+\)\s*.*/\1/')
+    local new_commands=$(cargo run -q --bin forcerelay help | $SED '0,/^SUBCOMMANDS:.*/d ; s/\s\+\(\S\+\)\s*.*/\1/')
     print_array $new_commands
     generate_commands_rec "" $new_commands
 }
@@ -146,7 +146,7 @@ function generate_help(){
             dir="${filename%/*}"
             mkdir -p $dir
 
-            cargo run -q --bin hermes $command | $SED '1s/.*/DESCRIPTION:/' > $TMP_PATH
+            cargo run -q --bin forcerelay $command | $SED '1s/.*/DESCRIPTION:/' > $TMP_PATH
             if ! cmp -s $TMP_PATH $filename; then
                 if [ $MODE = "update" ]; then
                     mv $TMP_PATH $filename
@@ -186,7 +186,7 @@ function generate_templates(){
             mkdir -p $dir
 
             local cpt=1
-            cargo run -q --bin hermes $command | $SED -n '/USAGE:/, /OPTIONS:/{ /USAGE:/! { /OPTIONS:/! p }}'  | $SED -r '/^\s*$/d ; s/^\s+// ; s/</[[#/g ; s/>/]]/g; s/hermes/[[#BINARY hermes]][[#GLOBALOPTIONS]]/ ; s/ \[(OPTIONS|SUBCOMMAND)]/\[\[#\1]]/g ;' | while read line || [[ -n $line ]]
+            cargo run -q --bin forcerelay $command | $SED -n '/USAGE:/, /OPTIONS:/{ /USAGE:/! { /OPTIONS:/! p }}'  | $SED -r '/^\s*$/d ; s/^\s+// ; s/</[[#/g ; s/>/]]/g; s/forcerelay/[[#BINARY forcerelay]][[#GLOBALOPTIONS]]/ ; s/ \[(OPTIONS|SUBCOMMAND)]/\[\[#\1]]/g ;' | while read line || [[ -n $line ]]
             do
                 # Create a template for every usage
                 filename=$COMMAND_DIR$path"_$cpt.md"

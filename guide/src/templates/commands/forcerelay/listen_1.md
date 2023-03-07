@@ -1,0 +1,1 @@
+[[#BINARY forcerelay]][[#GLOBALOPTIONS]] listen[[#OPTIONS]] --chain [[#CHAIN_ID]]

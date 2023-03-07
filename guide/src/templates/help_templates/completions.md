@@ -2,7 +2,7 @@ DESCRIPTION:
 Generate auto-complete scripts for different shells
 
 USAGE:
-    hermes completions --shell <SHELL>
+    forcerelay completions --shell <SHELL>
 
 OPTIONS:
     -h, --help    Print help information

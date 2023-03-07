@@ -2,7 +2,7 @@ DESCRIPTION:
 Query channel end
 
 USAGE:
-    hermes query channel end [OPTIONS] --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID>
+    forcerelay query channel end [OPTIONS] --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID>
 
 OPTIONS:
     -h, --help               Print help information

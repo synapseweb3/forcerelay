@@ -14,9 +14,9 @@ use crate::conclude::Output;
 
 #[derive(Clone, Command, Debug, Parser, PartialEq, Eq)]
 #[clap(
-    override_usage = "hermes keys delete --chain <CHAIN_ID> --key-name <KEY_NAME>
+    override_usage = "forcerelay keys delete --chain <CHAIN_ID> --key-name <KEY_NAME>
 
-    hermes keys delete --chain <CHAIN_ID> --all"
+    forcerelay keys delete --chain <CHAIN_ID> --all"
 )]
 pub struct KeysDeleteCmd {
     #[clap(

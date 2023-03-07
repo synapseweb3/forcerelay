@@ -2,7 +2,7 @@ DESCRIPTION:
 Query information about transactions
 
 USAGE:
-    hermes query tx <SUBCOMMAND>
+    forcerelay query tx <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

@@ -2,7 +2,7 @@ DESCRIPTION:
 Query information about clients
 
 USAGE:
-    hermes query client <SUBCOMMAND>
+    forcerelay query client <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

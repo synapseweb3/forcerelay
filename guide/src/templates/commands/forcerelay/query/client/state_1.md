@@ -1,0 +1,1 @@
+[[#BINARY forcerelay]][[#GLOBALOPTIONS]] query client state[[#OPTIONS]] --chain [[#CHAIN_ID]] --client [[#CLIENT_ID]]

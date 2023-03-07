@@ -29,7 +29,7 @@ fn find_key(chain_config: &ChainConfig) -> Option<String> {
 /// If a is specified then it will be used without verifying that it exists.
 #[derive(Clone, Command, Debug, Parser, PartialEq, Eq)]
 #[clap(
-    override_usage = "hermes config auto [OPTIONS] --output <PATH> --chains <CHAIN_NAME:OPTIONAL_KEY_NAME>"
+    override_usage = "forcerelay config auto [OPTIONS] --output <PATH> --chains <CHAIN_NAME:OPTIONAL_KEY_NAME>"
 )]
 pub struct AutoCmd {
     #[clap(

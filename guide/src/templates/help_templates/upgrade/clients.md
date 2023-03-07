@@ -2,7 +2,7 @@ DESCRIPTION:
 Upgrade all IBC clients that target a specific chain
 
 USAGE:
-    hermes upgrade clients [OPTIONS] --reference-chain <REFERENCE_CHAIN_ID> --upgrade-height <REFERENCE_UPGRADE_HEIGHT>
+    forcerelay upgrade clients [OPTIONS] --reference-chain <REFERENCE_CHAIN_ID> --upgrade-height <REFERENCE_UPGRADE_HEIGHT>
 
 OPTIONS:
     -h, --help                          Print help information

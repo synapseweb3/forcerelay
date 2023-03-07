@@ -2,7 +2,7 @@ DESCRIPTION:
 Query packet commitment
 
 USAGE:
-    hermes query packet commitment [OPTIONS] --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID> --sequence <SEQUENCE>
+    forcerelay query packet commitment [OPTIONS] --chain <CHAIN_ID> --port <PORT_ID> --channel <CHANNEL_ID> --sequence <SEQUENCE>
 
 OPTIONS:
     -h, --help               Print help information

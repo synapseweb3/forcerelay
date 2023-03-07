@@ -2,7 +2,7 @@ DESCRIPTION:
 Query for the header used in a client update at a certain height
 
 USAGE:
-    hermes query client header [OPTIONS] --chain <CHAIN_ID> --client <CLIENT_ID> --consensus-height <CONSENSUS_HEIGHT>
+    forcerelay query client header [OPTIONS] --chain <CHAIN_ID> --client <CLIENT_ID> --consensus-height <CONSENSUS_HEIGHT>
 
 OPTIONS:
     -h, --help               Print help information

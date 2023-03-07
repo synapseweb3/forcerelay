@@ -2,7 +2,7 @@ DESCRIPTION:
 Query objects from the chain
 
 USAGE:
-    hermes query <SUBCOMMAND>
+    forcerelay query <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

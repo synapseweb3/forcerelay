@@ -1,0 +1,1 @@
+[[#BINARY forcerelay]][[#GLOBALOPTIONS]] query connections[[#OPTIONS]] --chain [[#CHAIN_ID]]
