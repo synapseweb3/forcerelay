@@ -11,7 +11,7 @@ use tracing::error_span;
 use ibc_relayer::chain::handle::{CachingChainHandle, ChainHandle};
 use ibc_relayer::event::monitor::{Error as EventError, ErrorDetail as EventErrorDetail};
 use ibc_relayer::registry::SharedRegistry;
-use ibc_relayer::supervisor::forcerelay::handle_event_batch;
+use ibc_relayer::supervisor::forcerelay::handle_eth_ckb_event_batch;
 use ibc_relayer::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 
@@ -19,7 +19,7 @@ use crate::conclude::Output;
 use crate::prelude::*;
 
 #[derive(Clone, Command, Debug, Parser, PartialEq, Eq)]
-pub struct ForcerelayCmd {
+pub struct EthCkbCmd {
     #[clap(
         long = "ethereum-chain-id",
         required = true,
@@ -35,7 +35,7 @@ pub struct ForcerelayCmd {
     ckb_chain: ChainId,
 }
 
-impl Runnable for ForcerelayCmd {
+impl Runnable for EthCkbCmd {
     fn run(&self) {
         let config = (*app_config()).clone();
         let registry = SharedRegistry::<CachingChainHandle>::new(config);
@@ -61,7 +61,7 @@ impl Runnable for ForcerelayCmd {
                 if let Ok(batch) = eth_subscription.try_recv() {
                     match batch.deref() {
                         Ok(batch) => {
-                            handle_event_batch(&src_chain, &dst_chain, batch);
+                            handle_eth_ckb_event_batch(&src_chain, &dst_chain, batch);
                         }
                         Err(EventError(EventErrorDetail::SubscriptionCancelled(_), _)) => {
                             warn!("event subscription was cancelled, clearing pending packets");

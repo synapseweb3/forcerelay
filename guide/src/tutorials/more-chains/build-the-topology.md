@@ -1,9 +1,9 @@
 # Build the topology
 
-At this point in the tutorial, you should have four chains running and Hermes correctly configured. You can perform a `health-check` with the command :
+At this point in the tutorial, you should have four chains running and Forcerelay correctly configured. You can perform a `health-check` with the command :
 
 ```shell
-{{#template ../../templates/commands/hermes/health-check_1.md}}
+{{#template ../../templates/commands/forcerelay/health-check_1.md}}
 ```
 
 If the command runs successfully, it should output something similar to:
@@ -36,12 +36,12 @@ Execute the following command:
 If this command runs successfully, it should output the following:
 
 ```shell
-{{#template ../../templates/commands/hermes/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1 A_PORT_ID=transfer B_PORT_ID=transfer}}
-{{#template ../../templates/commands/hermes/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-2 A_PORT_ID=transfer B_PORT_ID=transfer}}
-{{#template ../../templates/commands/hermes/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-3 A_PORT_ID=transfer B_PORT_ID=transfer}}
-{{#template ../../templates/commands/hermes/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-1 B_CHAIN_ID=ibc-2 A_PORT_ID=transfer B_PORT_ID=transfer}}
-{{#template ../../templates/commands/hermes/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-1 B_CHAIN_ID=ibc-3 A_PORT_ID=transfer B_PORT_ID=transfer}}
-{{#template ../../templates/commands/hermes/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-2 B_CHAIN_ID=ibc-3 A_PORT_ID=transfer B_PORT_ID=transfer}}
+{{#template ../../templates/commands/forcerelay/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1 A_PORT_ID=transfer B_PORT_ID=transfer}}
+{{#template ../../templates/commands/forcerelay/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-2 A_PORT_ID=transfer B_PORT_ID=transfer}}
+{{#template ../../templates/commands/forcerelay/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-3 A_PORT_ID=transfer B_PORT_ID=transfer}}
+{{#template ../../templates/commands/forcerelay/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-1 B_CHAIN_ID=ibc-2 A_PORT_ID=transfer B_PORT_ID=transfer}}
+{{#template ../../templates/commands/forcerelay/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-1 B_CHAIN_ID=ibc-3 A_PORT_ID=transfer B_PORT_ID=transfer}}
+{{#template ../../templates/commands/forcerelay/create/channel_2.md --yes BINARY="$HOME/ibc-rs/target/release/hermes" A_CHAIN_ID=ibc-2 B_CHAIN_ID=ibc-3 A_PORT_ID=transfer B_PORT_ID=transfer}}
 ```
 
 Executing these commands will:
@@ -108,10 +108,10 @@ flowchart TD
 You can verify that everything is correct with the commands:
 
 ```shell
-{{#template ../../templates/commands/hermes/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-0}}
-{{#template ../../templates/commands/hermes/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-1}}
-{{#template ../../templates/commands/hermes/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-2}}
-{{#template ../../templates/commands/hermes/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-3}}
+{{#template ../../templates/commands/forcerelay/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-0}}
+{{#template ../../templates/commands/forcerelay/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-1}}
+{{#template ../../templates/commands/forcerelay/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-2}}
+{{#template ../../templates/commands/forcerelay/query/channels_1.md OPTIONS= --show-counterparty CHAIN_ID=ibc-3}}
 ```
 
 Which should normally output: 
@@ -174,7 +174,7 @@ Let's use packet filters to relay only on the green paths specified in the chart
     ]
     ```
 
-> __NOTE__: It is also possible to use a `deny` policy to filter out the channels you do not want to relay on. However, if other channels exist or are created, Hermes will also relay on them.
+> __NOTE__: It is also possible to use a `deny` policy to filter out the channels you do not want to relay on. However, if other channels exist or are created, Forcerelay will also relay on them.
 
 At this point, your config file should look like this:
 <details><summary style="font-weight:bold">config.toml</summary>
@@ -188,7 +188,7 @@ At this point, your config file should look like this:
 It is also possible to check that the configuration file is valid with the command:
 
 ```shell
-{{#template ../../templates/commands/hermes/config/validate_1.md}}
+{{#template ../../templates/commands/forcerelay/config/validate_1.md}}
 ```
 
 If the command runs successfully, the output should be:

@@ -1,4 +1,4 @@
-//! Definition of all the Hermes subcommands
+//! Definition of all the Forcerelay subcommands
 
 mod clear;
 mod completions;
@@ -19,9 +19,9 @@ mod version;
 
 use self::{
     clear::ClearCmds, completions::CompletionsCmd, config::ConfigCmd, create::CreateCmds,
-    fee::FeeCmd, forcerelay::ForcerelayCmd, health::HealthCheckCmd, keys::KeysCmd,
-    listen::ListenCmd, misbehaviour::MisbehaviourCmd, query::QueryCmd, start::StartCmd, tx::TxCmd,
-    update::UpdateCmds, upgrade::UpgradeCmds, version::VersionCmd,
+    fee::FeeCmd, forcerelay::EthCkbCmd, health::HealthCheckCmd, keys::KeysCmd, listen::ListenCmd,
+    misbehaviour::MisbehaviourCmd, query::QueryCmd, start::StartCmd, tx::TxCmd, update::UpdateCmds,
+    upgrade::UpgradeCmds, version::VersionCmd,
 };
 
 use core::time::Duration;
@@ -42,7 +42,7 @@ pub fn default_config_file() -> Option<PathBuf> {
 /// Cli Subcommands
 #[derive(Command, Parser, Debug, Runnable)]
 pub enum CliCmd {
-    /// Validate Hermes configuration file
+    /// Validate Forcerelay configuration file
     #[clap(subcommand)]
     Config(ConfigCmd),
 
@@ -100,7 +100,7 @@ pub enum CliCmd {
     Completions(CompletionsCmd),
 
     /// Relay ETH headers to CKB and maintain them in CKB contract
-    Forcerelay(ForcerelayCmd),
+    EthCkb(EthCkbCmd),
 }
 
 /// This trait allows you to define how application configuration is loaded.
@@ -140,7 +140,7 @@ impl Configurable<Config> for CliCmd {
     /// This can be safely deleted if you don't want to override config
     /// settings from command-line options.
     fn process_config(&self, mut config: Config) -> Result<Config, FrameworkError> {
-        // Alter the memo for all chains to include a suffix with Hermes build details
+        // Alter the memo for all chains to include a suffix with Forcerelay build details
         let web = "https://hermes.informal.systems";
         let suffix = format!("{} {} ({})", CliCmd::name(), clap::crate_version!(), web);
         for ccfg in config.chains.iter_mut() {
@@ -149,7 +149,7 @@ impl Configurable<Config> for CliCmd {
             }
         }
 
-        // For all commands except for `start` Hermes retries
+        // For all commands except for `start` Forcerelay retries
         // for a prolonged period of time.
         if !matches!(self, CliCmd::Start(_)) {
             for c in config.chains.iter_mut() {

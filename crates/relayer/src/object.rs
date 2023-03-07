@@ -117,7 +117,7 @@ impl Packet {
     }
 }
 
-/// A wallet worker which monitors the balance of the wallet in use by Hermes
+/// A wallet worker which monitors the balance of the wallet in use by Forcerelay
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Wallet {
     /// Chain identifier

@@ -1,4 +1,4 @@
-# ADR 010: Unified approach for CLI arguments for Hermes v1.0.0
+# ADR 010: Unified approach for CLI arguments for Forcerelay v1.0.0
 
 ## Changelog
 * 15.06.2022: Proposed.
@@ -6,9 +6,9 @@
 
 ## Context
 
-In this ADR we provide recommendations and intuitions to using flags for all the arguments of the Hermes commands.
+In this ADR we provide recommendations and intuitions to using flags for all the arguments of the Forcerelay commands.
 
-The problem we are trying to solve is a unified approach to CLI arguments for Hermes v1.0.0.
+The problem we are trying to solve is a unified approach to CLI arguments for Forcerelay v1.0.0.
 
 ## Decision
 
@@ -22,7 +22,7 @@ To avoid confusion, all the parameters should take long flags. The following app
 
 The following commands are implemented, with the binary name `hermes` often omitted:
 
-### Hermes global flags
+### Forcerelay global flags
 
 * `hermes --config <CONFIG> <COMMAND>`
 
@@ -269,11 +269,11 @@ __11.07.22__
 
 ### Positive
 
-* Clear parameters for Hermes commands
+* Clear parameters for Forcerelay commands
 
 ### Negative
 
-* Breaking changes which will require updating anything using Hermes
+* Breaking changes which will require updating anything using Forcerelay
 
 ### Neutral
 

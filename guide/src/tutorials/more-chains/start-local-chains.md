@@ -1,6 +1,6 @@
 # Start the local chains
 
-In this chapter, you will learn how to spawn four Gaia chains, connect them in an arbitrary topology and use Hermes to transfer tokens between them.
+In this chapter, you will learn how to spawn four Gaia chains, connect them in an arbitrary topology and use Forcerelay to transfer tokens between them.
 
 ```mermaid
 flowchart LR
@@ -35,7 +35,7 @@ rm -r $HOME/.gm/node-*
 rm -r $HOME/.gm/ibc-*
 ```
 
-Copy and paste the configuration below to `$HOME/.gm/gm.toml` and set Hermes' binary path according to your setup. The following contains the configuration of 4 IBC-enabled chains.
+Copy and paste the configuration below to `$HOME/.gm/gm.toml` and set Forcerelay' binary path according to your setup. The following contains the configuration of 4 IBC-enabled chains.
 
 __gm.toml__
 
@@ -105,7 +105,7 @@ ibc-3            22999  27040 27041 27042  $HOME/.gm/ibc-3
 
 
 
-### Hermes' configuration file
+### Forcerelay' configuration file
 
 Gaiad Manager `gm` takes care of creating the configuration file. Run the command below to create the `$HOME/.hermes/config.toml` file:
 
@@ -148,7 +148,7 @@ SUCCESS Added key 'wallet1' (cosmos15jxyjskrx7s8yqpfn3xddlrx7qcq0f8r69mp4g) on c
 ```
 
 > __TROUBLESHOOTING__: 
-> - If the command does not out output anything, make sure the path to Hermes' binary is set in `$HOME/.gm/gm.toml`.
+> - If the command does not out output anything, make sure the path to Forcerelay' binary is set in `$HOME/.gm/gm.toml`.
 
 ### The `$HOME/.gm` directory
 

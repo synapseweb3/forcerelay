@@ -2,7 +2,7 @@ DESCRIPTION:
 Query the denomination trace info from a trace hash
 
 USAGE:
-    hermes query transfer denom-trace --chain <CHAIN_ID> --hash <HASH>
+    forcerelay query transfer denom-trace --chain <CHAIN_ID> --hash <HASH>
 
 OPTIONS:
     -h, --help    Print help information

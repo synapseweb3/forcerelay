@@ -1,15 +1,15 @@
 # Telemetry
 
 To gain a better understanding of the status and activity of the relayer,
-Hermes features a built-in telemetry service based on the [OpenTelemetry][opentelemetry] observability framework,
+Forcerelay features a built-in telemetry service based on the [OpenTelemetry][opentelemetry] observability framework,
 whose metrics can be exposed over HTTP for integration with the [Prometheus][prometheus] monitoring system.
 
-The official Hermes builds for Linux and macOS come with telemetry support since version `v0.4.0`.
-See the [installation instructions][installation] for how to obtain the latest version of Hermes.
+The official Forcerelay builds for Linux and macOS come with telemetry support since version `v0.4.0`.
+See the [installation instructions][installation] for how to obtain the latest version of Forcerelay.
 
 ## Configuration
 
-The telemetry service is not active by default, and must be enabled in Hermes' configuration:
+The telemetry service is not active by default, and must be enabled in Forcerelay' configuration:
 
 ```toml
 [telemetry]
@@ -18,7 +18,7 @@ host    = '127.0.0.1'   # default value
 port    = 3001          # default value
 ```
 
-Please see the [relevant section for *Configuration*](../configuration/index.md) for more general details about Hermes configuration options.
+Please see the [relevant section for *Configuration*](../configuration/index.md) for more general details about Forcerelay configuration options.
 
 [installation]: ../../quick-start/installation.md#install-the-relayer
 [opentelemetry]: https://opentelemetry.io

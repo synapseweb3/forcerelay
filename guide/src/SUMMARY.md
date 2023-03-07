@@ -1,6 +1,6 @@
 # Summary
 
-# Hermes v1.3.0
+# Forcerelay v1.3.0
 
 ---
 - [Introduction](./index.md)
@@ -19,10 +19,10 @@
       - [Start the local chains](./tutorials/more-chains/start-local-chains.md)
       - [Build the topology](./tutorials/more-chains/build-the-topology.md)
       - [Start relaying](./tutorials/more-chains/start-relaying.md)
-      - [Add new instances of Hermes](./tutorials/more-chains/concurrent-instances.md)
+      - [Add new instances of Forcerelay](./tutorials/more-chains/concurrent-instances.md)
     - [Relaying in production](./tutorials/production/index.md)
       - [Set up the monitoring platform](./tutorials/production/setup-grafana.md)
-      - [Set up Hermes](./tutorials/production/setup-hermes.md)
+      - [Set up Forcerelay](./tutorials/production/setup-hermes.md)
       - [Start relaying](./tutorials/production/start-relaying.md)
 
 - [Advanced](./advanced/index.md)
@@ -37,7 +37,7 @@
 
 - [Documentation](./documentation/index.md)
     - [Configuration](./documentation/configuration/index.md)
-        - [Configure Hermes](./documentation/configuration/configure-hermes.md)
+        - [Configure Forcerelay](./documentation/configuration/configure-hermes.md)
         - [Description of the parameters](./documentation/configuration/description.md)
     - [Telemetry](./documentation/telemetry/index.md)
         - [Operators guide](./documentation/telemetry/operators.md)

@@ -73,7 +73,7 @@ your path.
 
 **Entries**: All entries are defined and documented in the `gm.toml` example configuration file.
 
-Copy and paste below to `$HOME/.gm/gm.toml` and set Hermes' binary path according to your setup.
+Copy and paste below to `$HOME/.gm/gm.toml` and set Forcerelay' binary path according to your setup.
 
 The following configuration you need to specify 2 `gaiad` chains. `hermes` will know about these chains.
 
@@ -87,4 +87,4 @@ The following configuration you need to specify 2 `gaiad` chains. `hermes` will 
 
 ## Next steps
 
-Now that `Gaiad Manager` is installed on your machine, visit the [first tutorial](../local-chains/index.md) to learn the basics of Hermes. You will start two local chains and exchange tokens over IBC transfers.
+Now that `Gaiad Manager` is installed on your machine, visit the [first tutorial](../local-chains/index.md) to learn the basics of Forcerelay. You will start two local chains and exchange tokens over IBC transfers.

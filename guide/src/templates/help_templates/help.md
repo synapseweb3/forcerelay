@@ -1,9 +1,9 @@
 DESCRIPTION:
-Informal Systems <hello@informal.systems>
-  Hermes is an IBC Relayer written in Rust
+Cryptape Interops Team
+  Forcerelay is an IBC-Compatible Relayer written in Rust
 
 USAGE:
-    hermes [OPTIONS] [SUBCOMMAND]
+    forcerelay [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
         --config <CONFIG>    Path to configuration file
@@ -13,10 +13,10 @@ OPTIONS:
 
 SUBCOMMANDS:
     clear           Clear objects, such as outstanding packets on a channel
-    config          Validate Hermes configuration file
+    config          Validate Forcerelay configuration file
     create          Create objects (client, connection, or channel) on chains
+    eth-ckb         Relay ETH headers to CKB and maintain them in CKB contract
     fee             Interact with the fee middleware
-    forcerelay      Relay ETH headers to CKB and maintain them in CKB contract
     health-check    Performs a health check of all chains in the the config
     help            Print this message or the help of the given subcommand(s)
     keys            Manage keys in the relayer for each chain

@@ -2,9 +2,9 @@ DESCRIPTION:
 Delete key(s) from a configured chain
 
 USAGE:
-    hermes keys delete --chain <CHAIN_ID> --key-name <KEY_NAME>
+    forcerelay keys delete --chain <CHAIN_ID> --key-name <KEY_NAME>
 
-    hermes keys delete --chain <CHAIN_ID> --all
+    forcerelay keys delete --chain <CHAIN_ID> --all
 
 OPTIONS:
     -h, --help    Print help information

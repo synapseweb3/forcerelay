@@ -1,7 +1,7 @@
 
-# End-to-end tests for Hermes
+# End-to-end tests for Forcerelay
 
-This folder contains end-to-end tests for Hermes, written in Python.
+This folder contains end-to-end tests for Forcerelay, written in Python.
 
 Unlike the Rust-based integration tests which hook into the relayer API,
 this test suite calls the `hermes` binary for setting up clients,

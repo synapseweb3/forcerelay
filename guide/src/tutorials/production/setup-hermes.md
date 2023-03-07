@@ -1,6 +1,6 @@
-# Setup Hermes
+# Setup Forcerelay
 
-In this section, you will learn how to set up Hermes to relay between the Hub and Osmosis. You will relay on channels that are already created. **It is strongly advised not to create any channels between two chains if another one with the same port already exists.**
+In this section, you will learn how to set up Forcerelay to relay between the Hub and Osmosis. You will relay on channels that are already created. **It is strongly advised not to create any channels between two chains if another one with the same port already exists.**
 
 ---
 
@@ -14,29 +14,29 @@ You can add a private key using one of two different ways:
 
 - If you have a [key-seed file](../../documentation/commands/keys/index.md#key-seed-file-private-key), use the commands :
     ```shell
-    {{#template ../../templates/commands/hermes/keys/add_1.md CHAIN_ID=cosmoshub-4 KEY_FILE=key_file_hub.json}}
-    {{#template ../../templates/commands/hermes/keys/add_1.md CHAIN_ID=osmosis-1 KEY_FILE=key_file_osmosis.json}}
+    {{#template ../../templates/commands/forcerelay/keys/add_1.md CHAIN_ID=cosmoshub-4 KEY_FILE=key_file_hub.json}}
+    {{#template ../../templates/commands/forcerelay/keys/add_1.md CHAIN_ID=osmosis-1 KEY_FILE=key_file_osmosis.json}}
     ```
 >__NOTE__: Do not confuse the `chain-name` and the `chain-id` which follows the format `chain_name-version`.
 
 - If you have a `mnemonic`, you can restore a private key from a [mnemonic-file](../../documentation/commands/keys/index.md#restore-a-private-key-to-A_CHAIN_ID-from-a-mnemonic). The following steps create a `mnemonic-file` and restore its key for each chain under names `keyhub` and `keyosmosis` :
     ```shell
     echo word1 ... word12or24 > mnemonic_file_hub
-    {{#template ../../templates/commands/hermes/keys/add_2.md CHAIN_ID=cosmoshub-4 MNEMONIC_FILE=mnemonic_file_hub.json OPTIONS= --key-name keyhub}}
+    {{#template ../../templates/commands/forcerelay/keys/add_2.md CHAIN_ID=cosmoshub-4 MNEMONIC_FILE=mnemonic_file_hub.json OPTIONS= --key-name keyhub}}
     rm mnemonic_file_hub
     echo word1 ... word12or24 > mnemonic_file_osmosis
-    {{#template ../../templates/commands/hermes/keys/add_2.md CHAIN_ID=osmosis-1 MNEMONIC_FILE=mnemonic_file_osmosis.json OPTIONS= --key-name keyosmosis}}
+    {{#template ../../templates/commands/forcerelay/keys/add_2.md CHAIN_ID=osmosis-1 MNEMONIC_FILE=mnemonic_file_osmosis.json OPTIONS= --key-name keyosmosis}}
     rm mnemonic_file_osmosis
     ``` 
 
 ## Configuration file
 
-Then, you need to create a configuration file for Hermes (more details in the [documentation](../../documentation/configuration/index.md)). 
+Then, you need to create a configuration file for Forcerelay (more details in the [documentation](../../documentation/configuration/index.md)). 
 
 The command `hermes config auto` provides a way to automatically generate a configuration file for chains in the [chain-registry](https://github.com/cosmos/chain-registry):
 
 ```shell
-{{#template ../../templates/commands/hermes/config/auto_1.md PATH=$HOME/.hermes/config.toml CHAIN_NAME:OPTIONAL_KEY_NAME=cosmoshub:keyhub osmosis:keyosmosis}}
+{{#template ../../templates/commands/forcerelay/config/auto_1.md PATH=$HOME/.hermes/config.toml CHAIN_NAME:OPTIONAL_KEY_NAME=cosmoshub:keyhub osmosis:keyosmosis}}
 ```
 >__NOTE__: This command also automatically finds IBC paths and generates packet filters from the [_IBC](https://github.com/cosmos/chain-registry/tree/master/_IBC) folder in the chain-registry.
 
@@ -57,7 +57,7 @@ __config.toml__
 ```
 >__NOTE__: You might not have the same RPC and gRPC endpoints in your configuration file as they are randomly selected in the chain-registry.
 
-The command created packet filters so Hermes will only relay on `channel-0` for `osmosis-1` and `channel-141` for `cosmoshub-4`. It uses RPC and gRPC endpoints found in the chain registry. If you also run a full node, you can replace the endpoints with your own. It has many advantages as you can accept transactions with lower gas.
+The command created packet filters so Forcerelay will only relay on `channel-0` for `osmosis-1` and `channel-141` for `cosmoshub-4`. It uses RPC and gRPC endpoints found in the chain registry. If you also run a full node, you can replace the endpoints with your own. It has many advantages as you can accept transactions with lower gas.
 
 >__WARNING__: It is difficult to estimate how much gas you will spend as it depends on many parameters like:
 > - The volume of transactions. More congestion means higher gas prices.
@@ -86,7 +86,7 @@ For the tutorial, we will follow the [example of Crypto Crew](https://github.com
 
 Finally, perform a `health-check` to verify that your setup is correct with:
 ```shell
-{{#template ../../templates/commands/hermes/health-check_1.md}}
+{{#template ../../templates/commands/forcerelay/health-check_1.md}}
 ``` 
 
 If the command runs successfully, it should output:
@@ -99,10 +99,10 @@ If the command runs successfully, it should output:
 SUCCESS performed health check for all chains in the config
 ```
 
->__WARNING__: In the previous tutorials, after setting up Hermes, we started by creating a new relay path. In production, the relay path most likely already exists and does not need to be created. **Do not create channels between the Hub and Osmosis.**
+>__WARNING__: In the previous tutorials, after setting up Forcerelay, we started by creating a new relay path. In production, the relay path most likely already exists and does not need to be created. **Do not create channels between the Hub and Osmosis.**
 
 ---
 
 ## Next steps
 
-You are now ready to relay. In the [next chapter](./start-relaying.md), you will start relaying and monitoring Hermes with Grafana.
+You are now ready to relay. In the [next chapter](./start-relaying.md), you will start relaying and monitoring Forcerelay with Grafana.

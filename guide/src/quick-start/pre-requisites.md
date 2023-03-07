@@ -12,7 +12,7 @@ The provided instructions will install all the Rust tool chain including `rustc`
 
 ### Version requirements
 
-Hermes is developed and tested using the latest version of Rust, `1.65` at
+Forcerelay is developed and tested using the latest version of Rust, `1.65` at
 the moment. To check that your tool chain is up-to-date run:
 
 ```shell
@@ -40,4 +40,4 @@ To install and configure Golang on your machine please follow the [Golang offici
 
 ## Next Steps
 
-Next, go to the [Installation](./installation.md) section to learn how to build Hermes.
+Next, go to the [Installation](./installation.md) section to learn how to build Forcerelay.

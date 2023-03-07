@@ -2,7 +2,7 @@ DESCRIPTION:
 Query the identifiers of all channels on a given chain
 
 USAGE:
-    hermes query channels [OPTIONS] --chain <CHAIN_ID>
+    forcerelay query channels [OPTIONS] --chain <CHAIN_ID>
 
 OPTIONS:
         --counterparty-chain <COUNTERPARTY_CHAIN_ID>

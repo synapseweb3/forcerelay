@@ -3,11 +3,11 @@ After the [`ibc`][ibc] and [`ibc-proto`][ibc-proto] crates
 the `cosmos` organization, we were left with a copy of
 the `ibc` crate in the `modules` directory.
 
-Hermes [will not be using][split-issue] the original `ibc` crate anymore,
+Forcerelay [will not be using][split-issue] the original `ibc` crate anymore,
 so we decided to rename the leftover copy of the `ibc` crate to `ibc-relayer-types`,
 and to trim it down to contain only the data structures used by the relayer.
 
-This change does not impact end-users of Hermes, but may affect downstream
+This change does not impact end-users of Forcerelay, but may affect downstream
 consumers of the `ibc-relayer` library in some cases.
 
 Please reach out to us if you encounter any issue following from

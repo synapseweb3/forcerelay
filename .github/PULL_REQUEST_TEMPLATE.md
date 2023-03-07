@@ -22,7 +22,7 @@ ______
 
 ### PR author checklist:
 - [ ] Added changelog entry, using [`unclog`](https://github.com/informalsystems/unclog).
-- [ ] Added tests: integration (for Hermes) or unit/mock tests (for modules).
+- [ ] Added tests: integration (for Forcerelay) or unit/mock tests (for modules).
 - [ ] Linked to GitHub issue.
 - [ ] Updated code comments and documentation (e.g., `docs/`).
 - [ ] Tagged *one* reviewer who will be the one responsible for shepherding this PR.

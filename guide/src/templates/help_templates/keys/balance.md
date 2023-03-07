@@ -3,7 +3,7 @@ Query balance for a key from a configured chain. If no key is given, the key is 
 configuration file
 
 USAGE:
-    hermes keys balance [OPTIONS] --chain <CHAIN_ID>
+    forcerelay keys balance [OPTIONS] --chain <CHAIN_ID>
 
 OPTIONS:
         --all                    (optional) query the balance for all denom. This flag overwrites

@@ -1,0 +1,1 @@
+[[#BINARY forcerelay]][[#GLOBALOPTIONS]] eth-ckb --ethereum-chain-id [[#ETH_CHAIN]] --ckb-chain-id [[#CKB_CHAIN]]

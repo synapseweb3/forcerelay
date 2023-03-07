@@ -1,0 +1,1 @@
+[[#BINARY forcerelay]][[#GLOBALOPTIONS]] create client[[#OPTIONS]] --host-chain [[#HOST_CHAIN_ID]] --reference-chain [[#REFERENCE_CHAIN_ID]]

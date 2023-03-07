@@ -1,13 +1,13 @@
 #  Relaying
 This section describes the types of relaying that hermes can perform.
 
-Hermes can send transactions triggered by IBC events. It currently handles channel handshake and packet events:
+Forcerelay can send transactions triggered by IBC events. It currently handles channel handshake and packet events:
  - [packets messages only](./packets.md#packet-relaying)
  - [channel and packet messages](./handshakes.md)
 
 ## The `start` Command
 
-The `start` command can be used to start Hermes in IBC event listen mode.
+The `start` command can be used to start Forcerelay in IBC event listen mode.
 
 ```shell
 {{#include ../../../templates/help_templates/start.md}}

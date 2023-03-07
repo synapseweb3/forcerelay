@@ -1,0 +1,1 @@
+[[#BINARY forcerelay]][[#GLOBALOPTIONS]] query channels[[#OPTIONS]] --chain [[#CHAIN_ID]]

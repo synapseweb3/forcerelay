@@ -2,7 +2,7 @@ DESCRIPTION:
 Listen to client update IBC events and handles misbehaviour
 
 USAGE:
-    hermes misbehaviour --chain <CHAIN_ID> --client <CLIENT_ID>
+    forcerelay misbehaviour --chain <CHAIN_ID> --client <CLIENT_ID>
 
 OPTIONS:
     -h, --help    Print help information

@@ -49,7 +49,7 @@ gaiad version --log_level error --long | head -n4
 1. Create a channel between `ibc-0` and `ibc-1`, and another between `ibc-1` and `ibc-2`:
 
     ```shell
-    {{#template ../../templates/commands/hermes/create/channel_2.md A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1 A_PORT_ID=transfer B_PORT_ID=transfer}}
+    {{#template ../../templates/commands/forcerelay/create/channel_2.md A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1 A_PORT_ID=transfer B_PORT_ID=transfer}}
     ```
 
     ```json
@@ -108,7 +108,7 @@ gaiad version --log_level error --long | head -n4
     ```
 
     ```shell
-    {{#template ../../templates/commands/hermes/create/channel_2.md A_CHAIN_ID=ibc-1 B_CHAIN_ID=ibc-2 A_PORT_ID=transfer B_PORT_ID=transfer}}
+    {{#template ../../templates/commands/forcerelay/create/channel_2.md A_CHAIN_ID=ibc-1 B_CHAIN_ID=ibc-2 A_PORT_ID=transfer B_PORT_ID=transfer}}
     ```
 
     ```json
@@ -169,7 +169,7 @@ gaiad version --log_level error --long | head -n4
 2. Obtain the addresses of the wallets on each chain:
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/list_1.md CHAIN_ID=ibc-0}}
+    {{#template ../../templates/commands/forcerelay/keys/list_1.md CHAIN_ID=ibc-0}}
     ```
 
     ```json
@@ -180,7 +180,7 @@ gaiad version --log_level error --long | head -n4
     ```
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/list_1.md CHAIN_ID=ibc-1}}
+    {{#template ../../templates/commands/forcerelay/keys/list_1.md CHAIN_ID=ibc-1}}
     ```
 
     ```json
@@ -191,7 +191,7 @@ gaiad version --log_level error --long | head -n4
     ```
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/list_1.md CHAIN_ID=ibc-2}}
+    {{#template ../../templates/commands/forcerelay/keys/list_1.md CHAIN_ID=ibc-2}}
     ```
 
     ```json
@@ -204,7 +204,7 @@ gaiad version --log_level error --long | head -n4
 3. (Optional) Check the balance of the wallets before transfering tokens:
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-0 OPTIONS= --all}}
+    {{#template ../../templates/commands/forcerelay/keys/balance_1.md CHAIN_ID=ibc-0 OPTIONS= --all}}
     ```
 
     ```json
@@ -214,7 +214,7 @@ gaiad version --log_level error --long | head -n4
     ```
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-1 OPTIONS= --all}}
+    {{#template ../../templates/commands/forcerelay/keys/balance_1.md CHAIN_ID=ibc-1 OPTIONS= --all}}
     ```
 
     ```json
@@ -224,7 +224,7 @@ gaiad version --log_level error --long | head -n4
     ```
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-2 OPTIONS= --all}}
+    {{#template ../../templates/commands/forcerelay/keys/balance_1.md CHAIN_ID=ibc-2 OPTIONS= --all}}
     ```
 
     ```json
@@ -236,7 +236,7 @@ gaiad version --log_level error --long | head -n4
 4. (Optional) Confirm the name of the channels used for the transfer:
 
     ```shell
-    {{#template ../../templates/commands/hermes/query/channels_1.md CHAIN_ID=ibc-0 OPTIONS= --counterparty-chain ibc-1}}
+    {{#template ../../templates/commands/forcerelay/query/channels_1.md CHAIN_ID=ibc-0 OPTIONS= --counterparty-chain ibc-1}}
     ```
 
     ```json
@@ -253,7 +253,7 @@ gaiad version --log_level error --long | head -n4
     ```
 
     ```shell
-    {{#template ../../templates/commands/hermes/query/channels_1.md CHAIN_ID=ibc-1 OPTIONS= --counterparty-chain ibc-2}}
+    {{#template ../../templates/commands/forcerelay/query/channels_1.md CHAIN_ID=ibc-1 OPTIONS= --counterparty-chain ibc-2}}
     ```
 
     ```json
@@ -269,16 +269,16 @@ gaiad version --log_level error --long | head -n4
     ]
     ```
 
-5. In a separate terminal, start an instance of Hermes:
+5. In a separate terminal, start an instance of Forcerelay:
 
     ```shell
-    {{#template ../../templates/commands/hermes/start_1.md}}
+    {{#template ../../templates/commands/forcerelay/start_1.md}}
     ```
 
 6. Transfer token using the special receiver:
 
     ```shell
-    {{#template ../../templates/commands/hermes/tx/ft-transfer_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 SRC_PORT_ID=transfer SRC_CHANNEL_ID=channel-0 AMOUNT=2500 OPTIONS= --denom samoleans --receiver 'cosmos1jwr34yvnkqkc0ddndnh9y8t94hlhn7rapfyags|transfer/channel-1:cosmos1nsztzzhl553avufxhqa204908l4dndafqph4tw' --timeout-seconds 120}}
+    {{#template ../../templates/commands/forcerelay/tx/ft-transfer_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 SRC_PORT_ID=transfer SRC_CHANNEL_ID=channel-0 AMOUNT=2500 OPTIONS= --denom samoleans --receiver 'cosmos1jwr34yvnkqkc0ddndnh9y8t94hlhn7rapfyags|transfer/channel-1:cosmos1nsztzzhl553avufxhqa204908l4dndafqph4tw' --timeout-seconds 120}}
     ```
 
     ```json
@@ -325,7 +325,7 @@ gaiad version --log_level error --long | head -n4
 7. (Optional) Check the balances:
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-0 OPTIONS= --all}}
+    {{#template ../../templates/commands/forcerelay/keys/balance_1.md CHAIN_ID=ibc-0 OPTIONS= --all}}
     ```
 
     ```json
@@ -335,7 +335,7 @@ gaiad version --log_level error --long | head -n4
     ```
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-1 OPTIONS= --all}}
+    {{#template ../../templates/commands/forcerelay/keys/balance_1.md CHAIN_ID=ibc-1 OPTIONS= --all}}
     ```
 
     ```json
@@ -345,7 +345,7 @@ gaiad version --log_level error --long | head -n4
     ```
 
     ```shell
-    {{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-2 OPTIONS= --all}}
+    {{#template ../../templates/commands/forcerelay/keys/balance_1.md CHAIN_ID=ibc-2 OPTIONS= --all}}
     ```
 
     ```json

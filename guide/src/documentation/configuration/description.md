@@ -2,7 +2,7 @@
 
 This page provides a full example of a configuration file with two chains configured:
 
->__NOTE__: Visit the [Relaying](../commands/relaying/index.md) section to learn more about Hermes' modes.
+>__NOTE__: Visit the [Relaying](../commands/relaying/index.md) section to learn more about Forcerelay' modes.
 
 ```toml
 {{#include ../../../../config.toml}}

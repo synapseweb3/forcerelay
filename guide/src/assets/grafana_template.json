@@ -121,7 +121,7 @@
       },
       "id": 62,
       "options": {
-        "content": "# Hermes Grafana Dashboard\n\nhttp://hermes.informal.systems/documentation/telemetry/operators.html to learn more about the metrics.",
+        "content": "# Forcerelay Grafana Dashboard\n\nhttp://hermes.informal.systems/documentation/telemetry/operators.html to learn more about the metrics.",
         "mode": "markdown"
       },
       "pluginVersion": "9.0.7",
@@ -161,7 +161,7 @@
           "refId": "A"
         }
       ],
-      "title": "Hermes logs",
+      "title": "Forcerelay logs",
       "type": "logs"
     },
     {
@@ -184,7 +184,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Indicates if you have enough funds on your wallet. Hermes can not relay without spending gas. Thus, it is important to set alarms which monitor the gas.",
+      "description": "Indicates if you have enough funds on your wallet. Forcerelay can not relay without spending gas. Thus, it is important to set alarms which monitor the gas.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -377,7 +377,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Indicates if Hermes is submitting messages to a specific chain ",
+      "description": "Indicates if Forcerelay is submitting messages to a specific chain ",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1057,7 +1057,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Indicates how many packets are being processed by Hermes. If this value stays constantly more than 0, it could mean that a packet is stuck.",
+      "description": "Indicates how many packets are being processed by Forcerelay. If this value stays constantly more than 0, it could mean that a packet is stuck.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1151,7 +1151,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Indicates how many `receive_packets` were processed by Hermes. It can be used with `send_packet_events` as every `send_packet_event` should trigger the processing of a `receive_packet`.",
+      "description": "Indicates how many `receive_packets` were processed by Forcerelay. It can be used with `send_packet_events` as every `send_packet_event` should trigger the processing of a `receive_packet`.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1241,7 +1241,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Indicates how many `timeout_packets` were processed by the relayer. It can be used with `timeout_packet_events` as every `timeout_event` should be processed by Hermes.",
+      "description": "Indicates how many `timeout_packets` were processed by the relayer. It can be used with `timeout_packet_events` as every `timeout_event` should be processed by Forcerelay.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1331,7 +1331,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Indicates how many acknowledgements were processed by the relayer. It can be used with `acknowledgment_events` as every event should be processed by Hermes.",
+      "description": "Indicates how many acknowledgements were processed by the relayer. It can be used with `acknowledgment_events` as every event should be processed by Forcerelay.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1806,7 +1806,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Indicates the number of times Hermes reconnected to the websocket.",
+      "description": "Indicates the number of times Forcerelay reconnected to the websocket.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2002,7 +2002,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Cleared `acknowledgment_events` rate per path. It is an indication that IBC packet relaying may be unsuccessful and that Hermes periodically finds packets to clear (i.e., unblock).",
+      "description": "Cleared `acknowledgment_events` rate per path. It is an indication that IBC packet relaying may be unsuccessful and that Forcerelay periodically finds packets to clear (i.e., unblock).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2092,7 +2092,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Cleared `send_packet_events` rate per path. It is an indication that IBC packet relaying may be unsuccessful and that Hermes periodically finds packets to clear (i.e., unblock).",
+      "description": "Cleared `send_packet_events` rate per path. It is an indication that IBC packet relaying may be unsuccessful and that Forcerelay periodically finds packets to clear (i.e., unblock).",
       "fieldConfig": {
         "defaults": {
           "color": {

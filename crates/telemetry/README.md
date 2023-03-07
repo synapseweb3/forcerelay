@@ -8,9 +8,9 @@
 ![Rust Stable][rustc-image]
 ![Rust 1.51+][rustc-version]
 
-This is the repository for the IBC telemetry service for use in the Hermes IBC relayer.
+This is the repository for the IBC telemetry service for use in the Forcerelay IBC relayer.
 
-See the [telemetry documentation][telemetry-doc] in the Hermes guide for more information.
+See the [telemetry documentation][telemetry-doc] in the Forcerelay guide for more information.
 
 ## License
 

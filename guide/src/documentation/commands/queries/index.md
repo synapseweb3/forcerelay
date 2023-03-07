@@ -1,6 +1,6 @@
 # Queries
 
-Hermes supports querying for different objects that exist on a configured chain.
+Forcerelay supports querying for different objects that exist on a configured chain.
 
 The `query` command provides the following sub-commands:
 

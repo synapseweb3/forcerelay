@@ -1,6 +1,6 @@
 # Local chains
 
-In this tutorial, you will test Hermes against two chains using Gaiad manager `gm`. This is the easiest way to get started.
+In this tutorial, you will test Forcerelay against two chains using Gaiad manager `gm`. This is the easiest way to get started.
 
 Using `gm` you will start two [`gaia`](https://github.com/cosmos/gaia) chains that support the `IBC` protocol.
 
@@ -11,7 +11,7 @@ Make sure that you followed the steps in the [Prerequisites for local chains](..
 ## Sections
 
 * **[Start Local Chains](./start-local-chains.md)**
-    * Start two local chains with `gm` and set up Hermes.
+    * Start two local chains with `gm` and set up Forcerelay.
 
 * **[Add a new relay path](./add-a-new-relay-path.md)**
     * Add a relay path between the two chains you started.

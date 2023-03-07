@@ -4,7 +4,7 @@ Start the relayer in multi-chain mode.
 Relays packets and open handshake messages between all chains in the config.
 
 USAGE:
-    hermes start [OPTIONS]
+    forcerelay start [OPTIONS]
 
 OPTIONS:
         --full-scan

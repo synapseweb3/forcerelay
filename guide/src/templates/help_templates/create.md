@@ -2,7 +2,7 @@ DESCRIPTION:
 Create objects (client, connection, or channel) on chains
 
 USAGE:
-    hermes create <SUBCOMMAND>
+    forcerelay create <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

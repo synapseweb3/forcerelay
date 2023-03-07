@@ -22,7 +22,7 @@ use crate::conclude::{exit_with_unrecoverable_error, Output};
 use crate::prelude::*;
 use ibc_relayer::config::default::connection_delay;
 
-static PROMPT: &str = "Are you sure you want a new connection & clients to be created? Hermes will use default security parameters.";
+static PROMPT: &str = "Are you sure you want a new connection & clients to be created? Forcerelay will use default security parameters.";
 static HINT: &str = "Consider using the default invocation\n\nhermes create channel --a-port <PORT-ID> --b-port <PORT-ID> --a-chain <CHAIN-A-ID> --a-connection <CONNECTION-A-ID>\n\nto re-use a pre-existing connection.";
 
 /// The data structure that represents all the possible options when invoking
@@ -46,9 +46,9 @@ static HINT: &str = "Consider using the default invocation\n\nhermes create chan
 /// to the same connection.
 #[derive(Clone, Command, Debug, Parser, PartialEq, Eq)]
 #[clap(
-    override_usage = "hermes create channel [OPTIONS] --a-chain <A_CHAIN_ID> --a-connection <A_CONNECTION_ID> --a-port <A_PORT_ID> --b-port <B_PORT_ID>
+    override_usage = "forcerelay create channel [OPTIONS] --a-chain <A_CHAIN_ID> --a-connection <A_CONNECTION_ID> --a-port <A_PORT_ID> --b-port <B_PORT_ID>
 
-    hermes create channel [OPTIONS] --a-chain <A_CHAIN_ID> --b-chain <B_CHAIN_ID> --a-port <A_PORT_ID> --b-port <B_PORT_ID> --new-client-connection"
+    forcerelay create channel [OPTIONS] --a-chain <A_CHAIN_ID> --b-chain <B_CHAIN_ID> --a-port <A_PORT_ID> --b-port <B_PORT_ID> --new-client-connection"
 )]
 pub struct CreateChannelCommand {
     #[clap(

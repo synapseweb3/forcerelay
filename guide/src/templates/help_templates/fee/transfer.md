@@ -2,7 +2,7 @@ DESCRIPTION:
 Perform a token transfer supported with a fee
 
 USAGE:
-    hermes fee transfer [OPTIONS] --dst-chain <DST_CHAIN_ID> --src-chain <SRC_CHAIN_ID> --src-port <SRC_PORT_ID> --src-channel <SRC_CHANNEL_ID> --amount <AMOUNT>
+    forcerelay fee transfer [OPTIONS] --dst-chain <DST_CHAIN_ID> --src-chain <SRC_CHAIN_ID> --src-port <SRC_PORT_ID> --src-channel <SRC_CHANNEL_ID> --amount <AMOUNT>
 
 OPTIONS:
         --ack-fee <ACK_FEE>

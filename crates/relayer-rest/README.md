@@ -8,9 +8,9 @@
 ![Rust Stable][rustc-image]
 ![Rust 1.65+][rustc-version]
 
-This is the repository for the IBC REST server for use in the Hermes IBC relayer.
+This is the repository for the IBC REST server for use in the Forcerelay IBC relayer.
 
-See the [REST server][rest-doc] section in the Hermes guide for more information.
+See the [REST server][rest-doc] section in the Forcerelay guide for more information.
 
 ## License
 

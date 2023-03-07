@@ -1,6 +1,6 @@
 ---
 name: Process Improvement
-about: For suggestions related to the process of how Hermes is shepherded.
+about: For suggestions related to the process of how Forcerelay is shepherded.
 
 ---
 
@@ -12,7 +12,7 @@ v    Please also ensure that this is not a duplicate issue :)
 
 ## Proposal
 
-<!-- Describe your proposal for how the process of Hermes should be improved -->
+<!-- Describe your proposal for how the process of Forcerelay should be improved -->
 <<<<<<< HEAD
 <!-- -->
 =======

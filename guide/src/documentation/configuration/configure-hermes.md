@@ -1,15 +1,15 @@
-# Configure Hermes
+# Configure Forcerelay
 
-In order to run Hermes, you will need to have a configuration file.
+In order to run Forcerelay, you will need to have a configuration file.
 
 The format supported for the configuration file is [TOML](https://toml.io/en/).
 
-By default, Hermes expects the configuration file to be located at `$HOME/.hermes/config.toml`.
+By default, Forcerelay expects the configuration file to be located at `$HOME/.hermes/config.toml`.
 
 This can be overridden by supplying the `--config` flag when invoking `hermes`, before the
 name of the command to run, e.g. `hermes --config my_config.toml query connection channels --chain ibc-1 --connection connection-1`.
 
-> The current version of Hermes does not support managing the configuration file programmatically.
+> The current version of Forcerelay does not support managing the configuration file programmatically.
 > You will need to use a text editor to create the file and add content to it.
 
 ```bash
@@ -24,18 +24,18 @@ hermes [--config CONFIG_FILE] COMMAND
 
 The configuration file must have one `global` section, and one `chains` section for each chain.
 <!-- markdown-link-check-disable -->
-> **Note:** As of 0.6.0, the Hermes configuration file is self-documented.
+> **Note:** As of 0.6.0, the Forcerelay configuration file is self-documented.
 > Please read the configuration file [`config.toml`](https://github.com/informalsystems/hermes/blob/{{#include ../../templates/version.md}}/config.toml)
 > itself for the most up-to-date documentation of parameters.
 
 
-By default, Hermes will relay on all channels available between all the configured chains.
-In this way, every configured chain will act as a source (in the sense that Hermes listens for events)
+By default, Forcerelay will relay on all channels available between all the configured chains.
+In this way, every configured chain will act as a source (in the sense that Forcerelay listens for events)
 and as a destination (to relay packets that others chains have sent).
 
-For example, if there are only two chains configured, then Hermes will only relay packets between those two,
+For example, if there are only two chains configured, then Forcerelay will only relay packets between those two,
 i.e. the two chains will serve as a source for each other, and likewise as a destination for each other's relevant events.
-Hermes will ignore all events that pertain to chains which are unknown (i.e. not present in config.toml).
+Forcerelay will ignore all events that pertain to chains which are unknown (i.e. not present in config.toml).
 
 To restrict relaying on specific channels, or uni-directionally, you can use [packet filtering policies](https://github.com/informalsystems/hermes/blob/{{#include ../../templates/version.md}}/config.toml#L209-L231).
 <!-- markdown-link-check-enabled -->
@@ -43,11 +43,11 @@ To restrict relaying on specific channels, or uni-directionally, you can use [pa
 ## Adding private keys
 
 For each chain configured you need to add a private key for that chain in order to submit [transactions](../commands/tx/index.md),
-please refer to the [Keys](../commands/keys/index.md) sections in order to learn how to add the private keys that are used by Hermes.
+please refer to the [Keys](../commands/keys/index.md) sections in order to learn how to add the private keys that are used by Forcerelay.
 
 ## Connecting via TLS
 
-Hermes supports connection via TLS for use-cases such as connecting from behind
+Forcerelay supports connection via TLS for use-cases such as connecting from behind
 a proxy or a load balancer. In order to enable this, you'll want to set the
 `rpc_addr`, `grpc_addr`, or `websocket_addr` parameters to specify a TLS
 connection via HTTPS using the following scheme (note that the port number 443
@@ -60,10 +60,10 @@ websocket_addr = 'wss://domain.com:443/websocket'
 
 ## Support for Interchain Accounts
 
-As of version 0.13.0, Hermes supports relaying on [Interchain Accounts][ica] channels.
+As of version 0.13.0, Forcerelay supports relaying on [Interchain Accounts][ica] channels.
 
 If the `packet_filter` option in the chain configuration is disabled, then
-Hermes will relay on all existing and future channels, including ICA channels.
+Forcerelay will relay on all existing and future channels, including ICA channels.
 
 There are two kinds of ICA channels:
 

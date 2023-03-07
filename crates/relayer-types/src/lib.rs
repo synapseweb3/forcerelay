@@ -34,8 +34,8 @@
 //! `Applications` consists of various packet encoding and processing semantics which underpin the
 //! various types of transactions that users can perform on any IBC-compliant chain.
 //!
-//! `Relayer` contains utilities for testing the `ibc` crate against the [Hermes IBC relayer][relayer-repo]. It acts
-//! as scaffolding for gluing the `ibc` crate with Hermes for testing purposes.
+//! `Relayer` contains utilities for testing the `ibc` crate against the [Forcerelay IBC relayer][relayer-repo]. It acts
+//! as scaffolding for gluing the `ibc` crate with Forcerelay for testing purposes.
 //!
 //! [core]: https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core
 //! [clients]: https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/clients

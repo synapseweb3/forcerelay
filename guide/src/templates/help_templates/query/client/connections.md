@@ -2,7 +2,7 @@ DESCRIPTION:
 Query the client connections
 
 USAGE:
-    hermes query client connections [OPTIONS] --chain <CHAIN_ID> --client <CLIENT_ID>
+    forcerelay query client connections [OPTIONS] --chain <CHAIN_ID> --client <CLIENT_ID>
 
 OPTIONS:
     -h, --help               Print help information

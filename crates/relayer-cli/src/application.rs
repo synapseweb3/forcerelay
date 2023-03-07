@@ -132,7 +132,7 @@ impl Application for CliApp {
             }
         };
 
-        tracing::info!("running Hermes v{}", clap::crate_version!());
+        tracing::info!("running Forcerelay v{}", clap::crate_version!());
 
         self.config.set_once(config);
 
@@ -156,7 +156,7 @@ impl Application for CliApp {
             .map_err(|err| {
                 let path = self.config_path.clone().unwrap_or_default();
                 eprintln!(
-                    "The Hermes configuration file at path '{}' is invalid, reason: {}",
+                    "The Forcerelay configuration file at path '{}' is invalid, reason: {}",
                     path.to_string_lossy(),
                     err
                 );

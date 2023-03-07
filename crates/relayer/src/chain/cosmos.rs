@@ -121,7 +121,7 @@ pub mod wait;
 /// would be risky, as transactions might be rejected; a smaller value
 /// might be un-necessarily restrictive on the relayer side.
 /// The [default max. block size in Tendermint 0.37 is 21MB](tm-37-max).
-/// With a fraction of `0.9`, then Hermes will never permit the configuration
+/// With a fraction of `0.9`, then Forcerelay will never permit the configuration
 /// of `max_tx_size` to exceed ~18.9MB.
 ///
 /// [tm-37-max]: https://github.com/tendermint/tendermint/blob/v0.37.0-rc1/types/params.go#L79
@@ -210,7 +210,7 @@ impl CosmosSdkChain {
         let default_gas = default_gas_from_config(&self.config);
 
         // If the default gas is strictly greater than the max gas and the tx simulation fails,
-        // Hermes won't be able to ever submit that tx because the gas amount wanted will be
+        // Forcerelay won't be able to ever submit that tx because the gas amount wanted will be
         // greater than the max gas.
         if default_gas > max_gas {
             return Err(Error::config_validation_default_gas_too_high(
@@ -793,18 +793,18 @@ impl ChainEndpoint for CosmosSdkChain {
         if let Err(e) = do_health_check(self) {
             warn!("Health checkup for chain '{}' failed", self.chain_id());
             warn!("    Reason: {}", e.detail());
-            warn!("    Some Hermes features may not work in this mode!");
+            warn!("    Some Forcerelay features may not work in this mode!");
 
             return Ok(HealthCheck::Unhealthy(Box::new(e)));
         }
 
         if let Err(e) = self.validate_params() {
             warn!(
-                "Hermes might be misconfigured for chain '{}'",
+                "Forcerelay might be misconfigured for chain '{}'",
                 self.chain_id()
             );
             warn!("    Reason: {}", e.detail());
-            warn!("    Some Hermes features may not work in this mode!");
+            warn!("    Some Forcerelay features may not work in this mode!");
 
             return Ok(HealthCheck::Unhealthy(Box::new(e)));
         }
@@ -1949,8 +1949,8 @@ fn client_id_suffix(client_id: &ClientId) -> Option<u64> {
 /// 3. Checks that transaction indexing is enabled.
 /// 4. Checks that the chain identifier matches the network name.
 /// 5. Checks that the underlying SDK and ibc-go versions are compatible.
-/// 6. Checks that the `gas_price` parameter in Hermes is >= the `min_gas_price`
-///    advertised by the node Hermes is connected to.
+/// 6. Checks that the `gas_price` parameter in Forcerelay is >= the `min_gas_price`
+///    advertised by the node Forcerelay is connected to.
 fn do_health_check(chain: &CosmosSdkChain) -> Result<(), Error> {
     let chain_id = chain.id();
     let grpc_address = chain.grpc_addr.to_string();

@@ -2,7 +2,7 @@ DESCRIPTION:
 Register a counterparty payee for a channel
 
 USAGE:
-    hermes fee register-counterparty-payee --chain <CHAIN_ID> --channel <CHANNEL_ID> --port <PORT_ID> --counterparty-payee <COUNTERPARTY_PAYEE_ADDRESS>
+    forcerelay fee register-counterparty-payee --chain <CHAIN_ID> --channel <CHANNEL_ID> --port <PORT_ID> --counterparty-payee <COUNTERPARTY_PAYEE_ADDRESS>
 
 OPTIONS:
     -h, --help    Print help information

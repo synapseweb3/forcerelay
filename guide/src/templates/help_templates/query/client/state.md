@@ -2,7 +2,7 @@ DESCRIPTION:
 Query the client state
 
 USAGE:
-    hermes query client state [OPTIONS] --chain <CHAIN_ID> --client <CLIENT_ID>
+    forcerelay query client state [OPTIONS] --chain <CHAIN_ID> --client <CLIENT_ID>
 
 OPTIONS:
     -h, --help               Print help information

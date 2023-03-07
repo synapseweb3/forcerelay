@@ -1,4 +1,4 @@
-# Uploads Hermes binary.
+# Uploads Forcerelay binary.
 # Ref: https://github.com/marketplace/actions/build-and-upload-rust-binary-to-github-releases
 
 name: Release

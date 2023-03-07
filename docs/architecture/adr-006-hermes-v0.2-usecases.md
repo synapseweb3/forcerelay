@@ -1,13 +1,13 @@
-# ADR 006: Hermes v0.2.0 Use-Cases
+# ADR 006: Forcerelay v0.2.0 Use-Cases
 
 ## Changelog
 * 16.02.2021: Proposed.
 
 ## Context
 
-One major problem with planning for the evolution of Hermes is that presently
+One major problem with planning for the evolution of Forcerelay is that presently
 there is insufficient clarity regarding its requirements.
-It is not known who are the typical Hermes users (is it human operators or
+It is not known who are the typical Forcerelay users (is it human operators or
 automated pipelines?), and what are their primary use-cases.
 
 This ADR proposes a few use-cases that seem interesting from the point
@@ -16,17 +16,17 @@ hopefully be a subset of the requirements of (any) future users.
 
 Three elements that provide further context for this discussion are:
 
-1. Hermes is still at an early stage of implementation, so these use-cases are
+1. Forcerelay is still at an early stage of implementation, so these use-cases are
    not set in stone.
 
-2. Some concrete use-cases are starting to emerge ([#628][#628]), which Hermes
+2. Some concrete use-cases are starting to emerge ([#628][#628]), which Forcerelay
    v0.1.0 either does not cover altogether, or covers poorly (e.g., because of
    inconsistent UX), thus informing this proposal.
 
-3. Hermes is one of _three_ relayer binaries that are being developed roughly in
+3. Forcerelay is one of _three_ relayer binaries that are being developed roughly in
 parallel. The other two are being developed in Go and Typescript, 
 respectively (see the [references](#references) section).
-In this context, it is plausible that Hermes will focus on performance,
+In this context, it is plausible that Forcerelay will focus on performance,
 robustness, and richness of features on a longer term.
 
 ## Decision
@@ -80,7 +80,7 @@ connection, or reuse a connection in the creation of a new channel).
 
 #### Patterns
 
-We propose two basic patterns that Hermes should be able to fulfil.
+We propose two basic patterns that Forcerelay should be able to fulfil.
 
 1. Simple invocations to perform basic actions.
     - By _action_ here we mean doing the complete handshake for an object from
@@ -91,14 +91,14 @@ We propose two basic patterns that Hermes should be able to fulfil.
 
 2. Allow reusing of pre-existing state for basic commands.
     - The pre-existing state could be a client with some specific trust options,
-      for instance, and in this case Hermes would provide support for creating
+      for instance, and in this case Forcerelay would provide support for creating
       a connection that uses this specific client.
     - This pattern should also include a retrying mechanism.
 
 #### Details of Use-Cases
 
 Applying the above patterns to a few cases, we get the following concrete
-commands that Hermes v0.2.0 should fulfil.
+commands that Forcerelay v0.2.0 should fulfil.
 
 ##### Create & Update a Client
 
@@ -126,7 +126,7 @@ update client <host-chain-id> <client-id>
 **Details:**
 Submits a transaction to chain id `<host-chain-id>` to update the client having
 identifier `<client-id>` with new consensus state from up-to-date headers.
-Hermes will automatically infer the target chain of this client from
+Forcerelay will automatically infer the target chain of this client from
 the [client state][client-state].
 
 - Upgrade a client:
@@ -138,7 +138,7 @@ upgrade client <host-chain-id> <client-id>
 **Details:**
 Submits a transaction to chain id `<host-chain-id>` to upgrade the client having
 identifier `<client-id>`. 
-Hermes will automatically infer the target chain of this client from
+Forcerelay will automatically infer the target chain of this client from
 the [client state][client-state].
 
 - Upgrade all clients that target a specific chain:
@@ -164,7 +164,7 @@ create connection <chain-a-id> <chain-b-id> [--delay <delay>]
 Starts a transaction to perform the connection open handshake protocol between
 two chains.
 The chains are called symbolically `a` and `b`, hence the option names
-`<chain-a-id>` and `<chain-b-id>`. In all handshakes, Hermes submits the first
+`<chain-a-id>` and `<chain-b-id>`. In all handshakes, Forcerelay submits the first
 step (typically called _init_, e.g., `ConnOpenInit`), to side `a`, then the
 second step (e.g., `ConnOpenTry`) to side `b`, and so on.
 
@@ -245,7 +245,7 @@ establish channel <chain-a-id> --channel-a <channel-id> --port-a <port-id>
 
 By default, the command will provide human-readable output, i.e., pretty
 printing.
-In practice, the final result of a Hermes command is captured in an 
+In practice, the final result of a Forcerelay command is captured in an 
 [Output][output] structure that has support for JSON serialization. To
 enable JSON, we add a configuration parameter `log_json`. The global section
 of the config file will look as follows:
@@ -256,7 +256,7 @@ log_level = 'error'
 log_json = 'false'
 ```
 
-By default, this parameter is `false`. When set to `true`, all the Hermes output
+By default, this parameter is `false`. When set to `true`, all the Forcerelay output
 will be in JSON.
 
 ## Status

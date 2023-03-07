@@ -3,7 +3,7 @@
 
 This minor release mainly improves the reliability of the relayer
 by ensuring that pending packets are cleared on start,
-and that Hermes can recover from the WebSocket subscriptions
+and that Forcerelay can recover from the WebSocket subscriptions
 being closed under its feet by Tendermint.
 
 Upgrading from version `0.6.0` to `0.6.1` requires no explicit steps.
@@ -53,11 +53,11 @@ Upgrading from version `0.6.0` to `0.6.1` requires no explicit steps.
 
 
 Many thanks to Fraccaroli Gianmarco (@Fraccaman) for helping us improve the
-reliability of Hermes ([#697]).
+reliability of Forcerelay ([#697]).
 
-This release includes two major features to Hermes: (1) support for reloading
+This release includes two major features to Forcerelay: (1) support for reloading
 the chains from the configuration file at runtime, and (2) a filtering mechanism
-to restrict Hermes activity based on predefined parameters (e.g., packet relaying
+to restrict Forcerelay activity based on predefined parameters (e.g., packet relaying
 on certain ports and channels exclusively, and ignoring activity for clients
 that have non-standard trust threshold).
 
@@ -66,9 +66,9 @@ In addition to these two, we have also added a health checkup mechanism, plus ne
 
 ### Upgrading from 0.5.0 to 0.6.0
 
-When upgrading from Hermes v0.5.0 to v0.6.0, the most important
+When upgrading from Forcerelay v0.5.0 to v0.6.0, the most important
 point to watch out for is the configuration file.
-The Hermes config.toml configuration file has went through a few revisions,
+The Forcerelay config.toml configuration file has went through a few revisions,
 with the changes described below.
 
 #### Added inline documentation for all options.
@@ -77,7 +77,7 @@ Please have a look around the [config.toml](https://github.com/informalsystems/i
 
 #### Added a packet filtering mechanism based on channel/port identifiers
 
-This feature will restrict the channels on which Hermes relays packets.
+This feature will restrict the channels on which Forcerelay relays packets.
 There are two new options in the configuration file:
 
 1. A global `filter` parameter to enable or disable filtering globally.
@@ -90,13 +90,13 @@ There are two new options in the configuration file:
 #### Added filtering based on client state
 
 The global `filter` option additionally enables filtering of all activities
-based on client state trust threshold. If enabled, Hermes will ignore all
+based on client state trust threshold. If enabled, Forcerelay will ignore all
 activity for clients that have a trust threshold different than `1/3`.
 
 #### Added a packet clearing configuration option
 
 This will enable the parametrization of the frequency
-at which Hermes will clear pending packets. This is a global option, called
+at which Forcerelay will clear pending packets. This is a global option, called
 `clear_packets_interval`, which applies to all chains in the configuration.
 
 
@@ -105,15 +105,15 @@ The full list of changes is described below.
 ### FEATURES
 
 - [ibc-relayer]
-  - The chains configuration can be reloaded by sending the Hermes process a `SIGHUP` signal ([#1117])
+  - The chains configuration can be reloaded by sending the Forcerelay process a `SIGHUP` signal ([#1117])
   - Added support for filtering based on client state trust threshold ([#1165])
 
 - [ibc-relayer-cli]
-  - Added `config validate` CLI to Hermes ([#600])
+  - Added `config validate` CLI to Forcerelay ([#600])
   - Added filtering capability to deny or allow for specific channels ([#1140], [#1141], [#69])
   - Added basic channel filter ([#1140])
   - Added `query channel ends` CLI command ([#1062])
-  - Added a health checkup mechanism for Hermes ([#697, #1057])
+  - Added a health checkup mechanism for Forcerelay ([#697, #1057])
 
 ### IMPROVEMENTS
 
@@ -121,7 +121,7 @@ The full list of changes is described below.
 - Add inline documentation to config.toml ([#1127])
 
 - [ibc-relayer]
-  - Hermes will now clear pending packets at a configurable interval ([#1124])
+  - Forcerelay will now clear pending packets at a configurable interval ([#1124])
 
 ### BUG FIXES
 
@@ -147,8 +147,8 @@ The full list of changes is described below.
 ## v0.5.0
 *June 22nd, 2021*
 
-This release brings a few features, and several improvements and bug fixes to the Hermes
-relayer, notably the capability for Hermes to complete IBC connection handshakes when
+This release brings a few features, and several improvements and bug fixes to the Forcerelay
+relayer, notably the capability for Forcerelay to complete IBC connection handshakes when
 it detects that one has been initialized, as well as the ability to detect chain
 impersonation attacks and to dynamically estimate the gas needed to submit
 a transaction.
@@ -182,7 +182,7 @@ substantially by switching over to `tx_broadcast_sync` for submitting transactio
 
 - [gaiad-manager]
   - Removed the testnet command as not all networks support it ([#1050])
-  - Update for compatibility with Hermes's new `--hd-path` option
+  - Update for compatibility with Forcerelay's new `--hd-path` option
 
 - [ibc-relayer]
   - Fix bug where channels were left partially open after `channel create` ([#1064])
@@ -211,22 +211,22 @@ substantially by switching over to `tx_broadcast_sync` for submitting transactio
 ## v0.4.0
 *June 3rd, 2021*
 
-- This release of Hermes features an internal [telemetry service][telemetry]
+- This release of Forcerelay features an internal [telemetry service][telemetry]
   which can export metrics about the relayer to Prometheus.
-- A new [relaying strategy][strategy] is now available, which enables Hermes to
+- A new [relaying strategy][strategy] is now available, which enables Forcerelay to
   complete channel handshakes in an event-based fashion.
-- Hermes now checks if another relayer may have already processed a packet event,
+- Forcerelay now checks if another relayer may have already processed a packet event,
   and will not attempt to process it itself, which improves performance.
 - The startup time of the relayer has been substantially improved.
 - The `start-multi` command has been promoted to `start`, which means
   that the worker-based relayer is not experimental anymore.
-- A regression where Hermes would not recover after a node went down and up again was fixed.
+- A regression where Forcerelay would not recover after a node went down and up again was fixed.
 
 [telemetry]: https://hermes.informal.systems/documentation/telemetry/index.html
 [strategy]: https://hermes.informal.systems/documentation/configuration/configure-hermes.html?highlight=strategy#global
 
 > Special thanks to Colin Axnér (@colin-axner) and Jongwhan Lee (@leejw51crypto)
-> for raising multiple issues that helped us improve the reliability of Hermes.
+> for raising multiple issues that helped us improve the reliability of Forcerelay.
 
 ### FEATURES
 
@@ -243,8 +243,8 @@ substantially by switching over to `tx_broadcast_sync` for submitting transactio
 - [ibc-relayer-cli]
   - Include chain-id in `query clients` command, and sort output by client counter ([#992])
   - Improve config loading message ([#996])
-  - Improve Hermes worker spawn time for `start` command ([#998])
-  - Better Hermes help message when command is unrecognized ([#1003])
+  - Improve Forcerelay worker spawn time for `start` command ([#998])
+  - Better Forcerelay help message when command is unrecognized ([#1003])
 
 ### BUG FIXES
 
@@ -252,7 +252,7 @@ substantially by switching over to `tx_broadcast_sync` for submitting transactio
   - Fix client worker initialization error ([#972])
   - Fix `hermes start` panic when all chains are unreachable ([#972])
   - Ensure expired or frozen client worker logs message and terminates ([#1022])
-  - Fix regression where Hermes would not recover after a node went down and up again ([#1026])
+  - Fix regression where Forcerelay would not recover after a node went down and up again ([#1026])
 
 - [gaiad-manager]
   - Import hermes keys properly even if wallet HD derivation path is set ([#975])
@@ -299,7 +299,7 @@ Docker images to Docker Hub.
   - Add support for multiple keys to the keyring ([#963])
 
 - [release]
-  - Released the official [Hermes image][hermes-docker] on Docker Hub ([#894])
+  - Released the official [Forcerelay image][hermes-docker] on Docker Hub ([#894])
   - Automatically deploy Docker Hub image during release ([#967])
 
 ### IMPROVEMENTS
@@ -468,7 +468,7 @@ This release also finalizes the initial implementation of all the ICS 004 handle
 
 - [ibc-relayer-cli]
   - Added `create connection` and `create channel` CLIs ([#630], [#715])
-  - Proposed ADR 006 to describe Hermes v0.2.0 use-cases ([#637])
+  - Proposed ADR 006 to describe Forcerelay v0.2.0 use-cases ([#637])
   - Added `client-upgrade` CLI ([#357])
   - Added delay feature for packet relaying ([#640])
   - Update gaia to version 4.2.0 for e2e tests on CI ([#809])
@@ -507,7 +507,7 @@ This release also finalizes the initial implementation of all the ICS 004 handle
   - Fix a bug where the keys addresses had their account prefix overriden by the prefix in the configuration ([#751])
 
 - [ibc-relayer-cli]
-  - Hermes guide: improved installation guideline ([#672])
+  - Forcerelay guide: improved installation guideline ([#672])
   - Make fee denom and amount configurable ([#754])
 
 - [ibc-proto]
@@ -634,8 +634,8 @@ involving packet acks in a 3-chain setup. More details below.
 
 Noteworthy changes in this release include:
 
-- The binary in the `ibc-relayer-cli` crate was given the name Hermes.
-- We published a comprehensive guide for Hermes at [hermes.informal.systems](https://hermes.informal.systems).
+- The binary in the `ibc-relayer-cli` crate was given the name Forcerelay.
+- We published a comprehensive guide for Forcerelay at [hermes.informal.systems](https://hermes.informal.systems).
 - Major improvements to user experience, in particular at CLI level: JSON output,
   configurable log output level, dedicated channel handshake command, as well as
   overall improvements to error display and output.

@@ -3,7 +3,7 @@
 With the `enabled = true` setting for `telemetry` in your config.toml, the telemetry service will be enabled and will serve the metrics using
 the Prometheus encoder over HTTP at [`http://localhost:3001/metrics`](http://localhost:3001/metrics).
 
-After starting Hermes with `{{#template ../../templates/commands/hermes/start_1.md}}`, and letting it run for a while to relay packets,
+After starting Forcerelay with `{{#template ../../templates/commands/forcerelay/start_1.md}}`, and letting it run for a while to relay packets,
 open [`http://localhost:3001/metrics`](http://localhost:3001/metrics) in a browser, you should
 see Prometheus-encoded metrics.
 
@@ -34,7 +34,7 @@ backlog_size{chain="ibc-1",channel="channel-0",counterparty="ibc-0",port="transf
 # TYPE client_updates_submitted counter
 client_updates_submitted{chain="ibc-0",client="07-tendermint-0"} 8
 client_updates_submitted{chain="ibc-1",client="07-tendermint-0"} 19
-# HELP queries Number of queries submitted by Hermes
+# HELP queries Number of queries submitted by Forcerelay
 # TYPE queries counter
 queries{chain="ibc-0",query_type="query_application_status"} 486
 queries{chain="ibc-0",query_type="query_channel"} 20
@@ -70,7 +70,7 @@ queries{chain="ibc-1",query_type="query_staking_params"} 2
 queries{chain="ibc-1",query_type="query_txs"} 40
 queries{chain="ibc-1",query_type="query_unreceived_acknowledgements"} 5
 queries{chain="ibc-1",query_type="query_unreceived_packets"} 4
-# HELP queries_cache_hits Number of cache hits for queries submitted by Hermes
+# HELP queries_cache_hits Number of cache hits for queries submitted by Forcerelay
 # TYPE queries_cache_hits counter
 queries_cache_hits{chain="ibc-0",query_type="query_channel"} 13
 queries_cache_hits{chain="ibc-0",query_type="query_client_state"} 29
@@ -92,7 +92,7 @@ send_packet_events{chain="ibc-1",channel="channel-0",counterparty="ibc-0",port="
 # TYPE total_messages_submitted counter
 total_messages_submitted{chain="ibc-0"} 11
 total_messages_submitted{chain="ibc-1"} 22
-# HELP tx_latency_confirmed The latency for all transactions submitted & confirmed to a specific chain, i.e. the difference between the moment when Hermes received a batch of events until the corresponding transaction(s) were confirmed. Milliseconds.
+# HELP tx_latency_confirmed The latency for all transactions submitted & confirmed to a specific chain, i.e. the difference between the moment when Forcerelay received a batch of events until the corresponding transaction(s) were confirmed. Milliseconds.
 # TYPE tx_latency_confirmed histogram
 tx_latency_confirmed_bucket{chain="ibc-0",channel="channel-0",counterparty="ibc-1",port="transfer",le="1000"} 0
 tx_latency_confirmed_bucket{chain="ibc-0",channel="channel-0",counterparty="ibc-1",port="transfer",le="5000"} 4
@@ -112,7 +112,7 @@ tx_latency_confirmed_bucket{chain="ibc-1",channel="channel-0",counterparty="ibc-
 tx_latency_confirmed_bucket{chain="ibc-1",channel="channel-0",counterparty="ibc-0",port="transfer",le="+Inf"} 4
 tx_latency_confirmed_sum{chain="ibc-1",channel="channel-0",counterparty="ibc-0",port="transfer"} 10103
 tx_latency_confirmed_count{chain="ibc-1",channel="channel-0",counterparty="ibc-0",port="transfer"} 4
-# HELP tx_latency_submitted The latency for all transactions submitted to a specific chain, i.e. the difference between the moment when Hermes received a batch of events and when it submitted the corresponding transaction(s). Milliseconds.
+# HELP tx_latency_submitted The latency for all transactions submitted to a specific chain, i.e. the difference between the moment when Forcerelay received a batch of events and when it submitted the corresponding transaction(s). Milliseconds.
 # TYPE tx_latency_submitted histogram
 tx_latency_submitted_bucket{chain="ibc-0",channel="channel-0",counterparty="ibc-1",port="transfer",le="200"} 0
 tx_latency_submitted_bucket{chain="ibc-0",channel="channel-0",counterparty="ibc-1",port="transfer",le="500"} 2
@@ -132,7 +132,7 @@ tx_latency_submitted_bucket{chain="ibc-1",channel="channel-0",counterparty="ibc-
 tx_latency_submitted_bucket{chain="ibc-1",channel="channel-0",counterparty="ibc-0",port="transfer",le="+Inf"} 4
 tx_latency_submitted_sum{chain="ibc-1",channel="channel-0",counterparty="ibc-0",port="transfer"} 2535
 tx_latency_submitted_count{chain="ibc-1",channel="channel-0",counterparty="ibc-0",port="transfer"} 4
-# HELP wallet_balance The balance of each wallet Hermes uses per chain. Please note that when converting the balance to f64 a loss in precision might be introduced in the displayed value
+# HELP wallet_balance The balance of each wallet Forcerelay uses per chain. Please note that when converting the balance to f64 a loss in precision might be introduced in the displayed value
 # TYPE wallet_balance gauge
 wallet_balance{account="cosmos1a450s556xf9n63vdd9aet6g6t29tm207ygp5rj",chain="ibc-1",denom="stake"} 99969960
 wallet_balance{account="cosmos1fafdyl4hl0ltcx4c3y9zhnkf5uxcah9tefuavy",chain="ibc-0",denom="stake"} 99983143
@@ -143,7 +143,7 @@ workers{type="client"} 2
 workers{type="connection"} 3
 workers{type="packet"} 2
 workers{type="wallet"} 2
-# HELP ws_events How many IBC events did Hermes receive via the websocket subscription
+# HELP ws_events How many IBC events did Forcerelay receive via the websocket subscription
 # TYPE ws_events counter
 ws_events{chain="ibc-0"} 115
 ws_events{chain="ibc-1"} 128

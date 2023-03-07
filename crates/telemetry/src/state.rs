@@ -100,31 +100,31 @@ pub struct TelemetryState {
     /// Number of confirmed timeout packets per channel
     timeout_packets_confirmed: Counter<u64>,
 
-    /// Number of queries submitted by Hermes, per chain and query type
+    /// Number of queries submitted by Forcerelay, per chain and query type
     queries: Counter<u64>,
 
-    /// Number of cache hits for queries submitted by Hermes, per chain and query type
+    /// Number of cache hits for queries submitted by Forcerelay, per chain and query type
     queries_cache_hits: Counter<u64>,
 
-    /// Number of times Hermes reconnected to the websocket endpoint, per chain
+    /// Number of times Forcerelay reconnected to the websocket endpoint, per chain
     ws_reconnect: Counter<u64>,
 
-    /// How many IBC events did Hermes receive via the WebSocket subscription, per chain
+    /// How many IBC events did Forcerelay receive via the WebSocket subscription, per chain
     ws_events: Counter<u64>,
 
     /// Number of messages submitted to a specific chain
     total_messages_submitted: Counter<u64>,
 
-    /// The balance of each wallet Hermes uses per chain
+    /// The balance of each wallet Forcerelay uses per chain
     wallet_balance: ObservableGauge<f64>,
 
     /// Indicates the latency for all transactions submitted to a specific chain,
-    /// i.e. the difference between the moment when Hermes received a batch of events
+    /// i.e. the difference between the moment when Forcerelay received a batch of events
     /// until the corresponding transaction(s) were submitted. Milliseconds.
     tx_latency_submitted: ObservableGauge<u64>,
 
     /// Indicates the latency for all transactions submitted to a specific chain,
-    /// i.e. the difference between the moment when Hermes received a batch of events
+    /// i.e. the difference between the moment when Forcerelay received a batch of events
     /// until the corresponding transaction(s) were confirmed. Milliseconds.
     tx_latency_confirmed: ObservableGauge<u64>,
 
@@ -428,7 +428,7 @@ impl TelemetryState {
         self.ws_reconnect.add(&cx, 1, labels);
     }
 
-    /// How many IBC events did Hermes receive via the WebSocket subscription, per chain
+    /// How many IBC events did Forcerelay receive via the WebSocket subscription, per chain
     pub fn ws_events(&self, chain_id: &ChainId, count: u64) {
         let cx = Context::current();
 
@@ -437,7 +437,7 @@ impl TelemetryState {
         self.ws_events.add(&cx, count, labels);
     }
 
-    /// How many messages Hermes submitted to the chain
+    /// How many messages Forcerelay submitted to the chain
     pub fn total_messages_submitted(&self, chain_id: &ChainId, count: u64) {
         let cx = Context::current();
 
@@ -446,7 +446,7 @@ impl TelemetryState {
         self.total_messages_submitted.add(&cx, count, labels);
     }
 
-    /// The balance in each wallet that Hermes is using, per account, denom and chain.
+    /// The balance in each wallet that Forcerelay is using, per account, denom and chain.
     /// The amount given is of unit: 10^6 * `denom`
     pub fn wallet_balance(&self, chain_id: &ChainId, account: &str, amount: f64, denom: &str) {
         let cx = Context::current();
@@ -848,23 +848,23 @@ impl Default for TelemetryState {
             queries: meter
                 .u64_counter("queries")
                 .with_description(
-                    "Number of queries submitted by Hermes",
+                    "Number of queries submitted by Forcerelay",
                 )
                 .init(),
 
             queries_cache_hits: meter
                 .u64_counter("queries_cache_hits")
-                .with_description("Number of cache hits for queries submitted by Hermes")
+                .with_description("Number of cache hits for queries submitted by Forcerelay")
                 .init(),
 
             ws_reconnect: meter
                 .u64_counter("ws_reconnect")
-                .with_description("Number of times Hermes reconnected to the websocket endpoint")
+                .with_description("Number of times Forcerelay reconnected to the websocket endpoint")
                 .init(),
 
             ws_events: meter
                 .u64_counter("ws_events")
-                .with_description("How many IBC events did Hermes receive via the websocket subscription")
+                .with_description("How many IBC events did Forcerelay receive via the websocket subscription")
                 .init(),
 
             total_messages_submitted: meter
@@ -874,7 +874,7 @@ impl Default for TelemetryState {
 
             wallet_balance: meter
                 .f64_observable_gauge("wallet_balance")
-                .with_description("The balance of each wallet Hermes uses per chain. Please note that when converting the balance to f64 a loss in precision might be introduced in the displayed value")
+                .with_description("The balance of each wallet Forcerelay uses per chain. Please note that when converting the balance to f64 a loss in precision might be introduced in the displayed value")
                 .init(),
 
             send_packet_events: meter
@@ -906,7 +906,7 @@ impl Default for TelemetryState {
                 .u64_observable_gauge("tx_latency_submitted")
                 .with_unit(Unit::new("milliseconds"))
                 .with_description("The latency for all transactions submitted to a specific chain, \
-                    i.e. the difference between the moment when Hermes received a batch of events \
+                    i.e. the difference between the moment when Forcerelay received a batch of events \
                     and when it submitted the corresponding transaction(s). Milliseconds.")
                 .init(),
 
@@ -914,7 +914,7 @@ impl Default for TelemetryState {
                 .u64_observable_gauge("tx_latency_confirmed")
                 .with_unit(Unit::new("milliseconds"))
                 .with_description("The latency for all transactions submitted & confirmed to a specific chain, \
-                    i.e. the difference between the moment when Hermes received a batch of events \
+                    i.e. the difference between the moment when Forcerelay received a batch of events \
                     until the corresponding transaction(s) were confirmed. Milliseconds.")
                 .init(),
 
