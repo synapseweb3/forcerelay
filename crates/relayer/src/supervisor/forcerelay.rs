@@ -17,7 +17,7 @@ const MAX_HEADERS_IN_BATCH: u64 = 256;
 const MAX_SLEEP_SECONDS: u64 = 5;
 const MAX_RETRY_NUMBER: u8 = 5;
 
-pub fn handle_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
+pub fn handle_eth_ckb_event_batch<ChainA: ChainHandle, ChainB: ChainHandle>(
     src_chain: &Arc<ChainA>,
     dst_chain: &Arc<ChainB>,
     event_batch: &EventBatch,
