@@ -84,7 +84,7 @@ ethers-contract = { version = "1.0.0" }
 ethers-providers = { version = "1.0.0" }
 ckb-sdk = "2.4.0"
 ckb-hash = "0.106.0"
-ckb-types = "0.106.0"
+ckb-types = "0.108.0"
 ckb-jsonrpc-types = "0.106.0"
 jsonrpc-core = "18.0"
 strum = { version = "0.24.1", features = ["derive"] }
