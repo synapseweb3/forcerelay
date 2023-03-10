@@ -8,6 +8,7 @@ use ibc_proto::protobuf::Protobuf;
 use serde::{Deserialize, Serialize};
 
 use ibc_proto::google::protobuf::Any;
+use ibc_relayer_types::clients::ics07_axon::client_state::ClientState as AxonClientState;
 use ibc_relayer_types::clients::ics07_ckb::client_state::ClientState as CkbClientState;
 use ibc_relayer_types::clients::ics07_eth::client_state::{
     ClientState as EthClientState, CLIENT_STATE_TYPE_URL as ETH_CLIENT_STATE_TYPE_URL,
@@ -61,6 +62,7 @@ pub enum AnyClientState {
     Tendermint(TmClientState),
     Eth(EthClientState),
     Ckb(CkbClientState),
+    Axon(AxonClientState),
 
     #[cfg(test)]
     Mock(MockClientState),
@@ -72,6 +74,7 @@ impl AnyClientState {
             Self::Tendermint(tm_state) => tm_state.latest_height(),
             Self::Eth(state) => state.latest_height(),
             Self::Ckb(state) => state.latest_height(),
+            Self::Axon(state) => state.latest_height(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.latest_height(),
@@ -83,6 +86,7 @@ impl AnyClientState {
             Self::Tendermint(tm_state) => tm_state.frozen_height(),
             Self::Eth(state) => state.frozen_height(),
             Self::Ckb(state) => state.frozen_height(),
+            Self::Axon(state) => state.frozen_height(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.frozen_height(),
@@ -94,6 +98,7 @@ impl AnyClientState {
             AnyClientState::Tendermint(state) => Some(state.trust_threshold),
             AnyClientState::Eth(_) => None,
             AnyClientState::Ckb(_) => None,
+            AnyClientState::Axon(_) => None,
 
             #[cfg(test)]
             AnyClientState::Mock(_) => None,
@@ -105,6 +110,7 @@ impl AnyClientState {
             AnyClientState::Tendermint(state) => state.max_clock_drift,
             AnyClientState::Eth(_) => Duration::ZERO,
             AnyClientState::Ckb(_) => Duration::ZERO,
+            AnyClientState::Axon(_) => Duration::ZERO,
 
             #[cfg(test)]
             AnyClientState::Mock(_) => Duration::new(0, 0),
@@ -116,6 +122,7 @@ impl AnyClientState {
             Self::Tendermint(state) => state.client_type(),
             Self::Eth(state) => state.client_type(),
             Self::Ckb(state) => state.client_type(),
+            Self::Axon(state) => state.client_type(),
 
             #[cfg(test)]
             Self::Mock(state) => state.client_type(),
@@ -127,6 +134,7 @@ impl AnyClientState {
             AnyClientState::Tendermint(tm_state) => tm_state.refresh_time(),
             AnyClientState::Eth(_) => None,
             AnyClientState::Ckb(_) => None,
+            AnyClientState::Axon(_) => None,
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.refresh_time(),
@@ -175,6 +183,7 @@ impl From<AnyClientState> for Any {
                 }
             }
             AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Axon(_) => todo!(),
             #[cfg(test)]
             AnyClientState::Mock(value) => Any {
                 type_url: MOCK_CLIENT_STATE_TYPE_URL.to_string(),
@@ -191,6 +200,7 @@ impl ClientState for AnyClientState {
             AnyClientState::Tendermint(tm_state) => tm_state.chain_id(),
             AnyClientState::Eth(_) => todo!(),
             AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Axon(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.chain_id(),
@@ -227,6 +237,7 @@ impl ClientState for AnyClientState {
             ),
             AnyClientState::Eth(_) => todo!(),
             AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Axon(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => {
@@ -240,6 +251,7 @@ impl ClientState for AnyClientState {
             AnyClientState::Tendermint(tm_state) => tm_state.expired(elapsed_since_latest),
             AnyClientState::Eth(_) => todo!(),
             AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Axon(_) => todo!(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.expired(elapsed_since_latest),
@@ -262,6 +274,11 @@ impl From<EthClientState> for AnyClientState {
 impl From<CkbClientState> for AnyClientState {
     fn from(value: CkbClientState) -> Self {
         Self::Ckb(value)
+    }
+}
+impl From<AxonClientState> for AnyClientState {
+    fn from(value: AxonClientState) -> Self {
+        Self::Axon(value)
     }
 }
 
@@ -304,6 +321,21 @@ impl<'a> TryFrom<&'a AnyClientState> for &'a CkbClientState {
         } else {
             Err(RelayerError::client_type_mismatch(
                 ClientType::Ckb,
+                value.client_type(),
+            ))
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a AnyClientState> for &'a AxonClientState {
+    type Error = RelayerError;
+
+    fn try_from(value: &'a AnyClientState) -> Result<Self, Self::Error> {
+        if let AnyClientState::Axon(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::client_type_mismatch(
+                ClientType::Axon,
                 value.client_type(),
             ))
         }
