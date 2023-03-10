@@ -140,6 +140,7 @@ fn subscribe(chain_config: &ChainConfig, rt: Arc<TokioRuntime>) -> eyre::Result<
             ChainConfig::Cosmos(_) => chain_config.cosmos().websocket_addr.clone(),
             ChainConfig::Eth(_) => "".parse().unwrap(),
             ChainConfig::Ckb(_) => "".parse().unwrap(),
+            ChainConfig::Axon(_) => "".parse().unwrap(),
         },
         rt,
     )

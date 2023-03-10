@@ -147,7 +147,7 @@ fn encode_signer_info(
 ) -> Result<SignerInfo, Error> {
     let pk_type = match address_type {
         AddressType::Cosmos => "/cosmos.crypto.secp256k1.PubKey".to_string(),
-        AddressType::Ethermint { pk_type } => pk_type.clone(),
+        AddressType::Ethermint { pk_type } | AddressType::Axon { pk_type } => pk_type.clone(),
         AddressType::Ckb { .. } => todo!(),
     };
     // Create a MsgSend proto Any message

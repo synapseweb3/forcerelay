@@ -1,4 +1,5 @@
 //! Relayer configuration
+pub mod axon;
 pub mod ckb;
 pub mod cosmos;
 pub mod error;
@@ -25,6 +26,7 @@ use crate::error::Error as RelayerError;
 use crate::extension_options::ExtensionOptionDynamicFeeTx;
 
 pub use crate::config::Error as ConfigError;
+use axon::AxonChainConfig;
 use ckb::ChainConfig as CkbChainConfig;
 use cosmos::CosmosChainConfig;
 pub use error::Error;
@@ -183,6 +185,7 @@ pub enum ChainConfig {
     Cosmos(CosmosChainConfig),
     Eth(EthChainConfig),
     Ckb(CkbChainConfig),
+    Axon(AxonChainConfig),
 }
 
 impl ChainConfig {
@@ -191,6 +194,7 @@ impl ChainConfig {
             ChainConfig::Cosmos(c) => &c.id,
             ChainConfig::Eth(c) => &c.id,
             ChainConfig::Ckb(c) => &c.id,
+            ChainConfig::Axon(c) => &c.id,
         }
     }
 
@@ -199,6 +203,7 @@ impl ChainConfig {
             ChainConfig::Cosmos(c) => &c.packet_filter,
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
+            ChainConfig::Axon(_) => todo!(),
         }
     }
 
@@ -207,6 +212,7 @@ impl ChainConfig {
             ChainConfig::Cosmos(c) => &c.key_name,
             ChainConfig::Eth(c) => &c.key_name,
             ChainConfig::Ckb(c) => &c.key_name,
+            ChainConfig::Axon(c) => &c.key_name,
         }
     }
 
@@ -247,6 +253,7 @@ impl ChainConfig {
             ChainConfig::Cosmos(_) => ChainType::CosmosSdk,
             ChainConfig::Eth(_) => ChainType::Eth,
             ChainConfig::Ckb(_) => ChainType::Ckb,
+            ChainConfig::Axon(_) => ChainType::Axon,
         }
     }
 
@@ -255,6 +262,7 @@ impl ChainConfig {
             ChainConfig::Cosmos(c) => c.max_block_time,
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
+            ChainConfig::Axon(_) => todo!(),
         }
     }
 }
@@ -310,6 +318,20 @@ impl TryFrom<ChainConfig> for EthChainConfig {
         } else {
             Err(RelayerError::config(ConfigError::encode(
                 toml::ser::Error::Custom("not Ethereum config".to_owned()),
+            )))
+        }
+    }
+}
+
+impl TryFrom<ChainConfig> for AxonChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Axon(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Axon config".to_owned()),
             )))
         }
     }
@@ -578,6 +600,13 @@ pub enum AddressType {
     Ckb {
         is_mainnet: bool,
     },
+    Axon { pk_type: String },
+}
+
+impl Default for AddressType {
+    fn default() -> Self {
+        AddressType::Cosmos
+    }
 }
 
 impl Display for AddressType {
@@ -586,6 +615,7 @@ impl Display for AddressType {
             AddressType::Cosmos => write!(f, "cosmos"),
             AddressType::Ethermint { .. } => write!(f, "ethermint"),
             AddressType::Ckb { .. } => write!(f, "ckb"),
+            AddressType::Axon { .. } => write!(f, "axon"),
         }
     }
 }

@@ -26,13 +26,13 @@ impl Protobuf<Any> for Header {}
 impl TryFrom<Any> for Header {
     type Error = Ics02Error;
 
-    fn try_from(value: Any) -> Result<Self, Self::Error> {
+    fn try_from(_value: Any) -> Result<Self, Self::Error> {
         todo!()
     }
 }
 
 impl From<Header> for Any {
-    fn from(value: Header) -> Self {
+    fn from(_value: Header) -> Self {
         todo!()
     }
 }

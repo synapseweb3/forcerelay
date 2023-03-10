@@ -39,6 +39,22 @@ impl ClientType {
     }
 }
 
+impl TryFrom<u64> for ClientType {
+    type Error = Error;
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::Tendermint),
+            2 => Ok(Self::Eth),
+            3 => Ok(Self::Ckb),
+            4 => Ok(Self::Axon),
+
+            #[cfg(any(test, feature = "mocks"))]
+            9999 => Ok(Self::Mock),
+            _ => Err(Error::unknown_client_type(value.to_string())),
+        }
+    }
+}
+
 impl Display for ClientType {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         write!(f, "ClientType({})", self.as_str())
