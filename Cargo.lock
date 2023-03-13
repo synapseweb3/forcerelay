@@ -806,7 +806,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "check-guide"
 version = "0.1.0"
 dependencies = [
- "clap 3.2.23",
+ "clap 4.1.8",
  "ibc-relayer-cli",
  "lazy_static",
  "mdbook-template",
@@ -1247,7 +1247,7 @@ checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
  "atty",
  "bitflags",
- "clap_derive",
+ "clap_derive 3.2.18",
  "clap_lex 0.2.4",
  "indexmap",
  "once_cell",
@@ -1263,6 +1263,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d7ae14b20b94cb02149ed21a86c423859cbe18dc7ed69845cace50e52b40a5"
 dependencies = [
  "bitflags",
+ "clap_derive 4.1.8",
  "clap_lex 0.3.2",
  "is-terminal",
  "once_cell",
@@ -1294,6 +1295,19 @@ name = "clap_derive"
 version = "3.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea0c8bce528c4be4da13ea6fead8965e95b6073585a2f05204bd8f4119f82a65"
+dependencies = [
+ "heck",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44bec8e5c9d09e439c4335b1af0abaab56dcf3b94999a936e1bb47b9134288f0"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -3505,7 +3519,7 @@ version = "1.3.0"
 dependencies = [
  "abscissa_core",
  "atty",
- "clap 3.2.23",
+ "clap 4.1.8",
  "clap_complete 3.2.5",
  "color-eyre",
  "console 0.15.5",
@@ -5330,7 +5344,7 @@ dependencies = [
 name = "query-events"
 version = "0.1.0"
 dependencies = [
- "clap 3.2.23",
+ "clap 4.1.8",
  "futures",
  "itertools",
  "tendermint",
