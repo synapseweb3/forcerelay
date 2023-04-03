@@ -312,10 +312,19 @@ pub async fn wait_ckb_transaction_committed(
     hash: H256,
     interval: Duration,
     confirms: u8,
+    time_limit: Duration,
 ) -> Result<(), Error> {
     let mut block_number = 0u64;
+    let mut time_used = Duration::from_secs(0);
     loop {
+        if time_used > time_limit {
+            return Err(Error::send_tx(
+                "timeout for waiting ckb tx committed".to_string(),
+            ));
+        }
+
         tokio::time::sleep(interval).await;
+        time_used += interval;
         let tx = rpc
             .get_transaction(&hash)
             .await?

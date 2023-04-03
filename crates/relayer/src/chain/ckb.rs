@@ -252,6 +252,7 @@ impl CkbChain {
             hash,
             Duration::from_secs(3),
             0,
+            Duration::from_secs(30),
         ))?;
 
         Ok(())
