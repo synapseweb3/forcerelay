@@ -252,7 +252,6 @@ where
     // get the new root and a proof for all new headers.
     let (packed_headers_mmr_root, packed_headers_mmr_proof) = {
         let positions = (start_slot..=maximal_slot)
-            .into_iter()
             .map(|slot| mmr::lib::leaf_index_to_pos(slot - minimal_slot))
             .collect::<Vec<_>>();
 
