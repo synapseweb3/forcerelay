@@ -252,7 +252,6 @@ where
     // get the new root and a proof for all new headers.
     let (packed_headers_mmr_root, packed_headers_mmr_proof) = {
         let positions = (start_slot..=maximal_slot)
-            .into_iter()
             .map(|slot| mmr::lib::leaf_index_to_pos(slot - minimal_slot))
             .collect::<Vec<_>>();
 
@@ -312,10 +311,19 @@ pub async fn wait_ckb_transaction_committed(
     hash: H256,
     interval: Duration,
     confirms: u8,
+    time_limit: Duration,
 ) -> Result<(), Error> {
     let mut block_number = 0u64;
+    let mut time_used = Duration::from_secs(0);
     loop {
+        if time_used > time_limit {
+            return Err(Error::send_tx(
+                "timeout for waiting ckb tx committed".to_string(),
+            ));
+        }
+
         tokio::time::sleep(interval).await;
+        time_used += interval;
         let tx = rpc
             .get_transaction(&hash)
             .await?

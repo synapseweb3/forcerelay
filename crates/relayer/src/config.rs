@@ -562,7 +562,7 @@ impl Default for RestConfig {
 /// TODO: Ethermint `pk_type` to be restricted
 /// after the Cosmos SDK release with ethsecp256k1
 /// <https://github.com/cosmos/cosmos-sdk/pull/9981>
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(
     rename_all = "lowercase",
     tag = "derivation",
@@ -570,15 +570,14 @@ impl Default for RestConfig {
     deny_unknown_fields
 )]
 pub enum AddressType {
+    #[default]
     Cosmos,
-    Ethermint { pk_type: String },
-    Ckb { is_mainnet: bool },
-}
-
-impl Default for AddressType {
-    fn default() -> Self {
-        AddressType::Cosmos
-    }
+    Ethermint {
+        pk_type: String,
+    },
+    Ckb {
+        is_mainnet: bool,
+    },
 }
 
 impl Display for AddressType {
