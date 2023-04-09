@@ -12,11 +12,14 @@ use ethers::types::Address;
 use ethers_contract::LogMeta;
 use ethers_providers::Middleware;
 use ibc_relayer_types::clients::ics07_axon::header::Header as AxonHeader;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::events::{self, Attributes};
 use ibc_relayer_types::core::ics02_client::header::Header;
 use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::Height;
 use tokio::sync::mpsc::UnboundedReceiver;
+use OwnableIBCHandler as Contract;
+use OwnableIBCHandlerEvents as ContractEvents;
 
 use crate::chain::tracking::TrackingId;
 use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonitorCmd};
@@ -111,7 +114,10 @@ impl AxonEventMonitor {
             }
         }
 
-        let contract = Arc::new(IBC::new(self.contract_address, Arc::clone(&self.client)));
+        let contract = Arc::new(Contract::new(
+            self.contract_address,
+            Arc::clone(&self.client),
+        ));
         let events = contract.events().from_block(self.start_block_number);
         if let Ok(stream) = events.stream().await {
             let mut meta_stream = stream.with_meta();
@@ -164,7 +170,7 @@ impl AxonEventMonitor {
         Next::Continue
     }
 
-    fn process_event(&mut self, event: IBCEvents, meta: LogMeta) -> Result<()> {
+    fn process_event(&mut self, event: ContractEvents, meta: LogMeta) -> Result<()> {
         info!("[event] = {:?}", event);
         info!("[event_meta] = {:?}\n", meta);
         let batch = EventBatch {
@@ -178,37 +184,19 @@ impl AxonEventMonitor {
         Ok(())
     }
 
-    fn to_ibc_event(&self, event: IBCEvents, height: u64) -> IbcEventWithHeight {
+    fn to_ibc_event(&self, event: ContractEvents, height: u64) -> IbcEventWithHeight {
         let attr = Attributes::default();
         let ibc_event = match event {
-            IBCEvents::UpdateClientFilter(event) => {
+            ContractEvents::GeneratedClientIdentifierFilter(event) => {
+                info!("GeneratedClientIdentifierFilter: {:?}", event.0);
                 let attr = Attributes {
-                    client_id: event.client_id.parse().unwrap(),
-                    client_type: event.client_type.as_u64().try_into().unwrap(),
-                    consensus_height: Height::new(
-                        event.consensus_height.revision_number,
-                        event.consensus_height.revision_number,
-                    )
-                    .unwrap(),
+                    client_id: event.0.parse().unwrap(),
+                    client_type: ClientType::Axon,
+                    consensus_height: Height::new(0, height).unwrap(),
                 };
                 IbcEvent::CreateClient(events::CreateClient(attr))
             }
-            IBCEvents::AcknowledgePacketFilter(_) => todo!(),
-            IBCEvents::ChannelCloseConfirmFilter(_) => todo!(),
-            IBCEvents::ChannelCloseInitFilter(_) => todo!(),
-            IBCEvents::ChannelOpenAckFilter(_) => todo!(),
-            IBCEvents::ChannelOpenConfirmFilter(_) => todo!(),
-            IBCEvents::ChannelOpenInitFilter(_) => todo!(),
-            IBCEvents::ChannelOpenTryFilter(_) => todo!(),
-            IBCEvents::ConnectionOpenAckFilter(_) => todo!(),
-            IBCEvents::ConnectionOpenConfirmFilter(_) => todo!(),
-            IBCEvents::ConnectionOpenInitFilter(_) => todo!(),
-            IBCEvents::ConnectionOpenTryFilter(_) => todo!(),
-            IBCEvents::CreateClientFilter(_) => todo!(),
-            IBCEvents::OwnershipTransferredFilter(_) => todo!(),
-            IBCEvents::RecvPacketFilter(_) => todo!(),
-            IBCEvents::SendPacketFilter(_) => todo!(),
-            IBCEvents::WriteAcknowledgementFilter(_) => todo!(),
+            _ => todo!(),
         };
         IbcEventWithHeight::new(ibc_event, Height::new(0, height).unwrap())
     }
