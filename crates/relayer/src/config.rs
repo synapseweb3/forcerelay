@@ -603,12 +603,6 @@ pub enum AddressType {
     Axon { pk_type: String },
 }
 
-impl Default for AddressType {
-    fn default() -> Self {
-        AddressType::Cosmos
-    }
-}
-
 impl Display for AddressType {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         match self {
