@@ -7,6 +7,7 @@ use std::{
 
 use crate::{
     account::Balance,
+    chain::{axon::contract::HeightData, requests::QueryHeight},
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::{axon::AxonChainConfig, ChainConfig},
     consensus_state::AnyConsensusState,
@@ -19,9 +20,12 @@ use crate::{
 };
 use ibc_relayer_types::{
     applications::ics31_icq::response::CrossChainQueryResponse,
-    clients::ics07_axon::{
-        client_state::ClientState as AxonClientState,
-        consensus_state::ConsensusState as AxonConsensusState, header::Header as AxonHeader,
+    clients::{
+        ics07_axon::{
+            client_state::ClientState as AxonClientState,
+            consensus_state::ConsensusState as AxonConsensusState, header::Header as AxonHeader,
+        },
+        ics07_ckb::client_state,
     },
     core::{
         ics02_client::events::UpdateClient,
@@ -31,30 +35,37 @@ use ibc_relayer_types::{
             packet::Sequence,
         },
         ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
-        ics24_host::identifier::{self, ChainId, ChannelId, PortId},
+        ics24_host::identifier::{self, ChainId, ChannelId, ClientId, PortId},
     },
     signer::Signer,
     Height,
 };
-use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
+use tendermint_rpc::{endpoint::broadcast::tx_sync::Response, query};
 
-use self::monitor::AxonEventMonitor;
+use self::{
+    contract::{OwnableIBCHandler, OwnableIBCHandlerEvents},
+    monitor::AxonEventMonitor,
+};
+
+type ContractProvider = ethers_providers::Provider<ethers_providers::Ws>;
+type Contract = OwnableIBCHandler<ContractProvider>;
+type ContractEvents = OwnableIBCHandlerEvents;
 
 use super::{
     client::ClientSettings,
     endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
     handle::Subscription,
     requests::{
-        CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest, QueryChannelRequest,
-        QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientStateRequest,
-        QueryClientStatesRequest, QueryConnectionChannelsRequest, QueryConnectionsRequest,
-        QueryConsensusStateHeightsRequest, QueryConsensusStateRequest,
-        QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
-        QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
-        QueryPacketCommitmentRequest, QueryPacketCommitmentsRequest, QueryPacketEventDataRequest,
-        QueryPacketReceiptRequest, QueryTxRequest, QueryUnreceivedAcksRequest,
-        QueryUnreceivedPacketsRequest, QueryUpgradedClientStateRequest,
-        QueryUpgradedConsensusStateRequest,
+        self, CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest,
+        QueryChannelRequest, QueryChannelsRequest, QueryClientConnectionsRequest,
+        QueryClientStateRequest, QueryClientStatesRequest, QueryConnectionChannelsRequest,
+        QueryConnectionRequest, QueryConnectionsRequest, QueryConsensusStateHeightsRequest,
+        QueryConsensusStateRequest, QueryHostConsensusStateRequest,
+        QueryNextSequenceReceiveRequest, QueryPacketAcknowledgementRequest,
+        QueryPacketAcknowledgementsRequest, QueryPacketCommitmentRequest,
+        QueryPacketCommitmentsRequest, QueryPacketEventDataRequest, QueryPacketReceiptRequest,
+        QueryTxRequest, QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest,
+        QueryUpgradedClientStateRequest, QueryUpgradedConsensusStateRequest,
     },
     tracking::TrackedMsgs,
 };
@@ -68,9 +79,12 @@ pub struct AxonChain {
     pub config: AxonChainConfig,
     pub light_client: AxonLightClient,
     pub tx_monitor_cmd: Option<TxMonitorCmd>,
+    pub contract: Contract,
     keybase: KeyRing<Secp256k1KeyPair>,
 }
 
+// Allow temporarily for development. Should remove when work is done.
+#[allow(unreachable_code)]
 impl ChainEndpoint for AxonChain {
     type LightBlock = ChainId;
     type Header = AxonHeader;
@@ -93,6 +107,7 @@ impl ChainEndpoint for AxonChain {
             keybase,
             light_client,
             tx_monitor_cmd: None,
+            contract: todo!(),
         })
     }
 
@@ -166,29 +181,34 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // Can't implement
     fn query_balance(&self, key_name: Option<&str>, denom: Option<&str>) -> Result<Balance, Error> {
         // NOTE: or return a 0 balance?
         todo!()
     }
 
+    // Can't implement
     fn query_all_balances(&self, key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
         // NOTE: or return a 0 balance vector?
         todo!()
     }
 
+    // Can't implement
     fn query_denom_trace(&self, hash: String) -> Result<DenomTrace, Error> {
         todo!()
     }
 
+    // Can't implement?
     fn query_commitment_prefix(&self) -> Result<CommitmentPrefix, Error> {
         todo!()
     }
 
-    // NOTE: we do not have application/module level
+    // Can't implement?
     fn query_application_status(&self) -> Result<ChainStatus, Error> {
         todo!()
     }
 
+    // Can't implement. Need access store
     fn query_clients(
         &self,
         request: QueryClientStatesRequest,
@@ -201,18 +221,65 @@ impl ChainEndpoint for AxonChain {
         request: QueryClientStateRequest,
         include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
-        todo!()
+        if matches!(IncludeProof::Yes, include_proof) {
+            return Err(Error::other_error(
+                "can't support client state query with proof".to_string(),
+            ));
+        }
+        if matches!(request.height, QueryHeight::Specific(_)) {
+            return Err(Error::other_error(
+                "can't support client state query in specific height".to_string(),
+            ));
+        }
+        let (client_state, _) = self
+            .rt
+            .block_on(
+                self.contract
+                    .get_client_state(request.client_id.to_string())
+                    .call(),
+            )
+            .map_err(map_contract_error)?;
+
+        let client_state: AnyClientState =
+            todo!("Type conversion. How to get specific consensus state from bytes?");
+        return Ok((client_state, None));
     }
 
-    // NOTE: how to define axon consensus state?
     fn query_consensus_state(
         &self,
         request: QueryConsensusStateRequest,
         include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error> {
-        todo!()
+        if matches!(IncludeProof::Yes, include_proof) {
+            return Err(Error::other_error(
+                "can't support consensus state query with proof".to_string(),
+            ));
+        }
+        if matches!(request.query_height, QueryHeight::Specific(_)) {
+            return Err(Error::other_error(
+                "can't support consensus state query in specific height".to_string(),
+            ));
+        }
+        let (consensus_state, _) = self
+            .rt
+            .block_on(
+                self.contract
+                    .get_consensus_state(
+                        request.client_id.to_string(),
+                        HeightData {
+                            revision_number: request.consensus_height.revision_number(),
+                            revision_height: request.consensus_height.revision_number(),
+                        },
+                    )
+                    .call(),
+            )
+            .map_err(map_contract_error)?;
+        let consensus_state: AnyConsensusState =
+            todo!("Type conversion. How to get specific consensus state from bytes?");
+        return Ok((consensus_state, None));
     }
 
+    // NOTE: can't implement. How to get all consensus state?
     fn query_consensus_state_heights(
         &self,
         request: QueryConsensusStateHeightsRequest,
@@ -220,7 +287,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
-    // NOTE: Most query_xx method can be implemented by directly calling contract
+    // NOTE: what's this?
     fn query_upgraded_client_state(
         &self,
         request: QueryUpgradedClientStateRequest,
@@ -228,6 +295,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // NOTE: what's this?
     fn query_upgraded_consensus_state(
         &self,
         request: QueryUpgradedConsensusStateRequest,
@@ -235,6 +303,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // NOTE: Can't implement. Need access store
     fn query_connections(
         &self,
         request: QueryConnectionsRequest,
@@ -242,6 +311,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // NOTE: Can't implement. Need access store
     fn query_client_connections(
         &self,
         request: QueryClientConnectionsRequest,
@@ -251,12 +321,35 @@ impl ChainEndpoint for AxonChain {
 
     fn query_connection(
         &self,
-        request: super::requests::QueryConnectionRequest,
+        request: QueryConnectionRequest,
         include_proof: IncludeProof,
     ) -> Result<(ConnectionEnd, Option<MerkleProof>), Error> {
-        todo!()
+        if matches!(IncludeProof::Yes, include_proof) {
+            return Err(Error::other_error(
+                "can't support connection query with proof".to_string(),
+            ));
+        }
+        if matches!(request.height, QueryHeight::Specific(_)) {
+            return Err(Error::other_error(
+                "can't support connection query in specific height".to_string(),
+            ));
+        }
+        let (connection_end, _) = self
+            .rt
+            .block_on(
+                self.contract
+                    .get_connection(request.connection_id.to_string())
+                    .call(),
+            )
+            .map_err(map_contract_error)?;
+        let connection_end: ConnectionEnd =
+            todo!("Type conversion. Fields checked and conversion is feasible.");
+        // Only be able to return None for MerkleProof as for now contract
+        // does not provide query_proof methods in light client interface
+        return Ok((connection_end, None));
     }
 
+    // NOTE: Can't implement. Need access store
     fn query_connection_channels(
         &self,
         request: QueryConnectionChannelsRequest,
@@ -264,6 +357,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // NOTE: Can't implement. Need access store
     fn query_channels(
         &self,
         request: QueryChannelsRequest,
@@ -276,14 +370,61 @@ impl ChainEndpoint for AxonChain {
         request: QueryChannelRequest,
         include_proof: IncludeProof,
     ) -> Result<(ChannelEnd, Option<MerkleProof>), Error> {
-        todo!()
+        if matches!(IncludeProof::Yes, include_proof) {
+            return Err(Error::other_error(
+                "can't support channel query with proof".to_string(),
+            ));
+        }
+        if matches!(request.height, QueryHeight::Specific(_)) {
+            return Err(Error::other_error(
+                "can't support channel query in specific height".to_string(),
+            ));
+        }
+        let (channel_end, _) = self
+            .rt
+            .block_on(
+                self.contract
+                    .get_channel(request.port_id.to_string(), request.channel_id.to_string())
+                    .call(),
+            )
+            .map_err(map_contract_error)?;
+        let channel_end: ChannelEnd =
+            todo!("Type conversion. Fields checked and conversion is feasible.");
+        return Ok((channel_end, None));
     }
 
     fn query_channel_client_state(
         &self,
         request: QueryChannelClientStateRequest,
     ) -> Result<Option<IdentifiedAnyClientState>, Error> {
-        todo!()
+        let query_channel_request = QueryChannelRequest {
+            port_id: request.port_id,
+            channel_id: request.channel_id,
+            height: requests::QueryHeight::Latest,
+        };
+        let (channel_end, _) = self.query_channel(query_channel_request, IncludeProof::No)?;
+        let connection_id = if let Some(connection_id) = channel_end.connection_hops.get(0) {
+            connection_id
+        } else {
+            return Ok(None);
+        };
+
+        let query_connection_request = QueryConnectionRequest {
+            connection_id: channel_end.connection_hops.get(0).unwrap().clone(),
+            height: QueryHeight::Latest,
+        };
+        let (connection_end, _) =
+            self.query_connection(query_connection_request, IncludeProof::No)?;
+        let client_id = connection_end.client_id();
+        let query_client_state = QueryClientStateRequest {
+            client_id: client_id.clone(),
+            height: QueryHeight::Latest,
+        };
+        let (client_state, _) = self.query_client_state(query_client_state, IncludeProof::No)?;
+        return Ok(Some(IdentifiedAnyClientState {
+            client_id: client_id.clone(),
+            client_state,
+        }));
     }
 
     fn query_packet_commitment(
@@ -291,9 +432,33 @@ impl ChainEndpoint for AxonChain {
         request: QueryPacketCommitmentRequest,
         include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        todo!()
+        if matches!(IncludeProof::Yes, include_proof) {
+            return Err(Error::other_error(
+                "can't support packet commitment query with proof".to_string(),
+            ));
+        }
+        if matches!(request.height, QueryHeight::Specific(_)) {
+            return Err(Error::other_error(
+                "can't support packet commitment query in specific height".to_string(),
+            ));
+        }
+        let (commitment, _) = self
+            .rt
+            .block_on(
+                self.contract
+                    .get_hashed_packet_commitment(
+                        request.port_id.to_string(),
+                        request.channel_id.to_string(),
+                        request.sequence.into(),
+                    )
+                    .call(),
+            )
+            .map_err(map_contract_error)?;
+        let commitment = commitment.to_vec();
+        return Ok((commitment, None));
     }
 
+    // NOTE: Can't implement. Need access store
     fn query_packet_commitments(
         &self,
         request: QueryPacketCommitmentsRequest,
@@ -301,6 +466,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // NOTE: Can't implement. Need design packet structure in contract.
     fn query_packet_receipt(
         &self,
         request: QueryPacketReceiptRequest,
@@ -309,6 +475,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // NOTE: Can't implement. How to implement?
     fn query_unreceived_packets(
         &self,
         request: QueryUnreceivedPacketsRequest,
@@ -321,9 +488,33 @@ impl ChainEndpoint for AxonChain {
         request: QueryPacketAcknowledgementRequest,
         include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        todo!()
+        if matches!(IncludeProof::Yes, include_proof) {
+            return Err(Error::other_error(
+                "can't support packet acknowledgement query with proof".to_string(),
+            ));
+        }
+        if matches!(request.height, QueryHeight::Specific(_)) {
+            return Err(Error::other_error(
+                "can't support packet commitment query in specific height".to_string(),
+            ));
+        }
+        let (commitment, _) = self
+            .rt
+            .block_on(
+                self.contract
+                    .get_hashed_packet_acknowledgement_commitment(
+                        request.port_id.to_string(),
+                        request.channel_id.to_string(),
+                        request.sequence.into(),
+                    )
+                    .call(),
+            )
+            .map_err(map_contract_error)?;
+        let commitment = commitment.to_vec();
+        return Ok((commitment, None));
     }
 
+    // NOTE: Can't implement. Need access store
     fn query_packet_acknowledgements(
         &self,
         request: QueryPacketAcknowledgementsRequest,
@@ -331,6 +522,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // NOTE: Can't implement. Need access store
     fn query_unreceived_acknowledgements(
         &self,
         request: QueryUnreceivedAcksRequest,
@@ -338,6 +530,7 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    // NOTE: Can't implement. Need access store
     fn query_next_sequence_receive(
         &self,
         request: QueryNextSequenceReceiveRequest,
@@ -421,4 +614,8 @@ impl AxonChain {
         thread::spawn(move || event_monitor.run());
         Ok(monitor_tx)
     }
+}
+
+fn map_contract_error(contract_err: ethers_contract::ContractError<ContractProvider>) -> Error {
+    todo!()
 }
