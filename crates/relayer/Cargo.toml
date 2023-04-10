@@ -79,7 +79,7 @@ reqwest = { version = "0.11", features = ["json"]}
 reqwest-middleware = "0.1"
 reqwest-retry = "0.1"
 eyre = "0.6"
-ethers = { version = "2.0.0", features = ["rustls", "ws"] }
+ethers = { version = "2.0.2", features = ["rustls", "ws"] }
 ethers-contract = { version = "2.0.0" }
 ethers-providers = { version = "2.0.0" }
 ckb-sdk = "2.4.0"
