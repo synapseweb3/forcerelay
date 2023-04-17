@@ -72,7 +72,7 @@ version = "0.28.0"
 default-features = false
 
 [dependencies.tendermint-testgen]
-version = "0.28.0"
+version = "0.31.1"
 optional = true
 default-features = false
 
@@ -83,4 +83,4 @@ tracing-subscriber = { version = "0.3.14", features = ["fmt", "env-filter", "jso
 test-log = { version = "0.2.10", features = ["trace"] }
 modelator = "0.4.2"
 tendermint-rpc = { version = "0.28.0", features = ["http-client", "websocket-client"] }
-tendermint-testgen = { version = "0.28.0" } # Needed for generating (synthetic) light blocks.
+tendermint-testgen = { version = "0.31.1" } # Needed for generating (synthetic) light blocks.
