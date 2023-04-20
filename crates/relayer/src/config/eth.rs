@@ -40,7 +40,9 @@ impl EthChainConfig {
     pub fn fork_version(&self, slot: u64) -> FixedVector<u8, U4> {
         let epoch = slot / 32;
 
-        if epoch >= self.forks.bellatrix.epoch {
+        if epoch >= self.forks.capella.epoch {
+            self.forks.capella.fork_version.clone()
+        } else if epoch >= self.forks.bellatrix.epoch {
             self.forks.bellatrix.fork_version.clone()
         } else if epoch >= self.forks.altair.epoch {
             self.forks.altair.fork_version.clone()
@@ -73,6 +75,10 @@ impl EthChainConfig {
                 bellatrix: Fork {
                     epoch: 112260,
                     fork_version: hex::decode("02001020").unwrap().into(),
+                },
+                capella: Fork {
+                    epoch: 162304,
+                    fork_version: hex::decode("03001020").unwrap().into(),
                 },
             },
             initial_checkpoint: Default::default(),
