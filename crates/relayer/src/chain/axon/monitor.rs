@@ -187,10 +187,10 @@ impl AxonEventMonitor {
     fn to_ibc_event(&self, event: ContractEvents, height: u64) -> IbcEventWithHeight {
         let attr = Attributes::default();
         let ibc_event = match event {
-            ContractEvents::GeneratedClientIdentifierFilter(event) => {
-                info!("GeneratedClientIdentifierFilter: {:?}", event.0);
+            ContractEvents::CreateClientFilter(event) => {
+                info!("Axon event CreateClient: {:?}", event);
                 let attr = Attributes {
-                    client_id: event.0.parse().unwrap(),
+                    client_id: event.client_id.parse().unwrap(),
                     client_type: ClientType::Axon,
                     consensus_height: Height::new(0, height).unwrap(),
                 };

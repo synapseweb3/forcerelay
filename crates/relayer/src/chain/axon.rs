@@ -115,7 +115,7 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn shutdown(self) -> Result<(), Error> {
-        tracing::debug!("runtime of eth chain endpoint shutdown");
+        tracing::debug!("runtime of axon chain endpoint shutdown");
         Ok(())
     }
 
@@ -679,7 +679,6 @@ impl AxonChain {
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
         crate::time!("axon_init_event_monitor");
         let (create_receiver, header_receiver) = self.light_client.subscribe();
-        // TODO: configure URLs
         let (event_monitor, monitor_tx) = AxonEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
