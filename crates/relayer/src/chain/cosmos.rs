@@ -2004,7 +2004,7 @@ fn do_health_check(chain: &CosmosSdkChain) -> Result<(), Error> {
 
         for price in node_min_gas_prices {
             match relayer_gas_price.partial_cmp(&price) {
-                Some(Ordering::Less) => return Err(Error::gas_price_too_low(chain_id.clone())),
+                Some(Ordering::Less) => return Err(Error::gas_price_too_low(chain_id)),
                 Some(_) => {
                     found_matching_denom = true;
                     break;
@@ -2075,7 +2075,7 @@ fn do_health_check(chain: &CosmosSdkChain) -> Result<(), Error> {
     }
 
     if chain.historical_entries()? == 0 {
-        return Err(Error::no_historical_entries(chain_id.clone()));
+        return Err(Error::no_historical_entries(chain_id));
     }
 
     Ok(())
