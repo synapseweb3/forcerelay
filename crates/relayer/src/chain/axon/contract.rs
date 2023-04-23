@@ -1,9 +1,5 @@
-#![allow(clippy::too_many_arguments, non_camel_case_types)]
-#![allow(clippy::enum_variant_names)]
-#![allow(dead_code)]
-#![allow(clippy::type_complexity)]
-#![allow(unused_imports)]
-#![allow(unused_qualifications)]
+#![allow(clippy::useless_conversion)]
+// #![deny(clippy::warnings)]
 pub use ownable_ibc_handler::*;
 /// This module was auto-generated with ethers-rs Abigen.
 /// More information at: <https://github.com/gakonst/ethers-rs>

@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
+#![allow(clippy::diverging_sub_expression)]
 
 use std::{
     sync::{self, Arc},
@@ -279,7 +280,7 @@ impl ChainEndpoint for AxonChain {
             .map(|height| Height::new(height.revision_number, height.revision_height))
             .collect::<Result<Vec<Height>, _>>()
             .map_err(|_| Error::invalid_height_no_source())?;
-        return Ok(heights);
+        Ok(heights)
     }
 
     fn query_upgraded_client_state(
@@ -349,7 +350,7 @@ impl ChainEndpoint for AxonChain {
             )
             .map_err(map_contract_error)?;
         let connection_end = to_connection_end(&connection_end)?;
-        return Ok((connection_end, None));
+        Ok((connection_end, None))
     }
 
     fn query_connection_channels(
@@ -405,7 +406,7 @@ impl ChainEndpoint for AxonChain {
             )
             .map_err(map_contract_error)?;
         let channel_end = to_channel_end(&channel_end)?;
-        return Ok((channel_end, None));
+        Ok((channel_end, None))
     }
 
     fn query_channel_client_state(
@@ -470,9 +471,9 @@ impl ChainEndpoint for AxonChain {
 
         let commitment_sequences = commitment_sequences
             .iter()
-            .map(|seq| seq.clone().into())
+            .map(|seq| (*seq).into())
             .collect();
-        let height: Height = todo!("how to get height?");
+        let height: Height = todo!();
         Ok((commitment_sequences, height))
     }
 
@@ -559,7 +560,7 @@ impl ChainEndpoint for AxonChain {
                         .get_hashed_packet_acknowledgement_commitment(
                             request.port_id.to_string(),
                             request.channel_id.to_string(),
-                            seq.clone().into(),
+                            seq.into(),
                         )
                         .call(),
                 )
@@ -585,7 +586,7 @@ impl ChainEndpoint for AxonChain {
                         .get_hashed_packet_acknowledgement_commitment(
                             request.port_id.to_string(),
                             request.channel_id.to_string(),
-                            seq.clone().into(),
+                            seq.into(),
                         )
                         .call(),
                 )
@@ -732,6 +733,6 @@ fn to_any_consensus_state(
     todo!("Type conversion.");
 }
 
-fn to_any_connection_id(connection_id: &String) -> Result<ConnectionId, Error> {
+fn to_any_connection_id<T: AsRef<str>> (connection_id: T) -> Result<ConnectionId, Error> {
     todo!("Type conversion.");
 }
