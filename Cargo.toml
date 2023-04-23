@@ -18,6 +18,7 @@ members = [
 ]
 
 [patch.crates-io]
+arbitrary = { git = "https://github.com/michaelsproul/arbitrary", rev="f002b99989b561ddce62e4cf2887b0f8860ae991" }
 # ibc-proto                        = { git = "https://github.com/cosmos/ibc-proto-rs.git",       branch = "main" }
 # tendermint                       = { git = "https://github.com/informalsystems/tendermint-rs", branch = "main" }
 # tendermint-rpc                   = { git = "https://github.com/informalsystems/tendermint-rs", branch = "main" }
