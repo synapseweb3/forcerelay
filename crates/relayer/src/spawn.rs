@@ -7,7 +7,7 @@ use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 
 use crate::{
     chain::{
-        ckb::CkbChain, cosmos::CosmosSdkChain, eth::EthChain, handle::ChainHandle,
+        axon::AxonChain, ckb::CkbChain, cosmos::CosmosSdkChain, eth::EthChain, handle::ChainHandle,
         runtime::ChainRuntime, ChainType,
     },
     config::Config,
@@ -59,7 +59,7 @@ pub fn spawn_chain_runtime<Handle: ChainHandle>(
         ChainType::CosmosSdk => ChainRuntime::<CosmosSdkChain>::spawn::<Handle>(chain_config, rt),
         ChainType::Eth => ChainRuntime::<EthChain>::spawn::<Handle>(chain_config, rt),
         ChainType::Ckb => ChainRuntime::<CkbChain>::spawn::<Handle>(chain_config, rt),
-        ChainType::Axon => todo!(),
+        ChainType::Axon => ChainRuntime::<AxonChain>::spawn::<Handle>(chain_config, rt),
     }
     .map_err(SpawnError::relayer)?;
 
