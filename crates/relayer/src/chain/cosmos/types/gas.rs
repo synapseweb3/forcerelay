@@ -1,7 +1,7 @@
 use ibc_proto::cosmos::tx::v1beta1::Fee;
 
 use crate::chain::cosmos::calculate_fee;
-use crate::config::cosmos::CosmosChainConfig;
+use crate::config::cosmos::ChainConfig as CosmosChainConfig;
 use crate::config::GasPrice;
 
 /// Default gas limit when submitting a transaction.

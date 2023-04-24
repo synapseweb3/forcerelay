@@ -14,6 +14,15 @@ mod tests {
     use std::time::Duration;
 
     use eth_light_client_in_ckb_verification::types::packed::{ClientReader, Uint64};
+
+    #[test]
+    fn test_config() {
+        use relayer::config::load;
+
+        let path = "config.toml";
+        load(path).unwrap();
+    }
+
     #[ignore]
     #[test]
     fn integration_test() {

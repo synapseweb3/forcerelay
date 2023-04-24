@@ -11,6 +11,7 @@ use tendermint_light_client_verifier::types::TrustThreshold;
 use ibc_relayer_types::core::ics23_commitment::specs::ProofSpecs;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use ibc_relayer_types::timestamp::ZERO_DURATION;
+use tendermint_rpc::{Url, WebSocketClientUrl};
 
 use crate::error::Error as RelayerError;
 use crate::keyring::Store;
@@ -22,13 +23,13 @@ use types::{MaxMsgNum, MaxTxSize, Memo};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct CosmosChainConfig {
+pub struct ChainConfig {
     pub id: ChainId,
     #[serde(default = "default::chain_type")]
     pub r#type: ChainType,
-    pub rpc_addr: tendermint_rpc::Url,
-    pub websocket_addr: tendermint_rpc::Url,
-    pub grpc_addr: tendermint_rpc::Url,
+    pub rpc_addr: Url,
+    pub websocket_addr: WebSocketClientUrl,
+    pub grpc_addr: Url,
     #[serde(default = "default::rpc_timeout", with = "humantime_serde")]
     pub rpc_timeout: Duration,
     pub account_prefix: String,
@@ -66,8 +67,20 @@ pub struct CosmosChainConfig {
     #[serde(default, with = "humantime_serde")]
     pub trusting_period: Option<Duration>,
 
+    /// CCV only
+    #[serde(default, with = "humantime_serde")]
+    pub unbonding_period: Option<Duration>,
+
     #[serde(default)]
     pub memo_prefix: Memo,
+
+    // This is an undocumented and hidden config to make the relayer wait for
+    // DeliverTX before sending the next transaction when sending messages in
+    // multiple batches. We will instruct relayer operators to turn this on
+    // in case relaying failed in a chain with priority mempool enabled.
+    // Warning: turning this on may cause degradation in performance.
+    #[serde(default)]
+    pub sequential_batch_tx: bool,
 
     // Note: These last few need to be last otherwise we run into `ValueAfterTable` error when serializing to TOML.
     //       That's because these are all tables and have to come last when serializing.
@@ -78,15 +91,7 @@ pub struct CosmosChainConfig {
     )]
     pub proof_specs: Option<ProofSpecs>,
 
-    // This is an undocumented and hidden config to make the relayer wait for
-    // DeliverTX before sending the next transaction when sending messages in
-    // multiple batches. We will instruct relayer operators to turn this on
-    // in case relaying failed in a chain with priority mempool enabled.
-    // Warning: turning this on may cause degradation in performance.
-    #[serde(default)]
-    pub sequential_batch_tx: bool,
-
-    // these two need to be last otherwise we run into `ValueAfterTable` error when serializing to TOML
+    // These last few need to be last otherwise we run into `ValueAfterTable` error when serializing to TOML
     /// The trust threshold defines what fraction of the total voting power of a known
     /// and trusted validator set is sufficient for a commit to be accepted going forward.
     #[serde(default)]

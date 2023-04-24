@@ -13,6 +13,7 @@ use core::{
     time::Duration,
 };
 use std::{fs, fs::File, io::Write, path::Path};
+use tendermint_rpc::Url;
 
 use ibc_proto::google::protobuf::Any;
 use serde_derive::{Deserialize, Serialize};
@@ -26,7 +27,7 @@ use crate::extension_options::ExtensionOptionDynamicFeeTx;
 
 pub use crate::config::Error as ConfigError;
 use ckb::ChainConfig as CkbChainConfig;
-use cosmos::CosmosChainConfig;
+use cosmos::ChainConfig as CosmosChainConfig;
 pub use error::Error;
 use eth::EthChainConfig;
 
@@ -218,6 +219,14 @@ impl ChainConfig {
         }
     }
 
+    pub fn rpc_addr(&self) -> &Url {
+        if let ChainConfig::Cosmos(c) = &self {
+            &c.rpc_addr
+        } else {
+            panic!("Not a cosmos chain")
+        }
+    }
+
     pub fn cosmos_mut(&mut self) -> &mut CosmosChainConfig {
         if let ChainConfig::Cosmos(c) = self {
             c
@@ -385,7 +394,10 @@ impl Config {
                 if !matches!(chain_config, ChainConfig::Cosmos(_)) {
                     false
                 } else {
-                    chain_config.packet_filter().is_allowed(port_id, channel_id)
+                    chain_config
+                        .packet_filter()
+                        .channel_policy
+                        .is_allowed(port_id, channel_id)
                 }
             }
             None => false,
@@ -633,6 +645,18 @@ mod tests {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/config/fixtures/relayer_conf_example.toml"
+        );
+
+        let config = load(path).expect("could not parse config");
+
+        dbg!(config);
+    }
+
+    #[test]
+    fn parse_valid_fee_filter_config() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/config/fixtures/relayer_conf_example_fee_filter.toml"
         );
 
         let config = load(path).expect("could not parse config");

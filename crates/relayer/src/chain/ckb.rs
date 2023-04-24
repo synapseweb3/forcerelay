@@ -6,6 +6,9 @@ use eth2_types::MainnetEthSpec;
 use eth_light_client_in_ckb_verification::types::{
     packed::Client as PackedClient, prelude::Unpack,
 };
+use ibc_proto::ibc::apps::fee::v1::{
+    QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse,
+};
 use ibc_relayer_storage::prelude::{StorageAsMMRStore as _, StorageReader as _};
 use ibc_relayer_storage::Storage;
 use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
@@ -727,6 +730,13 @@ impl ChainEndpoint for CkbChain {
     }
 
     fn subscribe(&mut self) -> Result<super::handle::Subscription, Error> {
+        todo!()
+    }
+
+    fn query_incentivized_packet(
+        &self,
+        _: QueryIncentivizedPacketRequest,
+    ) -> Result<QueryIncentivizedPacketResponse, Error> {
         todo!()
     }
 }

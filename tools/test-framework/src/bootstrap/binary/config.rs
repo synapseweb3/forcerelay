@@ -1,5 +1,6 @@
 use ibc_relayer::config::{
-    cosmos::CosmosChainConfig, Config, GlobalConfig, ModeConfig, RestConfig, TelemetryConfig,
+    cosmos::ChainConfig as CosmosChainConfig, Config, GlobalConfig, ModeConfig, RestConfig,
+    TelemetryConfig,
 };
 use serde_derive::{Deserialize, Serialize};
 
