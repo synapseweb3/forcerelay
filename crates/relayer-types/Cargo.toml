@@ -45,10 +45,10 @@ itertools = { version = "0.10.3", default-features = false, features = ["use_all
 primitive-types = { version = "0.12.1", default-features = false, features = ["serde_no_std"] }
 dyn-clone = "1.0.8"
 num-rational = "0.4.1"
-eth2_ssz_types   = { git = "https://github.com/synapseweb3/lighthouse", rev = "307ade9" }
-bls              = { git = "https://github.com/synapseweb3/lighthouse", rev = "307ade9" }
-tree_hash        = { git = "https://github.com/synapseweb3/lighthouse", rev = "307ade9" }
-tree_hash_derive = { git = "https://github.com/synapseweb3/lighthouse", rev = "307ade9" }
+eth2_ssz_types   = { git = "https://github.com/synapseweb3/lighthouse", rev = "2c246d6" }
+bls              = { git = "https://github.com/synapseweb3/lighthouse", rev = "2c246d6" }
+tree_hash        = { git = "https://github.com/synapseweb3/lighthouse", rev = "2c246d6" }
+tree_hash_derive = { git = "https://github.com/synapseweb3/lighthouse", rev = "2c246d6" }
 thiserror = "1.0"
 ethereum-types = "0.14.1"
 hex = "0.4"
