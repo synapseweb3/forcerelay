@@ -699,8 +699,8 @@ impl AxonChain {
     }
 }
 
-fn convert_err(contract_err: ethers_contract::ContractError<ContractProvider>) -> Error {
-    todo!()
+fn convert_err(err: ethers_contract::ContractError<ContractProvider>) -> Error {
+    Error::other_error(err.to_string())
 }
 
 fn to_identified_any_client_state(
