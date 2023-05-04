@@ -146,6 +146,7 @@ fn subscribe(
             ChainConfig::Cosmos(_) => chain_config.cosmos().websocket_addr.clone(),
             ChainConfig::Eth(_) => "".parse().unwrap(),
             ChainConfig::Ckb(_) => "".parse().unwrap(),
+            ChainConfig::Axon(_) => "".parse().unwrap(),
         },
         compat_mode,
         rt,

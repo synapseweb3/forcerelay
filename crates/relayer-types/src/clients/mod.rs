@@ -2,4 +2,5 @@
 
 pub mod ics07_ckb;
 pub mod ics07_eth;
+pub mod ics07_axon;
 pub mod ics07_tendermint;

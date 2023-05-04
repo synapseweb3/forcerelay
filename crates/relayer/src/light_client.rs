@@ -1,3 +1,4 @@
+pub mod axon;
 pub mod eth;
 pub mod tendermint;
 
@@ -6,6 +7,7 @@ use core::ops::Deref;
 use ibc_proto::google::protobuf::Any;
 use ibc_proto::ibc::lightclients::tendermint::v1::Header as RawTmHeader;
 use ibc_proto::protobuf::Protobuf as ErasedProtobuf;
+use ibc_relayer_types::clients::ics07_axon::header::Header as AxonHeader;
 use ibc_relayer_types::clients::ics07_ckb::header::Header as CkbHeader;
 use ibc_relayer_types::clients::ics07_eth::header::Header as EthHeader;
 use ibc_relayer_types::clients::ics07_tendermint::header::{
@@ -84,6 +86,7 @@ pub enum AnyHeader {
     Tendermint(TendermintHeader),
     Eth(EthHeader),
     Ckb(CkbHeader),
+    Axon(AxonHeader),
 }
 
 impl Header for AnyHeader {
@@ -92,6 +95,7 @@ impl Header for AnyHeader {
             Self::Tendermint(header) => header.client_type(),
             Self::Eth(header) => header.client_type(),
             Self::Ckb(header) => header.client_type(),
+            Self::Axon(header) => header.client_type(),
         }
     }
 
@@ -100,6 +104,7 @@ impl Header for AnyHeader {
             Self::Tendermint(header) => header.height(),
             Self::Eth(header) => header.height(),
             Self::Ckb(header) => header.height(),
+            Self::Axon(header) => header.height(),
         }
     }
 
@@ -108,6 +113,7 @@ impl Header for AnyHeader {
             Self::Tendermint(header) => header.timestamp(),
             Self::Eth(header) => header.timestamp(),
             Self::Ckb(header) => header.timestamp(),
+            Self::Axon(header) => header.timestamp(),
         }
     }
 }
@@ -140,6 +146,7 @@ impl From<AnyHeader> for Any {
             },
             AnyHeader::Eth(header) => header.into(),
             AnyHeader::Ckb(header) => header.into(),
+            AnyHeader::Axon(header) => header.into(),
         }
     }
 }
@@ -159,5 +166,11 @@ impl From<EthHeader> for AnyHeader {
 impl From<CkbHeader> for AnyHeader {
     fn from(header: CkbHeader) -> Self {
         Self::Ckb(header)
+    }
+}
+
+impl From<AxonHeader> for AnyHeader {
+    fn from(header: AxonHeader) -> Self {
+        Self::Axon(header)
     }
 }

@@ -68,6 +68,7 @@ pub enum Secp256k1AddressType {
     Cosmos,
     Ethermint,
     Ckb,
+    Axon,
 }
 
 impl Secp256k1AddressType {
@@ -95,6 +96,7 @@ impl TryFrom<&AddressType> for Secp256k1AddressType {
             }
             AddressType::Cosmos | AddressType::Ethermint { pk_type: _ } => Ok(Self::Cosmos),
             AddressType::Ckb { .. } => Ok(Self::Ckb),
+            AddressType::Axon { .. } => Ok(Self::Axon),
         }
     }
 }
@@ -102,7 +104,7 @@ impl TryFrom<&AddressType> for Secp256k1AddressType {
 /// Return an address from a Public Key
 pub fn get_address(public_key: &PublicKey, address_type: Secp256k1AddressType) -> [u8; 20] {
     match address_type {
-        Secp256k1AddressType::Ethermint => {
+        Secp256k1AddressType::Ethermint | Secp256k1AddressType::Axon => {
             let public_key = public_key.serialize_uncompressed();
             // 0x04 is `SECP256K1_TAG_PUBKEY_UNCOMPRESSED`:
             // https://github.com/bitcoin-core/secp256k1/blob/d7ec49a6893751f068275cc8ddf4993ef7f31756/include/secp256k1.h#L196
@@ -326,9 +328,13 @@ impl SigningKeyPair for Secp256k1KeyPair {
     // - informalsystems/hermes#2863.
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
         let message = match self.address_type {
-            Secp256k1AddressType::Ethermint | Secp256k1AddressType::Cosmos => {
+            Secp256k1AddressType::Ethermint
+            | Secp256k1AddressType::Cosmos
+            | Secp256k1AddressType::Axon => {
                 let hashed_message: GenericArray<u8, U32> = match self.address_type {
-                    Secp256k1AddressType::Ethermint => keccak256_hash(message).into(),
+                    Secp256k1AddressType::Ethermint | Secp256k1AddressType::Axon => {
+                        keccak256_hash(message).into()
+                    }
                     Secp256k1AddressType::Cosmos => Sha256::digest(message),
                     _ => unreachable!("checked"),
                 };
@@ -341,12 +347,12 @@ impl SigningKeyPair for Secp256k1KeyPair {
         };
 
         let signature = match self.address_type {
-            Secp256k1AddressType::Ethermint | Secp256k1AddressType::Cosmos => {
-                Secp256k1::signing_only()
-                    .sign_ecdsa(&message, &self.private_key)
-                    .serialize_compact()
-                    .to_vec()
-            }
+            Secp256k1AddressType::Ethermint
+            | Secp256k1AddressType::Cosmos
+            | Secp256k1AddressType::Axon => Secp256k1::signing_only()
+                .sign_ecdsa(&message, &self.private_key)
+                .serialize_compact()
+                .to_vec(),
             Secp256k1AddressType::Ckb => {
                 let (recov_id, data) = Secp256k1::signing_only()
                     .sign_ecdsa_recoverable(&message, &self.private_key)

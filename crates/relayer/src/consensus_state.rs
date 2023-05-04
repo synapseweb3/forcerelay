@@ -4,6 +4,7 @@ use ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState as RawConsensus
 #[cfg(test)]
 use ibc_proto::ibc::mock::ConsensusState as RawMockConsensusState;
 use ibc_proto::protobuf::Protobuf;
+use ibc_relayer_types::clients::ics07_axon::consensus_state::ConsensusState as AxonConsensusState;
 use ibc_relayer_types::clients::ics07_ckb::consensus_state::ConsensusState as CkbConsensusState;
 use ibc_relayer_types::clients::ics07_eth::consensus_state::ConsensusState as EthConsensusState;
 use ibc_relayer_types::clients::ics07_tendermint::consensus_state::{
@@ -30,6 +31,7 @@ pub enum AnyConsensusState {
     Tendermint(TmConsensusState),
     Eth(EthConsensusState),
     Ckb(CkbConsensusState),
+    Axon(AxonConsensusState),
 
     #[cfg(test)]
     Mock(MockConsensusState),
@@ -41,6 +43,7 @@ impl AnyConsensusState {
             Self::Tendermint(cs_state) => cs_state.timestamp.into(),
             Self::Eth(_) => todo!(),
             Self::Ckb(_) => todo!(),
+            Self::Axon(_) => todo!(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.timestamp(),
@@ -52,6 +55,7 @@ impl AnyConsensusState {
             AnyConsensusState::Tendermint(_cs) => ClientType::Tendermint,
             AnyConsensusState::Eth(_) => ClientType::Eth,
             AnyConsensusState::Ckb(_) => ClientType::Ckb,
+            AnyConsensusState::Axon(_) => ClientType::Axon,
 
             #[cfg(test)]
             AnyConsensusState::Mock(_cs) => ClientType::Mock,
@@ -94,6 +98,7 @@ impl From<AnyConsensusState> for Any {
             },
             AnyConsensusState::Eth(_) => todo!(),
             AnyConsensusState::Ckb(_) => todo!(),
+            AnyConsensusState::Axon(_) => todo!(),
             #[cfg(test)]
             AnyConsensusState::Mock(value) => Any {
                 type_url: MOCK_CONSENSUS_STATE_TYPE_URL.to_string(),
@@ -126,6 +131,12 @@ impl From<EthConsensusState> for AnyConsensusState {
 impl From<CkbConsensusState> for AnyConsensusState {
     fn from(value: CkbConsensusState) -> Self {
         Self::Ckb(value)
+    }
+}
+
+impl From<AxonConsensusState> for AnyConsensusState {
+    fn from(value: AxonConsensusState) -> Self {
+        Self::Axon(value)
     }
 }
 
@@ -191,6 +202,7 @@ impl ConsensusState for AnyConsensusState {
             Self::Tendermint(cs_state) => cs_state.root(),
             Self::Eth(_) => todo!(),
             Self::Ckb(_) => todo!(),
+            Self::Axon(_) => todo!(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.root(),
