@@ -641,6 +641,13 @@ impl ChainEndpoint for AxonChain {
         todo!()
     }
 
+    fn query_incentivized_packet(
+        &self,
+        request: ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketRequest,
+    ) -> Result<ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketResponse, Error> {
+        todo!()
+    }
+
     fn build_client_state(
         &self,
         height: Height,

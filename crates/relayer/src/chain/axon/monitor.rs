@@ -24,7 +24,7 @@ use OwnableIBCHandlerEvents as ContractEvents;
 use crate::chain::tracking::TrackingId;
 use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonitorCmd};
 use ibc_relayer_types::core::ics24_host::identifier::{ChainId, ClientId};
-use tendermint_rpc::Url;
+use tendermint_rpc::{Url, WebSocketClientUrl};
 use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error, info, instrument};
 
@@ -54,7 +54,7 @@ impl AxonEventMonitor {
     )]
     pub fn new(
         chain_id: ChainId,
-        websocket_addr: Url,
+        websocket_addr: WebSocketClientUrl,
         contract_address: Address,
         header_receiver: UnboundedReceiver<Vec<AxonHeader>>,
         rt: Arc<TokioRuntime>,
