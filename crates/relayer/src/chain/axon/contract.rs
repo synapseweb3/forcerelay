@@ -1,3 +1,4 @@
+#![allow(clippy::useless_conversion)]
 pub use ownable_ibc_handler::*;
 /// This module was auto-generated with ethers-rs Abigen.
 /// More information at: <https://github.com/gakonst/ethers-rs>

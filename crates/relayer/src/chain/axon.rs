@@ -730,7 +730,7 @@ impl From<contract::ChannelCounterpartyData> for channel::Counterparty {
     fn from(value: contract::ChannelCounterpartyData) -> Self {
         Self {
             port_id: PortId::from_str(value.port_id.as_ref()).unwrap(),
-            channel_id: if value.channel_id == "" {
+            channel_id: if value.channel_id.is_empty() {
                 None
             } else {
                 Some(ChannelId::from_str(value.channel_id.as_ref()).unwrap())
@@ -782,7 +782,7 @@ impl From<contract::CounterpartyData> for connection::Counterparty {
     fn from(value: contract::CounterpartyData) -> Self {
         Self::new(
             ClientId::from_str(value.client_id.as_ref()).unwrap(),
-            if value.connection_id == "" {
+            if value.connection_id.is_empty() {
                 None
             } else {
                 Some(ConnectionId::from_str(value.connection_id.as_ref()).unwrap())
