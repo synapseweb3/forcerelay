@@ -2,6 +2,7 @@
 #![allow(clippy::diverging_sub_expression)]
 
 use std::{
+    str::FromStr,
     sync::{self, Arc},
     thread,
 };
@@ -32,9 +33,13 @@ use ibc_relayer_types::{
     },
     core::{
         ics02_client::events::UpdateClient,
-        ics03_connection::connection::{ConnectionEnd, IdentifiedConnectionEnd},
+        ics03_connection::{
+            self,
+            connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
+        },
         ics04_channel::{
-            channel::{ChannelEnd, IdentifiedChannelEnd},
+            self,
+            channel::{self, ChannelEnd, IdentifiedChannelEnd},
             packet::Sequence,
         },
         ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
@@ -212,7 +217,7 @@ impl ChainEndpoint for AxonChain {
         let client_states: Vec<_> = self
             .rt
             .block_on(self.contract.get_client_states().call())
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         let client_states = client_states
             .iter()
             .map(to_identified_any_client_state)
@@ -237,7 +242,7 @@ impl ChainEndpoint for AxonChain {
                     .get_client_state(request.client_id.to_string())
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
 
         let client_state = to_any_client_state(&client_state)?;
         Ok((client_state, None))
@@ -257,7 +262,7 @@ impl ChainEndpoint for AxonChain {
         let (consensus_state, _) = self
             .rt
             .block_on(self.contract.get_consensus_state(client_id, height).call())
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         let consensus_state = to_any_consensus_state(&consensus_state)?;
         Ok((consensus_state, None))
     }
@@ -274,7 +279,7 @@ impl ChainEndpoint for AxonChain {
                     .get_consensus_heights(client_id.to_string())
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         let heights = heights
             .iter()
             .map(|height| Height::new(height.revision_number, height.revision_height))
@@ -304,11 +309,11 @@ impl ChainEndpoint for AxonChain {
         let connections: Vec<_> = self
             .rt
             .block_on(self.contract.get_connections().call())
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         let connections = connections
-            .iter()
-            .map(to_identified_connection_end)
-            .collect::<Result<Vec<_>, Error>>()?;
+            .into_iter()
+            .map(IdentifiedConnectionEnd::from)
+            .collect();
         Ok(connections)
     }
 
@@ -323,11 +328,12 @@ impl ChainEndpoint for AxonChain {
                     .get_client_connections(request.client_id.to_string())
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         let connection_ids = connection_ids
             .iter()
-            .map(to_any_connection_id)
-            .collect::<Result<Vec<_>, Error>>()?;
+            .map(|id| ConnectionId::from_str(id.as_ref()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| Error::other_error(e.to_string()))?;
         Ok(connection_ids)
     }
 
@@ -348,8 +354,8 @@ impl ChainEndpoint for AxonChain {
                     .get_connection(request.connection_id.to_string())
                     .call(),
             )
-            .map_err(map_contract_error)?;
-        let connection_end = to_connection_end(&connection_end)?;
+            .map_err(convert_err)?;
+        let connection_end = connection_end.into();
         Ok((connection_end, None))
     }
 
@@ -364,11 +370,11 @@ impl ChainEndpoint for AxonChain {
                     .get_connection_channels(request.connection_id.to_string())
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         let channels = channels
-            .iter()
-            .map(to_identified_channel_end)
-            .collect::<Result<Vec<_>, Error>>()?;
+            .into_iter()
+            .map(IdentifiedChannelEnd::from)
+            .collect();
         Ok(channels)
     }
 
@@ -379,11 +385,11 @@ impl ChainEndpoint for AxonChain {
         let channels: Vec<_> = self
             .rt
             .block_on(self.contract.get_channels().call())
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         let channels = channels
-            .iter()
-            .map(to_identified_channel_end)
-            .collect::<Result<Vec<_>, Error>>()?;
+            .into_iter()
+            .map(IdentifiedChannelEnd::from)
+            .collect();
         Ok(channels)
     }
 
@@ -404,8 +410,8 @@ impl ChainEndpoint for AxonChain {
                     .get_channel(request.port_id.to_string(), request.channel_id.to_string())
                     .call(),
             )
-            .map_err(map_contract_error)?;
-        let channel_end = to_channel_end(&channel_end)?;
+            .map_err(convert_err)?;
+        let channel_end = channel_end.into();
         Ok((channel_end, None))
     }
 
@@ -423,7 +429,7 @@ impl ChainEndpoint for AxonChain {
                     )
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
 
         if !found {
             Ok(None)
@@ -449,7 +455,7 @@ impl ChainEndpoint for AxonChain {
                     )
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         Ok((commitment.to_vec(), None))
     }
 
@@ -467,7 +473,7 @@ impl ChainEndpoint for AxonChain {
                     )
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
 
         let commitment_sequences = commitment_sequences
             .iter()
@@ -493,7 +499,7 @@ impl ChainEndpoint for AxonChain {
                     )
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         Ok((vec![has_receipt as u8], None))
     }
 
@@ -514,7 +520,7 @@ impl ChainEndpoint for AxonChain {
                         )
                         .call(),
                 )
-                .map_err(map_contract_error)?;
+                .map_err(convert_err)?;
             if !has_receipt {
                 sequences.push(seq);
             }
@@ -543,7 +549,7 @@ impl ChainEndpoint for AxonChain {
                     )
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         Ok((commitment.to_vec(), None))
     }
 
@@ -564,7 +570,7 @@ impl ChainEndpoint for AxonChain {
                         )
                         .call(),
                 )
-                .map_err(map_contract_error)?;
+                .map_err(convert_err)?;
             if found {
                 sequences.push(seq);
             }
@@ -590,7 +596,7 @@ impl ChainEndpoint for AxonChain {
                         )
                         .call(),
                 )
-                .map_err(map_contract_error)?;
+                .map_err(convert_err)?;
             if !found {
                 sequences.push(seq);
             }
@@ -613,7 +619,7 @@ impl ChainEndpoint for AxonChain {
                     )
                     .call(),
             )
-            .map_err(map_contract_error)?;
+            .map_err(convert_err)?;
         Ok((sequence.into(), None))
     }
 
@@ -632,6 +638,13 @@ impl ChainEndpoint for AxonChain {
         &self,
         request: QueryHostConsensusStateRequest,
     ) -> Result<Self::ConsensusState, Error> {
+        todo!()
+    }
+
+    fn query_incentivized_packet(
+        &self,
+        request: ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketRequest,
+    ) -> Result<ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketResponse, Error> {
         todo!()
     }
 
@@ -693,8 +706,8 @@ impl AxonChain {
     }
 }
 
-fn map_contract_error(contract_err: ethers_contract::ContractError<ContractProvider>) -> Error {
-    todo!()
+fn convert_err(err: ethers_contract::ContractError<ContractProvider>) -> Error {
+    Error::other_error(err.to_string())
 }
 
 fn to_identified_any_client_state(
@@ -707,32 +720,102 @@ fn to_any_client_state(client_state: &ethers::core::types::Bytes) -> Result<AnyC
     todo!("Type conversion. How to get specific consensus state from bytes?");
 }
 
-fn to_identified_channel_end(
-    client_state: &contract::IdentifiedChannelData,
-) -> Result<IdentifiedChannelEnd, Error> {
-    todo!("Type conversion");
-}
-
-fn to_channel_end(client_state: &contract::ChannelData) -> Result<ChannelEnd, Error> {
-    todo!("Type conversion");
-}
-
-fn to_connection_end(connection_end: &contract::ConnectionEndData) -> Result<ConnectionEnd, Error> {
-    todo!("Type conversion");
-}
-
-fn to_identified_connection_end(
-    connection_end: &contract::IdentifiedConnectionEndData,
-) -> Result<IdentifiedConnectionEnd, Error> {
-    todo!("Type conversion");
-}
-
 fn to_any_consensus_state(
     consensus_state: &ethers::core::types::Bytes,
 ) -> Result<AnyConsensusState, Error> {
     todo!("Type conversion.");
 }
 
-fn to_any_connection_id<T: AsRef<str>> (connection_id: T) -> Result<ConnectionId, Error> {
-    todo!("Type conversion.");
+impl From<contract::ChannelCounterpartyData> for channel::Counterparty {
+    fn from(value: contract::ChannelCounterpartyData) -> Self {
+        Self {
+            port_id: PortId::from_str(value.port_id.as_ref()).unwrap(),
+            channel_id: if value.channel_id.is_empty() {
+                None
+            } else {
+                Some(ChannelId::from_str(value.channel_id.as_ref()).unwrap())
+            },
+        }
+    }
+}
+
+impl From<contract::ChannelData> for ChannelEnd {
+    fn from(value: contract::ChannelData) -> Self {
+        Self {
+            state: channel::State::from_i32(value.state as i32).unwrap(),
+            ordering: channel::Order::from_i32(value.ordering as i32).unwrap(),
+            remote: value.counterparty.into(),
+            connection_hops: value
+                .connection_hops
+                .iter()
+                .map(|s| ConnectionId::from_str(s.as_ref()))
+                .collect::<Result<Vec<ConnectionId>, _>>()
+                .unwrap(),
+            version: ics04_channel::version::Version::new(value.version),
+        }
+    }
+}
+
+impl From<contract::IdentifiedChannelData> for IdentifiedChannelEnd {
+    fn from(value: contract::IdentifiedChannelData) -> Self {
+        let channel_end = ChannelEnd {
+            state: channel::State::from_i32(value.state as i32).unwrap(),
+            ordering: channel::Order::from_i32(value.ordering as i32).unwrap(),
+            remote: value.counterparty.into(),
+            connection_hops: value
+                .connection_hops
+                .iter()
+                .map(|s| ConnectionId::from_str(s.as_ref()))
+                .collect::<Result<Vec<ConnectionId>, _>>()
+                .unwrap(),
+            version: ics04_channel::version::Version::new(value.version),
+        };
+        Self {
+            port_id: PortId::from_str(value.port_id.as_ref()).unwrap(),
+            channel_id: ChannelId::from_str(value.channel_id.as_ref()).unwrap(),
+            channel_end,
+        }
+    }
+}
+
+impl From<contract::CounterpartyData> for connection::Counterparty {
+    fn from(value: contract::CounterpartyData) -> Self {
+        Self::new(
+            ClientId::from_str(value.client_id.as_ref()).unwrap(),
+            if value.connection_id.is_empty() {
+                None
+            } else {
+                Some(ConnectionId::from_str(value.connection_id.as_ref()).unwrap())
+            },
+            CommitmentPrefix::try_from(value.prefix.key_prefix.as_ref().to_vec()).unwrap(),
+        )
+    }
+}
+
+impl From<contract::ConnectionEndData> for ConnectionEnd {
+    fn from(value: contract::ConnectionEndData) -> Self {
+        Self::new(
+            connection::State::from_i32(value.state as i32).unwrap(),
+            ClientId::from_str(value.client_id.as_ref()).unwrap(),
+            value.counterparty.into(),
+            value
+                .versions
+                .into_iter()
+                .map(|v| ics03_connection::version::Version {
+                    identifier: v.identifier,
+                    features: v.features,
+                })
+                .collect::<Vec<_>>(),
+            std::time::Duration::new(value.delay_period, 0),
+        )
+    }
+}
+
+impl From<contract::IdentifiedConnectionEndData> for IdentifiedConnectionEnd {
+    fn from(value: contract::IdentifiedConnectionEndData) -> Self {
+        Self {
+            connection_id: ConnectionId::from_str(value.connection_id.as_ref()).unwrap(),
+            connection_end: value.connection_end.into(),
+        }
+    }
 }

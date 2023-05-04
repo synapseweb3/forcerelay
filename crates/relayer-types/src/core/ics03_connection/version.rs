@@ -14,9 +14,9 @@ use crate::core::ics04_channel::channel::Order;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Version {
     /// unique version identifier
-    identifier: String,
+    pub identifier: String,
     /// list of features compatible with the specified identifier
-    features: Vec<String>,
+    pub features: Vec<String>,
 }
 
 impl Version {
