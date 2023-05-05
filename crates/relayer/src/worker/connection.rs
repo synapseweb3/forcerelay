@@ -1,8 +1,13 @@
 use core::time::Duration;
 use crossbeam_channel::Receiver;
+use ibc_relayer_types::core::ics03_connection::connection;
+use ibc_relayer_types::events::IbcEvent::{
+    OpenAckConnection, OpenConfirmConnection, OpenTryConnection,
+};
 use tracing::{debug, error_span};
 
 use crate::connection::Connection as RelayConnection;
+use crate::connection::ConnectionError;
 use crate::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
 use crate::{
     chain::handle::{ChainHandle, ChainHandlePair},
@@ -16,7 +21,7 @@ use super::WorkerCmd;
 
 pub fn spawn_connection_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
     connection: Connection,
-    chains: ChainHandlePair<ChainA, ChainB>,
+    mut chains: ChainHandlePair<ChainA, ChainB>,
     cmd_rx: Receiver<WorkerCmd>,
 ) -> TaskHandle {
     let mut complete_handshake_on_new_block = true;
@@ -35,6 +40,58 @@ pub fn spawn_connection_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
 
                         complete_handshake_on_new_block = false;
                         if let Some(event_with_height) = last_event_with_height {
+                            // chains.a.
+                            // chains.a.save_conn_tx_hash(connection_id, message_type, tx_hash)
+                            let tx_hash = event_with_height.tx_hash;
+
+                            match event_with_height.event.clone() {
+                                OpenTryConnection(open_try) => {
+                                    let attr = open_try.0;
+                                    chains
+                                        .a
+                                        .save_conn_tx_hash(
+                                            &attr.connection_id.unwrap(),
+                                            connection::State::Init,
+                                            tx_hash,
+                                        )
+                                        .map_err(|_| {
+                                            TaskError::Fatal(RunError::connection(
+                                                ConnectionError::missing_connection_init_event(),
+                                            ))
+                                        })?;
+                                }
+                                OpenAckConnection(open_ack) => {
+                                    let attr = open_ack.0;
+                                    chains
+                                        .a
+                                        .save_conn_tx_hash(
+                                            &attr.connection_id.unwrap(),
+                                            connection::State::TryOpen,
+                                            tx_hash,
+                                        )
+                                        .map_err(|_| {
+                                            TaskError::Fatal(RunError::connection(
+                                                ConnectionError::missing_connection_try_event(),
+                                            ))
+                                        })?;
+                                }
+                                OpenConfirmConnection(open_confirm) => {
+                                    let attr = open_confirm.0;
+                                    chains
+                                        .a
+                                        .save_conn_tx_hash(
+                                            &attr.connection_id.unwrap(),
+                                            connection::State::Open,
+                                            tx_hash,
+                                        )
+                                        .map_err(|_| {
+                                            TaskError::Fatal(RunError::connection(
+                                                ConnectionError::missing_connection_confirm_event(),
+                                            ))
+                                        })?;
+                                }
+                                _ => todo!(),
+                            }
                             let mut handshake_connection = RelayConnection::restore_from_event(
                                 chains.a.clone(),
                                 chains.b.clone(),

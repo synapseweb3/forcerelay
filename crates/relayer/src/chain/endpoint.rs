@@ -685,4 +685,13 @@ pub trait ChainEndpoint: Sized {
         &self,
         request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error>;
+
+    fn save_conn_tx_hash(
+        &mut self,
+        _connection_id: &ConnectionId,
+        _state: State,
+        _tx_hash: [u8; 32],
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 }

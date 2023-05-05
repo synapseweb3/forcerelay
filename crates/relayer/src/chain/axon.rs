@@ -2,6 +2,7 @@
 #![allow(clippy::diverging_sub_expression)]
 
 use std::{
+    collections::HashMap,
     str::FromStr,
     sync::{self, Arc},
     thread,
@@ -12,6 +13,7 @@ use crate::{
     chain::{axon::contract::HeightData, requests::QueryHeight},
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::{axon::AxonChainConfig, filter::port, ChainConfig},
+    connection::ConnectionMsgType,
     consensus_state::AnyConsensusState,
     denom::DenomTrace,
     error::Error,
@@ -21,6 +23,9 @@ use crate::{
     misbehaviour::MisbehaviourEvidence,
     util::collate::collate,
 };
+use ethers::types::BlockId;
+use ethers_providers::Middleware;
+use futures::TryFutureExt;
 use ibc_proto::ibc::core::channel::v1::IdentifiedChannel;
 use ibc_relayer_types::{
     applications::ics31_icq::response::CrossChainQueryResponse,
@@ -40,11 +45,16 @@ use ibc_relayer_types::{
         ics04_channel::{
             self,
             channel::{self, ChannelEnd, IdentifiedChannelEnd},
+            events::OpenInit,
             packet::Sequence,
         },
-        ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
+        ics23_commitment::{
+            commitment::{CommitmentPrefix, CommitmentProofBytes},
+            merkle::MerkleProof,
+        },
         ics24_host::identifier::{self, ChainId, ChannelId, ClientId, ConnectionId, PortId},
     },
+    proofs::Proofs,
     signer::Signer,
     Height,
 };
@@ -89,7 +99,9 @@ pub struct AxonChain {
     pub light_client: AxonLightClient,
     pub tx_monitor_cmd: Option<TxMonitorCmd>,
     pub contract: Contract,
+    client: ContractProvider,
     keybase: KeyRing<Secp256k1KeyPair>,
+    conn_tx_hash: HashMap<(ConnectionId, connection::State), [u8; 32]>,
 }
 
 // Allow temporarily for development. Should remove when work is done.
@@ -117,6 +129,8 @@ impl ChainEndpoint for AxonChain {
             light_client,
             tx_monitor_cmd: None,
             contract: todo!(),
+            client: todo!(),
+            conn_tx_hash: HashMap::new(),
         })
     }
 
@@ -686,6 +700,83 @@ impl ChainEndpoint for AxonChain {
         requests: Vec<CrossChainQueryRequest>,
     ) -> Result<Vec<CrossChainQueryResponse>, Error> {
         todo!()
+    }
+
+    fn build_connection_proofs_and_client_state(
+        &self,
+        message_type: ConnectionMsgType,
+        connection_id: &ConnectionId,
+        client_id: &ClientId,
+        height: Height,
+    ) -> Result<(Option<AnyClientState>, Proofs), Error> {
+        let message_type = match message_type {
+            ConnectionMsgType::OpenTry => connection::State::Init,
+            ConnectionMsgType::OpenAck => connection::State::TryOpen,
+            ConnectionMsgType::OpenConfirm => connection::State::Open,
+        };
+        let key = (connection_id.clone(), message_type);
+        let tx_hash = self.conn_tx_hash.get(&key).unwrap();
+        let tx = self
+            .rt
+            .block_on(self.client.get_transaction(tx_hash))
+            .map_err(|e| Error::rpc_response(e.to_string()))?
+            .ok_or_else(|| {
+                Error::conn_open(
+                    connection_id.clone(),
+                    format!("can't find transaction with hash {}", hex::encode(tx_hash)),
+                )
+            })?;
+
+        let tx_receipt = self
+            .rt
+            .block_on(self.client.get_transaction_receipt(tx_hash))
+            .map_err(|e| Error::rpc_response(e.to_string()))?
+            .ok_or_else(|| {
+                Error::conn_open(
+                    connection_id.clone(),
+                    format!(
+                        "can't find transaction receipt with hash {}",
+                        hex::encode(tx_hash)
+                    ),
+                )
+            })?;
+        let block_number = tx.block_number.ok_or_else(|| {
+            Error::conn_open(
+                connection_id.clone(),
+                format!("transaction {} is still pending", hex::encode(tx_hash)),
+            )
+        })?;
+
+        let tx =
+            self.rt
+                .block_on(self.client.get_block(BlockId::Number(
+                    ethers::types::BlockNumber::Number(block_number),
+                )))
+                .map_err(|e| Error::rpc_response(e.to_string()))?
+                .ok_or_else(|| {
+                    Error::conn_open(
+                        connection_id.clone(),
+                        format!(
+                            "can't find transaction receipt with hash {}",
+                            hex::encode(tx_hash)
+                        ),
+                    )
+                })?;
+
+        let object_proof = todo!("build proof with transaction and block");
+        let client_proof = todo!("build client proof");
+        todo!("assemble Proofs");
+    }
+
+    fn save_conn_tx_hash(
+        &mut self,
+        connection_id: &ConnectionId,
+        state: connection::State,
+        tx_hash: [u8; 32],
+    ) -> Result<(), Error> {
+        self.conn_tx_hash
+            .insert((connection_id.clone(), state), tx_hash);
+        Ok(())
     }
 }
 

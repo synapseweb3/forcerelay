@@ -173,19 +173,21 @@ impl AxonEventMonitor {
     fn process_event(&mut self, event: ContractEvents, meta: LogMeta) -> Result<()> {
         info!("[event] = {:?}", event);
         info!("[event_meta] = {:?}\n", meta);
+        self.start_block_number = meta.block_number.as_u64();
         let batch = EventBatch {
             chain_id: self.chain_id.clone(),
             tracking_id: TrackingId::new_uuid(),
             height: Height::new(0, meta.block_number.as_u64()).unwrap(),
-            events: vec![self.to_ibc_event(event, meta.block_number.as_u64())],
+            events: vec![self.to_ibc_event(event, meta)],
         };
         self.process_batch(batch);
-        self.start_block_number = meta.block_number.as_u64();
         Ok(())
     }
 
-    fn to_ibc_event(&self, event: ContractEvents, height: u64) -> IbcEventWithHeight {
+    fn to_ibc_event(&self, event: ContractEvents, meta: LogMeta) -> IbcEventWithHeight {
         let attr = Attributes::default();
+        let height = meta.block_number.as_u64();
+        let tx_hash = meta.transaction_hash;
         let ibc_event = match event {
             ContractEvents::CreateClientFilter(event) => {
                 info!("Axon event CreateClient: {:?}", event);
@@ -198,7 +200,7 @@ impl AxonEventMonitor {
             }
             _ => todo!(),
         };
-        IbcEventWithHeight::new(ibc_event, Height::new(0, height).unwrap())
+        IbcEventWithHeight::new_with_tx_hash(ibc_event, Height::new(0, height).unwrap(), tx_hash.0)
     }
 
     fn process_batch(&mut self, batch: EventBatch) {
