@@ -709,15 +709,20 @@ impl ChainEndpoint for AxonChain {
         client_id: &ClientId,
         height: Height,
     ) -> Result<(Option<AnyClientState>, Proofs), Error> {
-        let message_type = match message_type {
+        let state = match message_type {
             ConnectionMsgType::OpenTry => connection::State::Init,
             ConnectionMsgType::OpenAck => connection::State::TryOpen,
             ConnectionMsgType::OpenConfirm => connection::State::Open,
         };
-        let key = (connection_id.clone(), message_type);
-        let tx_hash = self.conn_tx_hash.get(&key).unwrap();
-        let (tx, tx_receipt, block) = self.get_proof_ingredients(connection_id.clone(), *tx_hash)?;
-
+        let key = (connection_id.clone(), state);
+        let tx_hash = self.conn_tx_hash.get(&key).ok_or_else(|| {
+            Error::other_error(format!(
+                "missing tx hash for connection {:?} in state {:?}",
+                connection_id, state
+            ))
+        })?;
+        let (tx, tx_receipt, block) =
+            self.get_proof_ingredients(connection_id.clone(), *tx_hash)?;
         todo!("object_proof: build proof with transaction and block");
         todo!("client_proof: build client proof");
         todo!("assemble Proofs");
