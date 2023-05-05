@@ -34,17 +34,31 @@ pub mod rpc;
 pub struct IbcEventWithHeight {
     pub event: IbcEvent,
     pub height: Height,
+    pub tx_hash: [u8; 32],
 }
 
 impl IbcEventWithHeight {
     pub fn new(event: IbcEvent, height: Height) -> Self {
-        Self { event, height }
+        Self {
+            event,
+            height,
+            tx_hash: Default::default(),
+        }
+    }
+
+    pub fn new_with_tx_hash(event: IbcEvent, height: Height, tx_hash: [u8; 32]) -> Self {
+        Self {
+            event,
+            height,
+            tx_hash,
+        }
     }
 
     pub fn with_height(self, height: Height) -> Self {
         Self {
             event: self.event,
             height,
+            tx_hash: self.tx_hash,
         }
     }
 }

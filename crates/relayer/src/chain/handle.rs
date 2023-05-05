@@ -12,7 +12,7 @@ use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::{
-            connection::{ConnectionEnd, IdentifiedConnectionEnd},
+            connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
             version::Version,
         },
         ics04_channel::{
@@ -367,6 +367,13 @@ pub enum ChainRequest {
         request: QueryIncentivizedPacketRequest,
         reply_to: ReplyTo<QueryIncentivizedPacketResponse>,
     },
+
+    SaveConnTxHash {
+        connection_id: ConnectionId,
+        state: connection::State,
+        tx_hash: [u8; 32],
+        reply_to: ReplyTo<()>,
+    },
 }
 
 pub trait ChainHandle: Clone + Display + Send + Sync + Debug + 'static {
@@ -678,4 +685,13 @@ pub trait ChainHandle: Clone + Display + Send + Sync + Debug + 'static {
         &self,
         request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error>;
+
+    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
+        &mut self,
+        _connection_id: &ConnectionId,
+        _state: connection::State,
+        _tx_hash: T,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 }

@@ -13,7 +13,7 @@ use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::{
-            connection::{ConnectionEnd, IdentifiedConnectionEnd},
+            connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
             version::Version,
         },
         ics04_channel::{
@@ -349,6 +349,11 @@ where
                         ChainRequest::QueryIncentivizedPacket { request, reply_to } => {
                             self.query_incentivized_packet(request, reply_to)?
                         },
+
+                        ChainRequest::SaveConnTxHash { connection_id, state,  tx_hash, reply_to } => {
+                            self.save_conn_tx_hash(connection_id, state, tx_hash, reply_to)?
+                        },
+
                     }
                 },
             }
@@ -848,6 +853,18 @@ where
         let result = self.chain.query_incentivized_packet(request);
         reply_to.send(result).map_err(Error::send)?;
 
+        Ok(())
+    }
+
+    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
+        &mut self,
+        conn_id: ConnectionId,
+        state: connection::State,
+        tx_hash: T,
+        reply_to: ReplyTo<()>,
+    ) -> Result<(), Error> {
+        let result = self.chain.save_conn_tx_hash(&conn_id, state, tx_hash);
+        reply_to.send(result).map_err(Error::send)?;
         Ok(())
     }
 }

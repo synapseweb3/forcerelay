@@ -11,7 +11,7 @@ use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::connection::{ConnectionEnd, IdentifiedConnectionEnd},
-        ics03_connection::version::Version,
+        ics03_connection::{connection, version::Version},
         ics04_channel::channel::{ChannelEnd, IdentifiedChannelEnd},
         ics04_channel::packet::{PacketMsgType, Sequence},
         ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
@@ -514,5 +514,19 @@ impl ChainHandle for BaseChainHandle {
         request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error> {
         self.send(|reply_to| ChainRequest::QueryIncentivizedPacket { request, reply_to })
+    }
+
+    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
+        &mut self,
+        connection_id: &ConnectionId,
+        state: connection::State,
+        tx_hash: T,
+    ) -> Result<(), Error> {
+        self.send(|reply_to| ChainRequest::SaveConnTxHash {
+            connection_id: connection_id.clone(),
+            state,
+            tx_hash: tx_hash.into(),
+            reply_to,
+        })
     }
 }
