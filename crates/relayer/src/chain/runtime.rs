@@ -13,7 +13,7 @@ use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::{
-            connection::{ConnectionEnd, IdentifiedConnectionEnd, self},
+            connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
             version::Version,
         },
         ics04_channel::{
@@ -856,11 +856,11 @@ where
         Ok(())
     }
 
-    fn save_conn_tx_hash(
+    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
         &mut self,
         conn_id: ConnectionId,
         state: connection::State,
-        tx_hash: [u8; 32],
+        tx_hash: T,
         reply_to: ReplyTo<()>,
     ) -> Result<(), Error> {
         let result = self.chain.save_conn_tx_hash(&conn_id, state, tx_hash);

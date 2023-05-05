@@ -768,14 +768,14 @@ impl ChainEndpoint for AxonChain {
         todo!("assemble Proofs");
     }
 
-    fn save_conn_tx_hash(
+    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
         &mut self,
         connection_id: &ConnectionId,
         state: connection::State,
-        tx_hash: [u8; 32],
+        tx_hash: T,
     ) -> Result<(), Error> {
         self.conn_tx_hash
-            .insert((connection_id.clone(), state), tx_hash);
+            .insert((connection_id.clone(), state), tx_hash.into());
         Ok(())
     }
 }
