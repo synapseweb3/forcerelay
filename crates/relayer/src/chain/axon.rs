@@ -718,8 +718,8 @@ impl ChainEndpoint for AxonChain {
         let tx_hash = self.conn_tx_hash.get(&key).unwrap();
         let (tx, tx_receipt, block) = self.get_proof_ingredients(connection_id.clone(), *tx_hash)?;
 
-        let object_proof = todo!("build proof with transaction and block");
-        let client_proof = todo!("build client proof");
+        todo!("object_proof: build proof with transaction and block");
+        todo!("client_proof: build client proof");
         todo!("assemble Proofs");
     }
 
