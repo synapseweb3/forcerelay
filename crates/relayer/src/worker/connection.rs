@@ -40,10 +40,7 @@ pub fn spawn_connection_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
 
                         complete_handshake_on_new_block = false;
                         if let Some(event_with_height) = last_event_with_height {
-                            // chains.a.
-                            // chains.a.save_conn_tx_hash(connection_id, message_type, tx_hash)
                             let tx_hash = event_with_height.tx_hash;
-
                             match event_with_height.event.clone() {
                                 OpenTryConnection(open_try) => {
                                     let attr = open_try.0;

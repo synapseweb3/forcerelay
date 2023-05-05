@@ -1341,7 +1341,7 @@ pub fn extract_connection_id(event: &IbcEvent) -> Result<&ConnectionId, Connecti
 }
 
 /// Enumeration of proof carrying ICS3 message, helper for relayer.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConnectionMsgType {
     OpenTry,
     OpenAck,
