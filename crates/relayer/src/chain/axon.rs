@@ -23,7 +23,7 @@ use crate::{
     misbehaviour::MisbehaviourEvidence,
     util::collate::collate,
 };
-use ethers::types::BlockId;
+use ethers::types::{Block, BlockId, Transaction, TransactionReceipt, TxHash};
 use ethers_providers::Middleware;
 use futures::TryFutureExt;
 use ibc_proto::ibc::core::channel::v1::IdentifiedChannel;
@@ -716,52 +716,7 @@ impl ChainEndpoint for AxonChain {
         };
         let key = (connection_id.clone(), message_type);
         let tx_hash = self.conn_tx_hash.get(&key).unwrap();
-        let tx = self
-            .rt
-            .block_on(self.client.get_transaction(tx_hash))
-            .map_err(|e| Error::rpc_response(e.to_string()))?
-            .ok_or_else(|| {
-                Error::conn_open(
-                    connection_id.clone(),
-                    format!("can't find transaction with hash {}", hex::encode(tx_hash)),
-                )
-            })?;
-
-        let tx_receipt = self
-            .rt
-            .block_on(self.client.get_transaction_receipt(tx_hash))
-            .map_err(|e| Error::rpc_response(e.to_string()))?
-            .ok_or_else(|| {
-                Error::conn_open(
-                    connection_id.clone(),
-                    format!(
-                        "can't find transaction receipt with hash {}",
-                        hex::encode(tx_hash)
-                    ),
-                )
-            })?;
-        let block_number = tx.block_number.ok_or_else(|| {
-            Error::conn_open(
-                connection_id.clone(),
-                format!("transaction {} is still pending", hex::encode(tx_hash)),
-            )
-        })?;
-
-        let tx =
-            self.rt
-                .block_on(self.client.get_block(BlockId::Number(
-                    ethers::types::BlockNumber::Number(block_number),
-                )))
-                .map_err(|e| Error::rpc_response(e.to_string()))?
-                .ok_or_else(|| {
-                    Error::conn_open(
-                        connection_id.clone(),
-                        format!(
-                            "can't find transaction receipt with hash {}",
-                            hex::encode(tx_hash)
-                        ),
-                    )
-                })?;
+        let (tx, tx_receipt, block) = self.get_proof_ingredients(connection_id.clone(), *tx_hash)?;
 
         let object_proof = todo!("build proof with transaction and block");
         let client_proof = todo!("build client proof");
@@ -794,6 +749,61 @@ impl AxonChain {
         .map_err(Error::event_monitor)?;
         thread::spawn(move || event_monitor.run());
         Ok(monitor_tx)
+    }
+
+    fn get_proof_ingredients<T: Send + Sync + Into<TxHash>>(
+        &self,
+        connection_id: ConnectionId,
+        tx_hash: T,
+    ) -> Result<(Transaction, TransactionReceipt, Block<TxHash>), Error> {
+        let tx_hash = tx_hash.into();
+        let tx = self
+            .rt
+            .block_on(self.client.get_transaction(tx_hash))
+            .map_err(|e| Error::rpc_response(e.to_string()))?
+            .ok_or_else(|| {
+                Error::conn_open(
+                    connection_id.clone(),
+                    format!("can't find transaction with hash {}", hex::encode(tx_hash)),
+                )
+            })?;
+
+        let tx_receipt = self
+            .rt
+            .block_on(self.client.get_transaction_receipt(tx_hash))
+            .map_err(|e| Error::rpc_response(e.to_string()))?
+            .ok_or_else(|| {
+                Error::conn_open(
+                    connection_id.clone(),
+                    format!(
+                        "can't find transaction receipt with hash {}",
+                        hex::encode(tx_hash)
+                    ),
+                )
+            })?;
+
+        let block_number = tx.block_number.ok_or_else(|| {
+            Error::conn_open(
+                connection_id.clone(),
+                format!("transaction {} is still pending", hex::encode(tx_hash)),
+            )
+        })?;
+        let block =
+            self.rt
+                .block_on(self.client.get_block(BlockId::Number(
+                    ethers::types::BlockNumber::Number(block_number),
+                )))
+                .map_err(|e| Error::rpc_response(e.to_string()))?
+                .ok_or_else(|| {
+                    Error::conn_open(
+                        connection_id.clone(),
+                        format!(
+                            "can't find transaction receipt with hash {}",
+                            hex::encode(tx_hash)
+                        ),
+                    )
+                })?;
+        Ok((tx, tx_receipt, block))
     }
 }
 
