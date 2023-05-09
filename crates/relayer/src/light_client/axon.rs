@@ -8,8 +8,13 @@ use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::chain::axon::AxonChain;
+use crate::chain::endpoint::ChainEndpoint;
+use crate::client_state::AnyClientState;
 use crate::config::axon::AxonChainConfig;
 use crate::error::Error;
+use crate::misbehaviour::MisbehaviourEvidence;
+
+use super::Verified;
 
 pub struct LightClient {
     pub chain_id: ChainId,
@@ -20,7 +25,7 @@ impl LightClient {
         todo!()
     }
 
-    pub fn subscribe(&mut self) -> (UnboundedReceiver<Header>, UnboundedReceiver<Vec<Header>>) {
+    pub fn subscribe(&mut self) -> UnboundedReceiver<Header> {
         todo!();
     }
 
@@ -35,9 +40,8 @@ impl super::LightClient<AxonChain> for LightClient {
         &mut self,
         trusted: ibc_relayer_types::Height,
         target: ibc_relayer_types::Height,
-        client_state: &crate::client_state::AnyClientState,
-    ) -> Result<super::Verified<<AxonChain as crate::chain::endpoint::ChainEndpoint>::Header>, Error>
-    {
+        client_state: &AnyClientState,
+    ) -> Result<Verified<Header>, Error> {
         todo!()
     }
 
@@ -45,26 +49,23 @@ impl super::LightClient<AxonChain> for LightClient {
         &mut self,
         trusted: ibc_relayer_types::Height,
         target: ibc_relayer_types::Height,
-        client_state: &crate::client_state::AnyClientState,
-    ) -> Result<
-        super::Verified<<AxonChain as crate::chain::endpoint::ChainEndpoint>::LightBlock>,
-        Error,
-    > {
+        client_state: &AnyClientState,
+    ) -> Result<Verified<<AxonChain as ChainEndpoint>::LightBlock>, Error> {
         todo!()
     }
 
     fn check_misbehaviour(
         &mut self,
         update: &ibc_relayer_types::core::ics02_client::events::UpdateClient,
-        client_state: &crate::client_state::AnyClientState,
-    ) -> Result<Option<crate::misbehaviour::MisbehaviourEvidence>, Error> {
+        client_state: &AnyClientState,
+    ) -> Result<Option<MisbehaviourEvidence>, Error> {
         todo!()
     }
 
     fn fetch(
         &mut self,
         height: ibc_relayer_types::Height,
-    ) -> Result<<AxonChain as crate::chain::endpoint::ChainEndpoint>::LightBlock, Error> {
+    ) -> Result<<AxonChain as ChainEndpoint>::LightBlock, Error> {
         todo!()
     }
 }

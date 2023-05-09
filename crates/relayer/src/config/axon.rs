@@ -8,4 +8,5 @@ pub struct AxonChainConfig {
     pub websocket_addr: WebSocketClientUrl,
     pub contract_address: ethers::types::Address,
     pub key_name: String,
+    pub store_prefix: String,
 }

@@ -8,6 +8,11 @@ use std::{
     thread,
 };
 
+use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
+use bytes::Bytes;
+use eth2_types::Hash256;
+use tracing::warn;
+
 use crate::{
     account::Balance,
     chain::{axon::contract::HeightData, requests::QueryHeight},
@@ -23,7 +28,12 @@ use crate::{
     misbehaviour::MisbehaviourEvidence,
     util::collate::collate,
 };
-use ethers::types::{Block, BlockId, Transaction, TransactionReceipt, TxHash};
+use eth_light_client_in_ckb_prover::Receipts;
+use eth_light_client_in_ckb_verification::trie;
+use ethers::{
+    types::{Block, BlockId, Transaction, TransactionReceipt, TxHash},
+    utils::{rlp, rlp::Encodable},
+};
 use ethers_providers::Middleware;
 use futures::TryFutureExt;
 use ibc_proto::ibc::core::channel::v1::IdentifiedChannel;
@@ -37,7 +47,7 @@ use ibc_relayer_types::{
         ics07_ckb::client_state,
     },
     core::{
-        ics02_client::events::UpdateClient,
+        ics02_client::{error::Error as ClientError, events::UpdateClient},
         ics03_connection::{
             self,
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
@@ -46,7 +56,7 @@ use ibc_relayer_types::{
             self,
             channel::{self, ChannelEnd, IdentifiedChannelEnd},
             events::OpenInit,
-            packet::Sequence,
+            packet::{PacketMsgType, Sequence},
         },
         ics23_commitment::{
             commitment::{CommitmentPrefix, CommitmentProofBytes},
@@ -56,6 +66,7 @@ use ibc_relayer_types::{
     },
     proofs::Proofs,
     signer::Signer,
+    timestamp::Timestamp,
     Height,
 };
 use itertools::Itertools;
@@ -72,8 +83,9 @@ type ContractEvents = OwnableIBCHandlerEvents;
 
 use super::{
     client::ClientSettings,
+    cosmos::encode::key_pair_to_signer,
     endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
-    handle::Subscription,
+    handle::{CacheTxHashStatus, Subscription},
     requests::{
         self, CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest,
         QueryChannelRequest, QueryChannelsRequest, QueryClientConnectionsRequest,
@@ -101,7 +113,9 @@ pub struct AxonChain {
     pub contract: Contract,
     client: ContractProvider,
     keybase: KeyRing<Secp256k1KeyPair>,
-    conn_tx_hash: HashMap<(ConnectionId, connection::State), [u8; 32]>,
+    conn_tx_hash: HashMap<ConnectionId, TxHash>,
+    chan_tx_hash: HashMap<(ChannelId, PortId), TxHash>,
+    packet_tx_hash: HashMap<(ChannelId, PortId, u64), TxHash>,
 }
 
 // Allow temporarily for development. Should remove when work is done.
@@ -131,6 +145,8 @@ impl ChainEndpoint for AxonChain {
             contract: todo!(),
             client: todo!(),
             conn_tx_hash: HashMap::new(),
+            chan_tx_hash: HashMap::new(),
+            packet_tx_hash: HashMap::new(),
         })
     }
 
@@ -166,17 +182,26 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn get_signer(&self) -> Result<Signer, Error> {
-        todo!()
+        let key_entry = self
+            .keybase()
+            .get_key(&self.config.key_name)
+            .map_err(Error::key_base)?;
+        let signer = key_pair_to_signer(&key_entry)?;
+        Ok(signer)
     }
 
     fn ibc_version(&self) -> Result<Option<semver::Version>, Error> {
-        todo!()
+        Ok(None)
     }
 
     fn send_messages_and_wait_commit(
         &mut self,
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        // every skipped request will be set empty, e.g. udpate_client
+        if tracked_msgs.msgs.is_empty() {
+            return Ok(vec![]);
+        }
         todo!()
     }
 
@@ -201,27 +226,43 @@ impl ChainEndpoint for AxonChain {
         update: &UpdateClient,
         client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
-        todo!()
+        warn!("axon check_misbehaviour() cannot implement");
+        Ok(None)
     }
 
     fn query_balance(&self, key_name: Option<&str>, denom: Option<&str>) -> Result<Balance, Error> {
-        todo!("cannot implement");
+        warn!("axon query_balance() cannot implement");
+        Ok(Balance {
+            amount: "".to_owned(),
+            denom: "".to_owned(),
+        })
     }
 
     fn query_all_balances(&self, key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
-        todo!("cannot implement");
+        warn!("axon query_all_balances() cannot implement");
+        Ok(vec![])
     }
 
     fn query_denom_trace(&self, hash: String) -> Result<DenomTrace, Error> {
-        todo!("cannot implement");
+        warn!("axon query_denom_trace() cannot implement");
+        Ok(DenomTrace {
+            path: "".to_owned(),
+            base_denom: "".to_owned(),
+        })
     }
 
     fn query_commitment_prefix(&self) -> Result<CommitmentPrefix, Error> {
-        todo!("How to implement");
+        CommitmentPrefix::try_from(self.config.store_prefix.as_bytes().to_vec())
+            .map_err(|_| Error::ics02(ClientError::empty_prefix()))
     }
 
     fn query_application_status(&self) -> Result<ChainStatus, Error> {
-        todo!("How to implement");
+        // we don't care about axon's light client, so we should skip status check on light client
+        let max_height = Height::new(u64::MAX, u64::MAX).map_err(Error::ics02)?;
+        Ok(ChainStatus {
+            height: max_height,
+            timestamp: Timestamp::now(),
+        })
     }
 
     fn query_clients(
@@ -589,7 +630,7 @@ impl ChainEndpoint for AxonChain {
                 sequences.push(seq);
             }
         }
-        let height: Height = todo!("how to get height?");
+        let height = Height::new(u64::MAX, u64::MAX).unwrap();
         Ok((sequences, height))
     }
 
@@ -638,14 +679,16 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn query_txs(&self, request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
-        todo!()
+        warn!("axon query_txs() not support");
+        Ok(vec![])
     }
 
     fn query_packet_events(
         &self,
         request: QueryPacketEventDataRequest,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        todo!()
+        warn!("axon query_packet_events() not support");
+        Ok(vec![])
     }
 
     fn query_host_consensus_state(
@@ -692,14 +735,16 @@ impl ChainEndpoint for AxonChain {
         port_id: &PortId,
         counterparty_payee: &Signer,
     ) -> Result<(), Error> {
-        todo!()
+        warn!("axon maybe_register_counterparty_payee() not support");
+        Ok(())
     }
 
     fn cross_chain_query(
         &self,
         requests: Vec<CrossChainQueryRequest>,
     ) -> Result<Vec<CrossChainQueryResponse>, Error> {
-        todo!()
+        warn!("axon cross_chain_query() not support");
+        Ok(vec![])
     }
 
     fn build_connection_proofs_and_client_state(
@@ -714,28 +759,87 @@ impl ChainEndpoint for AxonChain {
             ConnectionMsgType::OpenAck => connection::State::TryOpen,
             ConnectionMsgType::OpenConfirm => connection::State::Open,
         };
-        let key = (connection_id.clone(), state);
-        let tx_hash = self.conn_tx_hash.get(&key).ok_or_else(|| {
-            Error::other_error(format!(
-                "missing tx hash for connection {:?} in state {:?}",
-                connection_id, state
-            ))
+        let tx_hash = self
+            .conn_tx_hash
+            .get(connection_id)
+            .ok_or(Error::conn_proof(
+                connection_id.clone(),
+                format!("missing connection tx_hash, state {state:?}"),
+            ))?;
+        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+            Error::conn_proof(
+                connection_id.clone(),
+                format!("{}, state {state:?}", e.detail()),
+            )
         })?;
-        let (tx, tx_receipt, block) =
-            self.get_proof_ingredients(connection_id.clone(), *tx_hash)?;
-        todo!("object_proof: build proof with transaction and block");
-        todo!("client_proof: build client proof");
-        todo!("assemble Proofs");
+        Ok((None, proofs))
     }
 
-    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
+    fn build_channel_proofs(
+        &self,
+        port_id: &PortId,
+        channel_id: &ChannelId,
+        height: Height,
+    ) -> Result<Proofs, Error> {
+        let tx_hash = self
+            .chan_tx_hash
+            .get(&(channel_id.clone(), port_id.clone()))
+            .ok_or(Error::chan_proof(
+                port_id.clone(),
+                channel_id.clone(),
+                "missing channel tx_hash".to_owned(),
+            ))?;
+        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+            Error::chan_proof(port_id.clone(), channel_id.clone(), e.detail().to_string())
+        })?;
+        Ok(proofs)
+    }
+
+    fn build_packet_proofs(
+        &self,
+        packet_type: PacketMsgType,
+        port_id: PortId,
+        channel_id: ChannelId,
+        sequence: Sequence,
+        height: Height,
+    ) -> Result<Proofs, Error> {
+        let tx_hash = self
+            .packet_tx_hash
+            .get(&(channel_id.clone(), port_id.clone(), sequence.into()))
+            .ok_or(Error::packet_proof(
+                port_id.clone(),
+                channel_id.clone(),
+                sequence.into(),
+                format!("missing packet tx_hash, type {packet_type:?}"),
+            ))?;
+        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+            Error::chan_proof(
+                port_id.clone(),
+                channel_id.clone(),
+                format!("{}, type {packet_type:?}", e.detail()),
+            )
+        })?;
+        Ok(proofs)
+    }
+
+    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
         &mut self,
-        connection_id: &ConnectionId,
-        state: connection::State,
+        cached_status: CacheTxHashStatus,
         tx_hash: T,
     ) -> Result<(), Error> {
-        self.conn_tx_hash
-            .insert((connection_id.clone(), state), tx_hash.into());
+        let hash: [u8; 32] = tx_hash.into();
+        match cached_status {
+            CacheTxHashStatus::Connection(conn_id) => {
+                self.conn_tx_hash.insert(conn_id, hash.into());
+            }
+            CacheTxHashStatus::Channel(chan_id, port_id) => {
+                self.chan_tx_hash.insert((chan_id, port_id), hash.into());
+            }
+            CacheTxHashStatus::Packet(chan_id, port_id, sequence) => {
+                self.packet_tx_hash
+                    .insert((chan_id, port_id, sequence), hash.into());
+            }
+        }
         Ok(())
     }
 }
@@ -743,7 +847,7 @@ impl ChainEndpoint for AxonChain {
 impl AxonChain {
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
         crate::time!("axon_init_event_monitor");
-        let (create_receiver, header_receiver) = self.light_client.subscribe();
+        let header_receiver = self.light_client.subscribe();
         let (event_monitor, monitor_tx) = AxonEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
@@ -756,59 +860,66 @@ impl AxonChain {
         Ok(monitor_tx)
     }
 
-    fn get_proof_ingredients<T: Send + Sync + Into<TxHash>>(
-        &self,
-        connection_id: ConnectionId,
-        tx_hash: T,
-    ) -> Result<(Transaction, TransactionReceipt, Block<TxHash>), Error> {
-        let tx_hash = tx_hash.into();
-        let tx = self
+    #[allow(unreachable_code)]
+    fn get_proofs(&self, tx_hash: &TxHash) -> Result<Proofs, Error> {
+        let receipt = self
             .rt
-            .block_on(self.client.get_transaction(tx_hash))
+            .block_on(self.client.get_transaction_receipt(*tx_hash))
             .map_err(|e| Error::rpc_response(e.to_string()))?
             .ok_or_else(|| {
-                Error::conn_open(
-                    connection_id.clone(),
-                    format!("can't find transaction with hash {}", hex::encode(tx_hash)),
-                )
+                Error::other_error(format!(
+                    "can't find transaction receipt with hash {}",
+                    hex::encode(tx_hash)
+                ))
             })?;
 
-        let tx_receipt = self
-            .rt
-            .block_on(self.client.get_transaction_receipt(tx_hash))
-            .map_err(|e| Error::rpc_response(e.to_string()))?
-            .ok_or_else(|| {
-                Error::conn_open(
-                    connection_id.clone(),
-                    format!(
-                        "can't find transaction receipt with hash {}",
-                        hex::encode(tx_hash)
-                    ),
-                )
-            })?;
-
-        let block_number = tx.block_number.ok_or_else(|| {
-            Error::conn_open(
-                connection_id.clone(),
-                format!("transaction {} is still pending", hex::encode(tx_hash)),
-            )
+        let block_number = receipt.block_number.ok_or_else(|| {
+            Error::other_error(format!(
+                "transaction {} is still pending",
+                hex::encode(tx_hash)
+            ))
         })?;
-        let block =
-            self.rt
-                .block_on(self.client.get_block(BlockId::Number(
-                    ethers::types::BlockNumber::Number(block_number),
-                )))
-                .map_err(|e| Error::rpc_response(e.to_string()))?
-                .ok_or_else(|| {
-                    Error::conn_open(
-                        connection_id.clone(),
-                        format!(
-                            "can't find transaction receipt with hash {}",
-                            hex::encode(tx_hash)
-                        ),
-                    )
-                })?;
-        Ok((tx, tx_receipt, block))
+
+        let receipts: Receipts = self
+            .rt
+            .block_on(self.client.get_block_receipts(block_number))
+            .map_err(|e| Error::rpc_response(e.to_string()))?
+            .into();
+        let receipt_proof = receipts.generate_proof(receipt.transaction_index.as_usize());
+
+        let block: AxonBlock = todo!("wait axon team adds more rpc interface");
+        let state_root: Hash256 = todo!("wait axon team adds more rpc interface");
+        let proof: AxonProof = todo!("wait axon team adds more rpc interface");
+        let mut validators: Vec<Validator> = todo!("wait axon team adds more rpc interface");
+
+        // check the validation of receipts mpt proof
+        let key = rlp::encode(&receipt.transaction_index.as_u64());
+        let verify_mpt = trie::verify_proof(
+            &receipt_proof,
+            block.header.receipts_root.as_bytes(),
+            &key,
+            &receipt.rlp_bytes(),
+        );
+        if !verify_mpt {
+            return Err(Error::rpc_response("unverified receipts mpt".to_owned()));
+        }
+
+        // check the validation of Axon block
+        axon_tools::verify_proof(block.clone(), state_root, &mut validators, proof.clone())
+            .map_err(|_| Error::rpc_response("unverified axon block".to_owned()))?;
+
+        let object_proof = rlp::RlpStream::new()
+            .append(&receipt)
+            .append_list::<Vec<_>, Vec<_>>(&receipt_proof)
+            .append(&block)
+            .append(&state_root)
+            .append(&proof)
+            .as_raw()
+            .to_owned();
+        let height = Height::new(u64::MAX, u64::MAX).unwrap();
+        let proofs =
+            Proofs::new(object_proof.try_into().unwrap(), None, None, None, height).unwrap();
+        Ok(proofs)
     }
 }
 

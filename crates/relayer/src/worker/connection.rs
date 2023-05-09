@@ -1,11 +1,11 @@
 use core::time::Duration;
 use crossbeam_channel::Receiver;
-use ibc_relayer_types::core::ics03_connection::connection;
 use ibc_relayer_types::events::IbcEvent::{
     OpenAckConnection, OpenConfirmConnection, OpenTryConnection,
 };
 use tracing::{debug, error_span};
 
+use crate::chain::handle::CacheTxHashStatus;
 use crate::connection::Connection as RelayConnection;
 use crate::connection::ConnectionError;
 use crate::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
@@ -43,12 +43,11 @@ pub fn spawn_connection_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
                             let tx_hash = event_with_height.tx_hash;
                             match event_with_height.event.clone() {
                                 OpenTryConnection(open_try) => {
-                                    let attr = open_try.0;
+                                    let conn_id = open_try.0.connection_id.unwrap();
                                     chains
                                         .a
-                                        .save_conn_tx_hash(
-                                            &attr.connection_id.unwrap(),
-                                            connection::State::Init,
+                                        .cache_ics_tx_hash(
+                                            CacheTxHashStatus::new_with_conn(conn_id),
                                             tx_hash,
                                         )
                                         .map_err(|_| {
@@ -58,12 +57,11 @@ pub fn spawn_connection_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
                                         })?;
                                 }
                                 OpenAckConnection(open_ack) => {
-                                    let attr = open_ack.0;
+                                    let conn_id = open_ack.0.connection_id.unwrap();
                                     chains
                                         .a
-                                        .save_conn_tx_hash(
-                                            &attr.connection_id.unwrap(),
-                                            connection::State::TryOpen,
+                                        .cache_ics_tx_hash(
+                                            CacheTxHashStatus::new_with_conn(conn_id),
                                             tx_hash,
                                         )
                                         .map_err(|_| {
@@ -73,12 +71,11 @@ pub fn spawn_connection_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
                                         })?;
                                 }
                                 OpenConfirmConnection(open_confirm) => {
-                                    let attr = open_confirm.0;
+                                    let conn_id = open_confirm.0.connection_id.unwrap();
                                     chains
                                         .a
-                                        .save_conn_tx_hash(
-                                            &attr.connection_id.unwrap(),
-                                            connection::State::Open,
+                                        .cache_ics_tx_hash(
+                                            CacheTxHashStatus::new_with_conn(conn_id),
                                             tx_hash,
                                         )
                                         .map_err(|_| {

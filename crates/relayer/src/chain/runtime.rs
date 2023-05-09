@@ -13,7 +13,7 @@ use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::{
-            connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
+            connection::{ConnectionEnd, IdentifiedConnectionEnd},
             version::Version,
         },
         ics04_channel::{
@@ -46,7 +46,7 @@ use crate::{
 use super::{
     client::ClientSettings,
     endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
-    handle::{ChainHandle, ChainRequest, ReplyTo, Subscription},
+    handle::{CacheTxHashStatus, ChainHandle, ChainRequest, ReplyTo, Subscription},
     requests::*,
     tracking::TrackedMsgs,
 };
@@ -350,8 +350,8 @@ where
                             self.query_incentivized_packet(request, reply_to)?
                         },
 
-                        ChainRequest::SaveConnTxHash { connection_id, state,  tx_hash, reply_to } => {
-                            self.save_conn_tx_hash(connection_id, state, tx_hash, reply_to)?
+                        ChainRequest::CacheIcsTxHash { cached_status, tx_hash, reply_to } => {
+                            self.cache_ics_tx_hash(cached_status, tx_hash, reply_to)?
                         },
 
                     }
@@ -856,14 +856,13 @@ where
         Ok(())
     }
 
-    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
+    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
         &mut self,
-        conn_id: ConnectionId,
-        state: connection::State,
+        cached_status: CacheTxHashStatus,
         tx_hash: T,
         reply_to: ReplyTo<()>,
     ) -> Result<(), Error> {
-        let result = self.chain.save_conn_tx_hash(&conn_id, state, tx_hash);
+        let result = self.chain.cache_ics_tx_hash(cached_status, tx_hash);
         reply_to.send(result).map_err(Error::send)?;
         Ok(())
     }

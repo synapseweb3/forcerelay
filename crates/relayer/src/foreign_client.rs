@@ -1051,6 +1051,11 @@ impl<DstChain: ChainHandle, SrcChain: ChainHandle> ForeignClient<DstChain, SrcCh
         target_height: Height,
         trusted_height: Option<Height>,
     ) -> Result<Vec<Any>, ForeignClientError> {
+        // skip building update client msg if we don't have check on light client
+        if target_height.revision_height() == u64::MAX {
+            return Ok(vec![]);
+        }
+
         let src_application_latest_height = || {
             self.src_chain().query_latest_height().map_err(|e| {
                 ForeignClientError::client_create(
