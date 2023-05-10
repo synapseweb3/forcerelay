@@ -13,7 +13,7 @@ __Example__
 Register the address `cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw` for the chain `ibc-1` on channel `channel-0`:
 
 ```shell
-{{#template ../../../templates/commands/hermes/fee/register-payee_1.md CHAIN_ID=ibc-1 CHANNEL_ID=channel-0 PORT_ID=transfer PAYEE_ADDRESS=cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw}}
+{{#template ../../../templates/commands/forcerelay/fee/register-payee_1.md CHAIN_ID=ibc-1 CHANNEL_ID=channel-0 PORT_ID=transfer PAYEE_ADDRESS=cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw}}
 ```
 
 ```json

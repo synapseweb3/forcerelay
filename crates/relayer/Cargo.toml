@@ -32,7 +32,7 @@ tree_hash        = { git = "https://github.com/synapseweb3/lighthouse", rev = "2
 
 eth_light_client_in_ckb-verification = { version = "0.2.0-alpha", git = "https://github.com/synapseweb3/eth-light-client-in-ckb", rev = "5a5dc2e" }
 eth_light_client_in_ckb-prover = { version = "0.2.0-alpha", git = "https://github.com/synapseweb3/eth-light-client-in-ckb", rev = "5a5dc2e" }
-axon-tools = { version = "0.0.3", features = ["proof"] }
+axon-tools = { version = "0.0.5", features = ["proof", "impl-serde", "trie"] }
 
 subtle-encoding = "0.5"
 humantime-serde = "1.1.1"
