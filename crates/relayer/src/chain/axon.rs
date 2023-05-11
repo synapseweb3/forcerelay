@@ -24,14 +24,14 @@ use crate::{
     error::Error,
     event::{monitor::TxMonitorCmd, IbcEventWithHeight},
     keyring::{KeyRing, Secp256k1KeyPair},
-    light_client::axon::LightClient as AxonLightClient,
+    light_client::{axon::LightClient as AxonLightClient, LightClient},
     misbehaviour::MisbehaviourEvidence,
     util::collate::collate,
 };
 use eth_light_client_in_ckb_prover::Receipts;
 use eth_light_client_in_ckb_verification::trie;
 use ethers::{
-    types::{Block, BlockId, Transaction, TransactionReceipt, TxHash},
+    types::{Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TxHash, U64},
     utils::{rlp, rlp::Encodable},
 };
 use ethers_providers::Middleware;
@@ -104,14 +104,18 @@ use tokio::runtime::{self, Runtime as TokioRuntime};
 
 mod contract;
 mod monitor;
+mod rpc;
+
+use rpc::AxonRpc;
 
 pub struct AxonChain {
-    pub rt: Arc<TokioRuntime>,
-    pub config: AxonChainConfig,
-    pub light_client: AxonLightClient,
-    pub tx_monitor_cmd: Option<TxMonitorCmd>,
-    pub contract: Contract,
-    client: ContractProvider,
+    rt: Arc<TokioRuntime>,
+    config: AxonChainConfig,
+    light_client: AxonLightClient,
+    tx_monitor_cmd: Option<TxMonitorCmd>,
+    contract: Contract,
+    rpc_client: rpc::AxonRpcClient,
+    client: Arc<ContractProvider>,
     keybase: KeyRing<Secp256k1KeyPair>,
     conn_tx_hash: HashMap<ConnectionId, TxHash>,
     chan_tx_hash: HashMap<(ChannelId, PortId), TxHash>,
@@ -119,7 +123,6 @@ pub struct AxonChain {
 }
 
 // Allow temporarily for development. Should remove when work is done.
-#[allow(unreachable_code)]
 impl ChainEndpoint for AxonChain {
     type LightBlock = ChainId;
     type Header = AxonHeader;
@@ -136,14 +139,24 @@ impl ChainEndpoint for AxonChain {
         let mut light_client = AxonLightClient::from_config(&config, rt.clone())?;
         light_client.bootstrap()?;
         let keybase = KeyRing::new_secp256k1(Default::default(), "axon", &config.id).unwrap();
+
+        let url = config.websocket_addr.clone();
+        let rpc_client = rpc::AxonRpcClient::new(&url.clone().into());
+        let client = Arc::new(
+            rt.block_on(ContractProvider::connect(url.to_string()))
+                .map_err(|_| Error::web_socket(url.into()))?,
+        );
+        let contract = Contract::new(config.contract_address, Arc::clone(&client));
+
         Ok(Self {
             rt,
             config,
             keybase,
             light_client,
             tx_monitor_cmd: None,
-            contract: todo!(),
-            client: todo!(),
+            contract,
+            rpc_client,
+            client,
             conn_tx_hash: HashMap::new(),
             chan_tx_hash: HashMap::new(),
             packet_tx_hash: HashMap::new(),
@@ -218,7 +231,9 @@ impl ChainEndpoint for AxonChain {
         target: Height,
         client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
-        todo!()
+        self.light_client
+            .verify(trusted, target, client_state)
+            .map(|v| v.target)
     }
 
     fn check_misbehaviour(
@@ -226,8 +241,7 @@ impl ChainEndpoint for AxonChain {
         update: &UpdateClient,
         client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
-        warn!("axon check_misbehaviour() cannot implement");
-        Ok(None)
+        self.light_client.check_misbehaviour(update, client_state)
     }
 
     fn query_balance(&self, key_name: Option<&str>, denom: Option<&str>) -> Result<Balance, Error> {
@@ -534,7 +548,7 @@ impl ChainEndpoint for AxonChain {
             .iter()
             .map(|seq| (*seq).into())
             .collect();
-        let height: Height = todo!();
+        let height = Height::new(u64::MAX, u64::MAX).unwrap();
         Ok((commitment_sequences, height))
     }
 
@@ -860,7 +874,6 @@ impl AxonChain {
         Ok(monitor_tx)
     }
 
-    #[allow(unreachable_code)]
     fn get_proofs(&self, tx_hash: &TxHash) -> Result<Proofs, Error> {
         let receipt = self
             .rt
@@ -887,10 +900,9 @@ impl AxonChain {
             .into();
         let receipt_proof = receipts.generate_proof(receipt.transaction_index.as_usize());
 
-        let block: AxonBlock = todo!("wait axon team adds more rpc interface");
-        let state_root: Hash256 = todo!("wait axon team adds more rpc interface");
-        let proof: AxonProof = todo!("wait axon team adds more rpc interface");
-        let mut validators: Vec<Validator> = todo!("wait axon team adds more rpc interface");
+        let (block, state_root, proof, mut validators) = self
+            .rt
+            .block_on(self.get_proofs_ingredients(block_number))?;
 
         // check the validation of receipts mpt proof
         let key = rlp::encode(&receipt.transaction_index.as_u64());
@@ -904,10 +916,6 @@ impl AxonChain {
             return Err(Error::rpc_response("unverified receipts mpt".to_owned()));
         }
 
-        // check the validation of Axon block
-        axon_tools::verify_proof(block.clone(), state_root, &mut validators, proof.clone())
-            .map_err(|_| Error::rpc_response("unverified axon block".to_owned()))?;
-
         let object_proof = rlp::RlpStream::new()
             .append(&receipt)
             .append_list::<Vec<_>, Vec<_>>(&receipt_proof)
@@ -919,7 +927,40 @@ impl AxonChain {
         let height = Height::new(u64::MAX, u64::MAX).unwrap();
         let proofs =
             Proofs::new(object_proof.try_into().unwrap(), None, None, None, height).unwrap();
+
+        // check the validation of Axon block
+        axon_tools::verify_proof(block, state_root, &mut validators, proof)
+            .map_err(|_| Error::rpc_response("unverified axon block".to_owned()))?;
+
         Ok(proofs)
+    }
+
+    async fn get_proofs_ingredients(
+        &self,
+        block_number: U64,
+    ) -> Result<(AxonBlock, Hash256, AxonProof, Vec<Validator>), Error> {
+        let previous_number = block_number
+            .checked_sub(1u64.into())
+            .expect("bad block_number");
+        let next_number = block_number
+            .checked_add(1u64.into())
+            .expect("bad block_number");
+
+        let block = self.rpc_client.get_block_by_id(block_number.into()).await?;
+        let state_root = self
+            .rpc_client
+            .get_block_by_id(previous_number.into())
+            .await?
+            .header
+            .state_root;
+        // maybe we won't get proof because the next block isn't mined yet, so here needs double check
+        let proof = self.rpc_client.get_proof_by_id(next_number.into()).await?;
+        let validators = self
+            .rpc_client
+            .get_validators_by_id(block_number.into())
+            .await?;
+
+        Ok((block, state_root, proof, validators))
     }
 }
 
