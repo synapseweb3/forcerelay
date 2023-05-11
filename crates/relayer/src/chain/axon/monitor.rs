@@ -6,19 +6,18 @@ use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
 use crate::light_client::AnyHeader;
 use crossbeam_channel as channel;
+use ethers::contract::stream::EventStreamMeta;
+use ethers::contract::LogMeta;
 use ethers::prelude::*;
-use ethers::prelude::{Provider, StreamExt, Ws};
+use ethers::providers::Middleware;
 use ethers::types::Address;
-use ethers_contract::stream::EventStreamMeta;
-use ethers_contract::LogMeta;
-use ethers_providers::Middleware;
 use ibc_relayer_types::clients::ics07_axon::header::Header as AxonHeader;
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::events::{self, Attributes};
 use ibc_relayer_types::core::ics02_client::header::Header;
 use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::Height;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 use OwnableIBCHandler as Contract;
 use OwnableIBCHandlerEvents as ContractEvents;
 
@@ -41,7 +40,7 @@ pub struct AxonEventMonitor {
     contract_address: Address,
     start_block_number: u64,
     rx_cmd: channel::Receiver<MonitorCmd>,
-    header_receiver: UnboundedReceiver<AxonHeader>,
+    header_receiver: Receiver<AxonHeader>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
 }
 
@@ -57,7 +56,7 @@ impl AxonEventMonitor {
         chain_id: ChainId,
         websocket_addr: WebSocketClientUrl,
         contract_address: Address,
-        header_receiver: UnboundedReceiver<AxonHeader>,
+        header_receiver: Receiver<AxonHeader>,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();

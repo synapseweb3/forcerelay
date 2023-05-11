@@ -31,10 +31,11 @@ use crate::{
 use eth_light_client_in_ckb_prover::Receipts;
 use eth_light_client_in_ckb_verification::trie;
 use ethers::{
+    contract::ContractError,
+    providers::Middleware,
     types::{Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TxHash, U64},
     utils::{rlp, rlp::Encodable},
 };
-use ethers_providers::Middleware;
 use futures::TryFutureExt;
 use ibc_proto::ibc::core::channel::v1::IdentifiedChannel;
 use ibc_relayer_types::{
@@ -77,7 +78,7 @@ use self::{
     monitor::AxonEventMonitor,
 };
 
-type ContractProvider = ethers_providers::Provider<ethers_providers::Ws>;
+type ContractProvider = ethers::providers::Provider<ethers::providers::Ws>;
 type Contract = OwnableIBCHandler<ContractProvider>;
 type ContractEvents = OwnableIBCHandlerEvents;
 
@@ -106,7 +107,7 @@ mod contract;
 mod monitor;
 mod rpc;
 
-use rpc::AxonRpc;
+pub use rpc::AxonRpc;
 
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
@@ -136,8 +137,6 @@ impl ChainEndpoint for AxonChain {
 
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: AxonChainConfig = config.try_into()?;
-        let mut light_client = AxonLightClient::from_config(&config, rt.clone())?;
-        light_client.bootstrap()?;
         let keybase = KeyRing::new_secp256k1(Default::default(), "axon", &config.id).unwrap();
 
         let url = config.websocket_addr.clone();
@@ -147,6 +146,9 @@ impl ChainEndpoint for AxonChain {
                 .map_err(|_| Error::web_socket(url.into()))?,
         );
         let contract = Contract::new(config.contract_address, Arc::clone(&client));
+
+        let light_client = AxonLightClient::from_config(&config, rt.clone())?;
+        light_client.bootstrap(client.clone(), rpc_client.clone(), 0)?;
 
         Ok(Self {
             rt,
@@ -955,16 +957,13 @@ impl AxonChain {
             .state_root;
         // maybe we won't get proof because the next block isn't mined yet, so here needs double check
         let proof = self.rpc_client.get_proof_by_id(next_number.into()).await?;
-        let validators = self
-            .rpc_client
-            .get_validators_by_id(block_number.into())
-            .await?;
+        let validators = self.rpc_client.get_validators().await?;
 
         Ok((block, state_root, proof, validators))
     }
 }
 
-fn convert_err(err: ethers_contract::ContractError<ContractProvider>) -> Error {
+fn convert_err(err: ContractError<ContractProvider>) -> Error {
     Error::other_error(err.to_string())
 }
 

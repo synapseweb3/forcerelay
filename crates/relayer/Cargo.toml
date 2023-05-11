@@ -82,8 +82,6 @@ reqwest-middleware = "0.1"
 reqwest-retry = "0.1"
 eyre = "0.6"
 ethers = { version = "2.0.2", features = ["rustls", "ws"] }
-ethers-contract = { version = "2.0.2" }
-ethers-providers = { version = "2.0.2" }
 ckb-sdk = "2.4.0"
 ckb-hash = "0.106.0"
 ckb-types = "0.106.0"

@@ -2,12 +2,16 @@
 
 use std::sync::Arc;
 
+use ethers::prelude::*;
+use ethers::prelude::{Provider, Ws};
+use futures::TryFutureExt;
 use ibc_relayer_types::clients::ics07_axon::header::Header;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tokio::runtime::Runtime as TokioRuntime;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::RwLock;
 
-use crate::chain::axon::AxonChain;
+use crate::chain::axon::{AxonChain, AxonRpc};
 use crate::chain::endpoint::ChainEndpoint;
 use crate::client_state::AnyClientState;
 use crate::config::axon::AxonChainConfig;
@@ -17,20 +21,55 @@ use crate::misbehaviour::MisbehaviourEvidence;
 use super::Verified;
 
 pub struct LightClient {
-    pub chain_id: ChainId,
+    rt: Arc<TokioRuntime>,
+    chain_id: ChainId,
+    header_updaters: Arc<RwLock<Vec<Sender<Header>>>>,
 }
 
 impl LightClient {
     pub fn from_config(config: &AxonChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
-        todo!()
+        Ok(Self {
+            rt,
+            chain_id: config.id.clone(),
+            header_updaters: Arc::new(RwLock::new(vec![])),
+        })
     }
 
-    pub fn subscribe(&mut self) -> UnboundedReceiver<Header> {
-        todo!();
+    pub fn subscribe(&mut self) -> Receiver<Header> {
+        let (tx, rx) = channel(1);
+        self.rt.block_on(self.header_updaters.write()).push(tx);
+        rx
     }
 
-    pub fn bootstrap(&mut self) -> Result<(), Error> {
-        todo!()
+    pub fn bootstrap<T: AxonRpc + Sync + Send + 'static>(
+        &self,
+        provider: Arc<Provider<Ws>>,
+        rpc: T,
+        epoch_len: u64,
+    ) -> Result<(), Error> {
+        let rt = self.rt.clone();
+        let emiters = self.header_updaters.clone();
+        self.rt.spawn(async move {
+            provider
+                .watch_blocks()
+                .await
+                .expect("unsupported ws client")
+                .for_each(|block_hash| {
+                    let block = rt
+                        .block_on(rpc.get_block_by_id(block_hash.into()))
+                        .expect("watch axon block failed");
+                    // axon validators would refresh in case of the change of epoch
+                    if block.header.number % epoch_len == 0 {
+                        rt.block_on(emiters.read()).iter().for_each(|emiter| {
+                            rt.block_on(emiter.send(block.header.clone().into()))
+                                .expect("send axon header");
+                        });
+                    }
+                    futures::future::ready(())
+                })
+                .await;
+        });
+        Ok(())
     }
 }
 

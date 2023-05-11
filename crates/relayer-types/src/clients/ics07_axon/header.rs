@@ -14,6 +14,14 @@ pub struct Header {
     pub axon_header: AxonHeader,
 }
 
+impl From<AxonHeader> for Header {
+    fn from(header: AxonHeader) -> Self {
+        Self {
+            axon_header: header,
+        }
+    }
+}
+
 impl ics02_client::header::Header for Header {
     fn client_type(&self) -> ics02_client::client_type::ClientType {
         ics02_client::client_type::ClientType::Axon

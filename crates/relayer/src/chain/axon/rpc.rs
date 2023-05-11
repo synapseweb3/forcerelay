@@ -2,7 +2,7 @@ use crate::error::Error;
 
 use async_trait::async_trait;
 use axon_tools::types::{AxonBlock, Proof, Validator};
-use ethers::types::BlockNumber;
+use ethers::types::BlockId;
 use reqwest::Client;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -12,13 +12,14 @@ pub type Response<T> = Result<T, Error>;
 
 #[async_trait]
 pub trait AxonRpc {
-    async fn get_block_by_id(&self, number: BlockNumber) -> Response<AxonBlock>;
+    async fn get_block_by_id(&self, block_id: BlockId) -> Response<AxonBlock>;
 
-    async fn get_proof_by_id(&self, number: BlockNumber) -> Response<Proof>;
+    async fn get_proof_by_id(&self, block_id: BlockId) -> Response<Proof>;
 
-    async fn get_validators_by_id(&self, number: BlockNumber) -> Response<Vec<Validator>>;
+    async fn get_validators(&self) -> Response<Vec<Validator>>;
 }
 
+#[derive(Clone)]
 pub struct AxonRpcClient {
     client: Client,
     url: Url,
@@ -72,15 +73,15 @@ macro_rules! jsonrpc {
 
 #[async_trait]
 impl AxonRpc for AxonRpcClient {
-    async fn get_block_by_id(&self, number: BlockNumber) -> Response<AxonBlock> {
-        jsonrpc!("axon_getBlockById", self, AxonBlock, number)
+    async fn get_block_by_id(&self, block_id: BlockId) -> Response<AxonBlock> {
+        jsonrpc!("axon_getBlockById", self, AxonBlock, block_id)
     }
 
-    async fn get_proof_by_id(&self, number: BlockNumber) -> Response<Proof> {
-        jsonrpc!("axon_getProofById", self, Proof, number)
+    async fn get_proof_by_id(&self, block_id: BlockId) -> Response<Proof> {
+        jsonrpc!("axon_getProofById", self, Proof, block_id)
     }
 
-    async fn get_validators_by_id(&self, number: BlockNumber) -> Response<Vec<Validator>> {
-        jsonrpc!("axon_getValidatorsById", self, Vec<Validator>, number)
+    async fn get_validators(&self) -> Response<Vec<Validator>> {
+        jsonrpc!("axon_getValidatorsById", self, Vec<Validator>)
     }
 }

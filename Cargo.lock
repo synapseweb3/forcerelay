@@ -3559,8 +3559,6 @@ dependencies = [
  "eth_light_client_in_ckb-prover",
  "eth_light_client_in_ckb-verification 0.2.0-alpha",
  "ethers",
- "ethers-contract",
- "ethers-providers",
  "eyre",
  "flex-error",
  "futures",
