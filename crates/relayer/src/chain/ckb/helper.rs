@@ -61,7 +61,9 @@ pub trait CellSearcher: CkbReader {
                 .map_err(|e| Error::rpc_response(e.to_string()))?;
 
             if result.objects.is_empty() {
-                let errmsg = "no enough inputs";
+                let errmsg = format!(
+                    "no enough ckb ({searched_capacity}/{need_capacity}) on address: {address}"
+                );
                 return Err(Error::send_tx(errmsg.to_string()));
             }
 
