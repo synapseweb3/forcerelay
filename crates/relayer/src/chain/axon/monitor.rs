@@ -6,18 +6,18 @@ use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
 use crate::light_client::AnyHeader;
 use crossbeam_channel as channel;
+use ethers::contract::stream::EventStreamMeta;
+use ethers::contract::LogMeta;
 use ethers::prelude::*;
-use ethers::prelude::{Provider, StreamExt, Ws};
+use ethers::providers::Middleware;
 use ethers::types::Address;
-use ethers_contract::LogMeta;
-use ethers_providers::Middleware;
 use ibc_relayer_types::clients::ics07_axon::header::Header as AxonHeader;
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::events::{self, Attributes};
 use ibc_relayer_types::core::ics02_client::header::Header;
 use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::Height;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 use OwnableIBCHandler as Contract;
 use OwnableIBCHandlerEvents as ContractEvents;
 
@@ -40,7 +40,7 @@ pub struct AxonEventMonitor {
     contract_address: Address,
     start_block_number: u64,
     rx_cmd: channel::Receiver<MonitorCmd>,
-    header_receiver: UnboundedReceiver<Vec<AxonHeader>>,
+    header_receiver: Receiver<AxonHeader>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
 }
 
@@ -56,7 +56,7 @@ impl AxonEventMonitor {
         chain_id: ChainId,
         websocket_addr: WebSocketClientUrl,
         contract_address: Address,
-        header_receiver: UnboundedReceiver<Vec<AxonHeader>>,
+        header_receiver: Receiver<AxonHeader>,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
@@ -66,9 +66,11 @@ impl AxonEventMonitor {
             .block_on(Provider::<Ws>::connect(websocket_addr.to_string()))
             .map_err(|_| Error::client_creation_failed(chain_id.clone(), websocket_addr))?;
 
+        // here should consider recovering from long-time-crash
         let start_block_number = rt
             .block_on(client.get_block_number())
-            .map_err(|e| Error::others(e.to_string()))?;
+            .map_err(|e| Error::others(e.to_string()))?
+            .as_u64();
 
         let event_bus = EventBus::new();
         let monitor = Self {
@@ -76,7 +78,7 @@ impl AxonEventMonitor {
             rt,
             chain_id,
             contract_address,
-            start_block_number: start_block_number.as_u64(),
+            start_block_number,
             rx_cmd,
             header_receiver,
             event_bus,
@@ -92,7 +94,7 @@ impl AxonEventMonitor {
         fields(chain = %self.chain_id)
     )]
     pub fn run(mut self) {
-        debug!("starting event monitor");
+        debug!("starting Axon event monitor");
         let rt = self.rt.clone();
         rt.block_on(async {
             loop {
@@ -106,14 +108,17 @@ impl AxonEventMonitor {
         // TODO: close client
     }
 
-    async fn run_loop(&mut self) -> Next {
+    fn update_subscribe(&mut self) -> Next {
         if let Ok(cmd) = self.rx_cmd.try_recv() {
             match cmd {
                 MonitorCmd::Shutdown => return Next::Abort,
                 MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
             }
         }
+        Next::Continue
+    }
 
+    async fn run_loop(&mut self) -> Next {
         let contract = Arc::new(Contract::new(
             self.contract_address,
             Arc::clone(&self.client),
@@ -123,33 +128,27 @@ impl AxonEventMonitor {
             let mut meta_stream = stream.with_meta();
             loop {
                 tokio::select! {
-                    Some(headers) = self.header_receiver.recv() => {
-                        if let (Some(first), Some(last)) = (headers.first(), headers.last()) {
-                            info!("receive a new header: [{:?}, {:?}]", headers.first(), headers.last());
-                            let events = headers.iter()
-                                .map(|header| {
-                                    let height = header.height();
-                                    IbcEventWithHeight::new(
-                                        events::NewBlock::new(height).into(),
-                                        height,
-                                    )})
-                                .collect();
-                            let batch = EventBatch {
-                                chain_id: self.chain_id.clone(),
-                                tracking_id: TrackingId::new_uuid(),
-                                height: last.height(),
-                                events,
-                            };
-                            self.process_batch(batch);
+                    Some(header) = self.header_receiver.recv() => {
+                        if let Next::Abort = self.update_subscribe() {
+                            return Next::Abort;
                         }
+                        let height = header.height();
+                        let event = IbcEventWithHeight::new(
+                            events::NewBlock::new(height).into(),
+                            height,
+                        );
+                        let batch = EventBatch {
+                            chain_id: self.chain_id.clone(),
+                            tracking_id: TrackingId::new_uuid(),
+                            height,
+                            events: vec![event],
+                        };
+                        self.process_batch(batch);
                     },
 
                     Some(ret) = meta_stream.next() => {
-                        if let Ok(cmd) = self.rx_cmd.try_recv() {
-                            match cmd {
-                                MonitorCmd::Shutdown => return Next::Abort,
-                                MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
-                            }
+                        if let Next::Abort = self.update_subscribe() {
+                            return Next::Abort;
                         }
                         match ret {
                             Ok((event, meta)) => {
@@ -167,7 +166,7 @@ impl AxonEventMonitor {
                 }
             }
         }
-        Next::Continue
+        Next::Abort
     }
 
     fn process_event(&mut self, event: ContractEvents, meta: LogMeta) -> Result<()> {

@@ -8,6 +8,11 @@ use std::{
     thread,
 };
 
+use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
+use bytes::Bytes;
+use eth2_types::Hash256;
+use tracing::warn;
+
 use crate::{
     account::Balance,
     chain::{axon::contract::HeightData, requests::QueryHeight},
@@ -19,12 +24,18 @@ use crate::{
     error::Error,
     event::{monitor::TxMonitorCmd, IbcEventWithHeight},
     keyring::{KeyRing, Secp256k1KeyPair},
-    light_client::axon::LightClient as AxonLightClient,
+    light_client::{axon::LightClient as AxonLightClient, LightClient},
     misbehaviour::MisbehaviourEvidence,
     util::collate::collate,
 };
-use ethers::types::{Block, BlockId, Transaction, TransactionReceipt, TxHash};
-use ethers_providers::Middleware;
+use eth_light_client_in_ckb_prover::Receipts;
+use eth_light_client_in_ckb_verification::trie;
+use ethers::{
+    contract::ContractError,
+    providers::Middleware,
+    types::{Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TxHash, U64},
+    utils::{rlp, rlp::Encodable},
+};
 use futures::TryFutureExt;
 use ibc_proto::ibc::core::channel::v1::IdentifiedChannel;
 use ibc_relayer_types::{
@@ -37,7 +48,7 @@ use ibc_relayer_types::{
         ics07_ckb::client_state,
     },
     core::{
-        ics02_client::events::UpdateClient,
+        ics02_client::{error::Error as ClientError, events::UpdateClient},
         ics03_connection::{
             self,
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
@@ -46,7 +57,7 @@ use ibc_relayer_types::{
             self,
             channel::{self, ChannelEnd, IdentifiedChannelEnd},
             events::OpenInit,
-            packet::Sequence,
+            packet::{PacketMsgType, Sequence},
         },
         ics23_commitment::{
             commitment::{CommitmentPrefix, CommitmentProofBytes},
@@ -56,6 +67,7 @@ use ibc_relayer_types::{
     },
     proofs::Proofs,
     signer::Signer,
+    timestamp::Timestamp,
     Height,
 };
 use itertools::Itertools;
@@ -66,14 +78,15 @@ use self::{
     monitor::AxonEventMonitor,
 };
 
-type ContractProvider = ethers_providers::Provider<ethers_providers::Ws>;
+type ContractProvider = ethers::providers::Provider<ethers::providers::Ws>;
 type Contract = OwnableIBCHandler<ContractProvider>;
 type ContractEvents = OwnableIBCHandlerEvents;
 
 use super::{
     client::ClientSettings,
+    cosmos::encode::key_pair_to_signer,
     endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
-    handle::Subscription,
+    handle::{CacheTxHashStatus, Subscription},
     requests::{
         self, CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest,
         QueryChannelRequest, QueryChannelsRequest, QueryClientConnectionsRequest,
@@ -92,20 +105,25 @@ use tokio::runtime::{self, Runtime as TokioRuntime};
 
 mod contract;
 mod monitor;
+mod rpc;
+
+pub use rpc::AxonRpc;
 
 pub struct AxonChain {
-    pub rt: Arc<TokioRuntime>,
-    pub config: AxonChainConfig,
-    pub light_client: AxonLightClient,
-    pub tx_monitor_cmd: Option<TxMonitorCmd>,
-    pub contract: Contract,
-    client: ContractProvider,
+    rt: Arc<TokioRuntime>,
+    config: AxonChainConfig,
+    light_client: AxonLightClient,
+    tx_monitor_cmd: Option<TxMonitorCmd>,
+    contract: Contract,
+    rpc_client: rpc::AxonRpcClient,
+    client: Arc<ContractProvider>,
     keybase: KeyRing<Secp256k1KeyPair>,
-    conn_tx_hash: HashMap<(ConnectionId, connection::State), [u8; 32]>,
+    conn_tx_hash: HashMap<ConnectionId, TxHash>,
+    chan_tx_hash: HashMap<(ChannelId, PortId), TxHash>,
+    packet_tx_hash: HashMap<(ChannelId, PortId, u64), TxHash>,
 }
 
 // Allow temporarily for development. Should remove when work is done.
-#[allow(unreachable_code)]
 impl ChainEndpoint for AxonChain {
     type LightBlock = ChainId;
     type Header = AxonHeader;
@@ -119,18 +137,31 @@ impl ChainEndpoint for AxonChain {
 
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: AxonChainConfig = config.try_into()?;
-        let mut light_client = AxonLightClient::from_config(&config, rt.clone())?;
-        light_client.bootstrap()?;
         let keybase = KeyRing::new_secp256k1(Default::default(), "axon", &config.id).unwrap();
+
+        let url = config.websocket_addr.clone();
+        let rpc_client = rpc::AxonRpcClient::new(&url.clone().into());
+        let client = Arc::new(
+            rt.block_on(ContractProvider::connect(url.to_string()))
+                .map_err(|_| Error::web_socket(url.into()))?,
+        );
+        let contract = Contract::new(config.contract_address, Arc::clone(&client));
+
+        let light_client = AxonLightClient::from_config(&config, rt.clone())?;
+        light_client.bootstrap(client.clone(), rpc_client.clone(), 0)?;
+
         Ok(Self {
             rt,
             config,
             keybase,
             light_client,
             tx_monitor_cmd: None,
-            contract: todo!(),
-            client: todo!(),
+            contract,
+            rpc_client,
+            client,
             conn_tx_hash: HashMap::new(),
+            chan_tx_hash: HashMap::new(),
+            packet_tx_hash: HashMap::new(),
         })
     }
 
@@ -166,17 +197,26 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn get_signer(&self) -> Result<Signer, Error> {
-        todo!()
+        let key_entry = self
+            .keybase()
+            .get_key(&self.config.key_name)
+            .map_err(Error::key_base)?;
+        let signer = key_pair_to_signer(&key_entry)?;
+        Ok(signer)
     }
 
     fn ibc_version(&self) -> Result<Option<semver::Version>, Error> {
-        todo!()
+        Ok(None)
     }
 
     fn send_messages_and_wait_commit(
         &mut self,
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        // every skipped request will be set empty, e.g. udpate_client
+        if tracked_msgs.msgs.is_empty() {
+            return Ok(vec![]);
+        }
         todo!()
     }
 
@@ -193,7 +233,9 @@ impl ChainEndpoint for AxonChain {
         target: Height,
         client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
-        todo!()
+        self.light_client
+            .verify(trusted, target, client_state)
+            .map(|v| v.target)
     }
 
     fn check_misbehaviour(
@@ -201,27 +243,42 @@ impl ChainEndpoint for AxonChain {
         update: &UpdateClient,
         client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
-        todo!()
+        self.light_client.check_misbehaviour(update, client_state)
     }
 
     fn query_balance(&self, key_name: Option<&str>, denom: Option<&str>) -> Result<Balance, Error> {
-        todo!("cannot implement");
+        warn!("axon query_balance() cannot implement");
+        Ok(Balance {
+            amount: "".to_owned(),
+            denom: "".to_owned(),
+        })
     }
 
     fn query_all_balances(&self, key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
-        todo!("cannot implement");
+        warn!("axon query_all_balances() cannot implement");
+        Ok(vec![])
     }
 
     fn query_denom_trace(&self, hash: String) -> Result<DenomTrace, Error> {
-        todo!("cannot implement");
+        warn!("axon query_denom_trace() cannot implement");
+        Ok(DenomTrace {
+            path: "".to_owned(),
+            base_denom: "".to_owned(),
+        })
     }
 
     fn query_commitment_prefix(&self) -> Result<CommitmentPrefix, Error> {
-        todo!("How to implement");
+        CommitmentPrefix::try_from(self.config.store_prefix.as_bytes().to_vec())
+            .map_err(|_| Error::ics02(ClientError::empty_prefix()))
     }
 
     fn query_application_status(&self) -> Result<ChainStatus, Error> {
-        todo!("How to implement");
+        // we don't care about axon's light client, so we should skip status check on light client
+        let max_height = Height::new(u64::MAX, u64::MAX).map_err(Error::ics02)?;
+        Ok(ChainStatus {
+            height: max_height,
+            timestamp: Timestamp::now(),
+        })
     }
 
     fn query_clients(
@@ -493,7 +550,7 @@ impl ChainEndpoint for AxonChain {
             .iter()
             .map(|seq| (*seq).into())
             .collect();
-        let height: Height = todo!();
+        let height = Height::new(u64::MAX, u64::MAX).unwrap();
         Ok((commitment_sequences, height))
     }
 
@@ -589,7 +646,7 @@ impl ChainEndpoint for AxonChain {
                 sequences.push(seq);
             }
         }
-        let height: Height = todo!("how to get height?");
+        let height = Height::new(u64::MAX, u64::MAX).unwrap();
         Ok((sequences, height))
     }
 
@@ -638,14 +695,16 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn query_txs(&self, request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
-        todo!()
+        warn!("axon query_txs() not support");
+        Ok(vec![])
     }
 
     fn query_packet_events(
         &self,
         request: QueryPacketEventDataRequest,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        todo!()
+        warn!("axon query_packet_events() not support");
+        Ok(vec![])
     }
 
     fn query_host_consensus_state(
@@ -692,14 +751,16 @@ impl ChainEndpoint for AxonChain {
         port_id: &PortId,
         counterparty_payee: &Signer,
     ) -> Result<(), Error> {
-        todo!()
+        warn!("axon maybe_register_counterparty_payee() not support");
+        Ok(())
     }
 
     fn cross_chain_query(
         &self,
         requests: Vec<CrossChainQueryRequest>,
     ) -> Result<Vec<CrossChainQueryResponse>, Error> {
-        todo!()
+        warn!("axon cross_chain_query() not support");
+        Ok(vec![])
     }
 
     fn build_connection_proofs_and_client_state(
@@ -714,28 +775,87 @@ impl ChainEndpoint for AxonChain {
             ConnectionMsgType::OpenAck => connection::State::TryOpen,
             ConnectionMsgType::OpenConfirm => connection::State::Open,
         };
-        let key = (connection_id.clone(), state);
-        let tx_hash = self.conn_tx_hash.get(&key).ok_or_else(|| {
-            Error::other_error(format!(
-                "missing tx hash for connection {:?} in state {:?}",
-                connection_id, state
-            ))
+        let tx_hash = self
+            .conn_tx_hash
+            .get(connection_id)
+            .ok_or(Error::conn_proof(
+                connection_id.clone(),
+                format!("missing connection tx_hash, state {state:?}"),
+            ))?;
+        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+            Error::conn_proof(
+                connection_id.clone(),
+                format!("{}, state {state:?}", e.detail()),
+            )
         })?;
-        let (tx, tx_receipt, block) =
-            self.get_proof_ingredients(connection_id.clone(), *tx_hash)?;
-        todo!("object_proof: build proof with transaction and block");
-        todo!("client_proof: build client proof");
-        todo!("assemble Proofs");
+        Ok((None, proofs))
     }
 
-    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
+    fn build_channel_proofs(
+        &self,
+        port_id: &PortId,
+        channel_id: &ChannelId,
+        height: Height,
+    ) -> Result<Proofs, Error> {
+        let tx_hash = self
+            .chan_tx_hash
+            .get(&(channel_id.clone(), port_id.clone()))
+            .ok_or(Error::chan_proof(
+                port_id.clone(),
+                channel_id.clone(),
+                "missing channel tx_hash".to_owned(),
+            ))?;
+        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+            Error::chan_proof(port_id.clone(), channel_id.clone(), e.detail().to_string())
+        })?;
+        Ok(proofs)
+    }
+
+    fn build_packet_proofs(
+        &self,
+        packet_type: PacketMsgType,
+        port_id: PortId,
+        channel_id: ChannelId,
+        sequence: Sequence,
+        height: Height,
+    ) -> Result<Proofs, Error> {
+        let tx_hash = self
+            .packet_tx_hash
+            .get(&(channel_id.clone(), port_id.clone(), sequence.into()))
+            .ok_or(Error::packet_proof(
+                port_id.clone(),
+                channel_id.clone(),
+                sequence.into(),
+                format!("missing packet tx_hash, type {packet_type:?}"),
+            ))?;
+        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+            Error::chan_proof(
+                port_id.clone(),
+                channel_id.clone(),
+                format!("{}, type {packet_type:?}", e.detail()),
+            )
+        })?;
+        Ok(proofs)
+    }
+
+    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
         &mut self,
-        connection_id: &ConnectionId,
-        state: connection::State,
+        cached_status: CacheTxHashStatus,
         tx_hash: T,
     ) -> Result<(), Error> {
-        self.conn_tx_hash
-            .insert((connection_id.clone(), state), tx_hash.into());
+        let hash: [u8; 32] = tx_hash.into();
+        match cached_status {
+            CacheTxHashStatus::Connection(conn_id) => {
+                self.conn_tx_hash.insert(conn_id, hash.into());
+            }
+            CacheTxHashStatus::Channel(chan_id, port_id) => {
+                self.chan_tx_hash.insert((chan_id, port_id), hash.into());
+            }
+            CacheTxHashStatus::Packet(chan_id, port_id, sequence) => {
+                self.packet_tx_hash
+                    .insert((chan_id, port_id, sequence), hash.into());
+            }
+        }
         Ok(())
     }
 }
@@ -743,7 +863,7 @@ impl ChainEndpoint for AxonChain {
 impl AxonChain {
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
         crate::time!("axon_init_event_monitor");
-        let (create_receiver, header_receiver) = self.light_client.subscribe();
+        let header_receiver = self.light_client.subscribe();
         let (event_monitor, monitor_tx) = AxonEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
@@ -756,63 +876,94 @@ impl AxonChain {
         Ok(monitor_tx)
     }
 
-    fn get_proof_ingredients<T: Send + Sync + Into<TxHash>>(
-        &self,
-        connection_id: ConnectionId,
-        tx_hash: T,
-    ) -> Result<(Transaction, TransactionReceipt, Block<TxHash>), Error> {
-        let tx_hash = tx_hash.into();
-        let tx = self
+    fn get_proofs(&self, tx_hash: &TxHash) -> Result<Proofs, Error> {
+        let receipt = self
             .rt
-            .block_on(self.client.get_transaction(tx_hash))
+            .block_on(self.client.get_transaction_receipt(*tx_hash))
             .map_err(|e| Error::rpc_response(e.to_string()))?
             .ok_or_else(|| {
-                Error::conn_open(
-                    connection_id.clone(),
-                    format!("can't find transaction with hash {}", hex::encode(tx_hash)),
-                )
+                Error::other_error(format!(
+                    "can't find transaction receipt with hash {}",
+                    hex::encode(tx_hash)
+                ))
             })?;
 
-        let tx_receipt = self
-            .rt
-            .block_on(self.client.get_transaction_receipt(tx_hash))
-            .map_err(|e| Error::rpc_response(e.to_string()))?
-            .ok_or_else(|| {
-                Error::conn_open(
-                    connection_id.clone(),
-                    format!(
-                        "can't find transaction receipt with hash {}",
-                        hex::encode(tx_hash)
-                    ),
-                )
-            })?;
-
-        let block_number = tx.block_number.ok_or_else(|| {
-            Error::conn_open(
-                connection_id.clone(),
-                format!("transaction {} is still pending", hex::encode(tx_hash)),
-            )
+        let block_number = receipt.block_number.ok_or_else(|| {
+            Error::other_error(format!(
+                "transaction {} is still pending",
+                hex::encode(tx_hash)
+            ))
         })?;
-        let block =
-            self.rt
-                .block_on(self.client.get_block(BlockId::Number(
-                    ethers::types::BlockNumber::Number(block_number),
-                )))
-                .map_err(|e| Error::rpc_response(e.to_string()))?
-                .ok_or_else(|| {
-                    Error::conn_open(
-                        connection_id.clone(),
-                        format!(
-                            "can't find transaction receipt with hash {}",
-                            hex::encode(tx_hash)
-                        ),
-                    )
-                })?;
-        Ok((tx, tx_receipt, block))
+
+        let receipts: Receipts = self
+            .rt
+            .block_on(self.client.get_block_receipts(block_number))
+            .map_err(|e| Error::rpc_response(e.to_string()))?
+            .into();
+        let receipt_proof = receipts.generate_proof(receipt.transaction_index.as_usize());
+
+        let (block, state_root, proof, mut validators) = self
+            .rt
+            .block_on(self.get_proofs_ingredients(block_number))?;
+
+        // check the validation of receipts mpt proof
+        let key = rlp::encode(&receipt.transaction_index.as_u64());
+        let verify_mpt = trie::verify_proof(
+            &receipt_proof,
+            block.header.receipts_root.as_bytes(),
+            &key,
+            &receipt.rlp_bytes(),
+        );
+        if !verify_mpt {
+            return Err(Error::rpc_response("unverified receipts mpt".to_owned()));
+        }
+
+        let object_proof = rlp::RlpStream::new()
+            .append(&receipt)
+            .append_list::<Vec<_>, Vec<_>>(&receipt_proof)
+            .append(&block)
+            .append(&state_root)
+            .append(&proof)
+            .as_raw()
+            .to_owned();
+        let height = Height::new(u64::MAX, u64::MAX).unwrap();
+        let proofs =
+            Proofs::new(object_proof.try_into().unwrap(), None, None, None, height).unwrap();
+
+        // check the validation of Axon block
+        axon_tools::verify_proof(block, state_root, &mut validators, proof)
+            .map_err(|_| Error::rpc_response("unverified axon block".to_owned()))?;
+
+        Ok(proofs)
+    }
+
+    async fn get_proofs_ingredients(
+        &self,
+        block_number: U64,
+    ) -> Result<(AxonBlock, Hash256, AxonProof, Vec<Validator>), Error> {
+        let previous_number = block_number
+            .checked_sub(1u64.into())
+            .expect("bad block_number");
+        let next_number = block_number
+            .checked_add(1u64.into())
+            .expect("bad block_number");
+
+        let block = self.rpc_client.get_block_by_id(block_number.into()).await?;
+        let state_root = self
+            .rpc_client
+            .get_block_by_id(previous_number.into())
+            .await?
+            .header
+            .state_root;
+        // maybe we won't get proof because the next block isn't mined yet, so here needs double check
+        let proof = self.rpc_client.get_proof_by_id(next_number.into()).await?;
+        let validators = self.rpc_client.get_validators().await?;
+
+        Ok((block, state_root, proof, validators))
     }
 }
 
-fn convert_err(err: ethers_contract::ContractError<ContractProvider>) -> Error {
+fn convert_err(err: ContractError<ContractProvider>) -> Error {
     Error::other_error(err.to_string())
 }
 

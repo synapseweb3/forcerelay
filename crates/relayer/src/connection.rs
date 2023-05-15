@@ -930,6 +930,11 @@ impl<ChainA: ChainHandle, ChainB: ChainHandle> Connection<ChainA, ChainB> {
         &self,
         consensus_height: Height,
     ) -> Result<(), ConnectionError> {
+        // skip if we do not check the consensus proof height
+        if consensus_height.revision_height() == u64::MAX {
+            return Ok(());
+        }
+
         let dst_application_latest_height = || {
             self.dst_chain()
                 .query_latest_height()

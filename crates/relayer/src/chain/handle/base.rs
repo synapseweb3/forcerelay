@@ -11,7 +11,7 @@ use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::connection::{ConnectionEnd, IdentifiedConnectionEnd},
-        ics03_connection::{connection, version::Version},
+        ics03_connection::version::Version,
         ics04_channel::channel::{ChannelEnd, IdentifiedChannelEnd},
         ics04_channel::packet::{PacketMsgType, Sequence},
         ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
@@ -39,7 +39,9 @@ use crate::{
     misbehaviour::MisbehaviourEvidence,
 };
 
-use super::{reply_channel, ChainHandle, ChainRequest, HealthCheck, ReplyTo, Subscription};
+use super::{
+    reply_channel, CacheTxHashStatus, ChainHandle, ChainRequest, HealthCheck, ReplyTo, Subscription,
+};
 
 /// A basic chain handle implementation.
 /// For use in interactive CLIs, e.g., `query`, `tx`, etc.
@@ -516,15 +518,13 @@ impl ChainHandle for BaseChainHandle {
         self.send(|reply_to| ChainRequest::QueryIncentivizedPacket { request, reply_to })
     }
 
-    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
+    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
         &mut self,
-        connection_id: &ConnectionId,
-        state: connection::State,
+        cached_status: CacheTxHashStatus,
         tx_hash: T,
     ) -> Result<(), Error> {
-        self.send(|reply_to| ChainRequest::SaveConnTxHash {
-            connection_id: connection_id.clone(),
-            state,
+        self.send(|reply_to| ChainRequest::CacheIcsTxHash {
+            cached_status,
             tx_hash: tx_hash.into(),
             reply_to,
         })

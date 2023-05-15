@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 use core::fmt::{self, Debug, Display};
 
-use crossbeam_channel as channel;
+use crossbeam_channel;
 use tracing::Span;
 
 use ibc_proto::ibc::apps::fee::v1::{
@@ -12,7 +12,7 @@ use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
         ics03_connection::{
-            connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
+            connection::{ConnectionEnd, IdentifiedConnectionEnd},
             version::Version,
         },
         ics04_channel::{
@@ -88,13 +88,34 @@ impl<ChainA: ChainHandle, ChainB: ChainHandle> Debug for ChainHandlePair<ChainA,
     }
 }
 
-pub type Subscription = channel::Receiver<Arc<MonitorResult<EventBatch>>>;
+pub type Subscription = crossbeam_channel::Receiver<Arc<MonitorResult<EventBatch>>>;
 
-pub type ReplyTo<T> = channel::Sender<Result<T, Error>>;
-pub type Reply<T> = channel::Receiver<Result<T, Error>>;
+pub type ReplyTo<T> = crossbeam_channel::Sender<Result<T, Error>>;
+pub type Reply<T> = crossbeam_channel::Receiver<Result<T, Error>>;
 
 pub fn reply_channel<T>() -> (ReplyTo<T>, Reply<T>) {
-    channel::bounded(1)
+    crossbeam_channel::bounded(1)
+}
+
+#[derive(Debug, Clone)]
+pub enum CacheTxHashStatus {
+    Connection(ConnectionId),
+    Channel(ChannelId, PortId),
+    Packet(ChannelId, PortId, u64),
+}
+
+impl CacheTxHashStatus {
+    pub fn new_with_conn(conn_id: ConnectionId) -> Self {
+        Self::Connection(conn_id)
+    }
+
+    pub fn new_with_chan(chan_id: ChannelId, port_id: PortId) -> Self {
+        Self::Channel(chan_id, port_id)
+    }
+
+    pub fn new_with_packet(chan_id: ChannelId, port_id: PortId, sequence: u64) -> Self {
+        Self::Packet(chan_id, port_id, sequence)
+    }
 }
 
 /// Requests that a `ChainHandle` may send to a `ChainRuntime`.
@@ -368,16 +389,15 @@ pub enum ChainRequest {
         reply_to: ReplyTo<QueryIncentivizedPacketResponse>,
     },
 
-    SaveConnTxHash {
-        connection_id: ConnectionId,
-        state: connection::State,
+    CacheIcsTxHash {
+        cached_status: CacheTxHashStatus,
         tx_hash: [u8; 32],
         reply_to: ReplyTo<()>,
     },
 }
 
 pub trait ChainHandle: Clone + Display + Send + Sync + Debug + 'static {
-    fn new(chain_id: ChainId, sender: channel::Sender<(Span, ChainRequest)>) -> Self;
+    fn new(chain_id: ChainId, sender: crossbeam_channel::Sender<(Span, ChainRequest)>) -> Self;
 
     /// Get the [`ChainId`] of this chain.
     fn id(&self) -> ChainId;
@@ -686,10 +706,9 @@ pub trait ChainHandle: Clone + Display + Send + Sync + Debug + 'static {
         request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error>;
 
-    fn save_conn_tx_hash<T: Into<[u8; 32]>>(
+    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
         &mut self,
-        _connection_id: &ConnectionId,
-        _state: connection::State,
+        _cached_status: CacheTxHashStatus,
         _tx_hash: T,
     ) -> Result<(), Error> {
         Ok(())

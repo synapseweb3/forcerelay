@@ -6,6 +6,7 @@ use flex_error::{define_error, DisplayOnly, TraceError};
 use http::uri::InvalidUri;
 use humantime::format_duration;
 use ibc_proto::protobuf::Error as TendermintProtoError;
+use ibc_relayer_types::core::ics24_host::identifier::PortId;
 use prost::{DecodeError, EncodeError};
 use regex::Regex;
 use tendermint::abci;
@@ -193,6 +194,24 @@ define_error! {
 
         BadConnectionState
             |_| { "bad connection state" },
+
+        ConnProof
+            { connection_id: ConnectionId, reason: String }
+            |e| {
+                format!("failed to build connetion({0}) proof: {1}", e.connection_id, e.reason)
+            },
+
+        ChanProof
+            { port_id: PortId, channel_id: ChannelId, reason: String }
+            |e| {
+                format!("failed to build channel({0}, {1}) proof: {2}", e.channel_id, e.port_id, e.reason)
+            },
+
+        PacketProof
+            { port_id: PortId, channel_id: ChannelId, sequence: u64, reason: String }
+            |e| {
+                format!("failed to build packet(({0}, {1}), {2}) proof: {3}", e.channel_id, e.port_id, e.sequence, e.reason)
+            },
 
         ConnOpen
             { connection_id: ConnectionId, reason: String }
