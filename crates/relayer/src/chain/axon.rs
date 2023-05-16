@@ -37,7 +37,7 @@ use ethers::{
     utils::{rlp, rlp::Encodable},
 };
 use futures::TryFutureExt;
-use ibc_proto::ibc::core::channel::v1::IdentifiedChannel;
+use ibc_proto::{google::protobuf::Any, ibc::core::channel::v1::IdentifiedChannel};
 use ibc_relayer_types::{
     applications::ics31_icq::response::CrossChainQueryResponse,
     clients::{
@@ -48,10 +48,14 @@ use ibc_relayer_types::{
         ics07_ckb::client_state,
     },
     core::{
-        ics02_client::{error::Error as ClientError, events::UpdateClient},
+        ics02_client::{
+            error::Error as ClientError,
+            events::{NewBlock, UpdateClient},
+        },
         ics03_connection::{
             self,
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
+            msgs::conn_open_init,
         },
         ics04_channel::{
             self,
@@ -65,6 +69,7 @@ use ibc_relayer_types::{
         },
         ics24_host::identifier::{self, ChainId, ChannelId, ClientId, ConnectionId, PortId},
     },
+    events::IbcEvent,
     proofs::Proofs,
     signer::Signer,
     timestamp::Timestamp,
@@ -105,6 +110,7 @@ use tokio::runtime::{self, Runtime as TokioRuntime};
 
 mod contract;
 mod monitor;
+mod msg;
 mod rpc;
 
 pub use rpc::AxonRpc;
@@ -219,7 +225,11 @@ impl ChainEndpoint for AxonChain {
         if tracked_msgs.msgs.is_empty() {
             return Ok(vec![]);
         }
-        todo!()
+        tracked_msgs
+            .msgs
+            .into_iter()
+            .map(|msg| self.send_message(msg))
+            .collect::<Result<Vec<_>, _>>()
     }
 
     fn send_messages_and_wait_check_tx(
@@ -977,7 +987,67 @@ impl AxonChain {
     }
 }
 
-fn convert_err(err: ContractError<ContractProvider>) -> Error {
+impl AxonChain {
+    fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
+        let tx_receipt = match message.type_url.as_str() {
+            conn_open_init::TYPE_URL => {
+                let msg: contract::MsgConnectionOpenInit = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .connection_open_init(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            _ => {
+                todo!()
+            }
+        };
+        let tx_receipt = tx_receipt.ok_or(Error::send_tx(String::from("fail to send tx")))?;
+        let tx_hash = tx_receipt.transaction_hash.0;
+        let height = {
+            let block_height = tx_receipt.block_number.ok_or_else(|| {
+                Error::other_error(format!(
+                    "transaction {} is still pending",
+                    hex::encode(tx_hash)
+                ))
+            })?;
+            Height::new(u64::MAX, block_height.as_u64()).unwrap()
+        };
+        let event = IbcEventWithHeight {
+            event: NewBlock::new(height).into(),
+            height,
+            tx_hash,
+        };
+        Ok(event)
+    }
+}
+
+// fn new_attributes(
+//     connection_id: String,
+//     client_id: String,
+//     counterparty_connection_id: String,
+//     counterparty_client_id: String,
+// ) -> ics03_connection::events::Attributes {
+//     ics03_connection::events::Attributes {
+//         connection_id: match connection_id.as_str() {
+//             "" => None,
+//             s => Some(ConnectionId::from_str(s).unwrap()),
+//         },
+//         client_id: ClientId::from_str(client_id.as_str()).unwrap(),
+//         counterparty_connection_id: match counterparty_connection_id.as_str() {
+//             "" => None,
+//             s => Some(ConnectionId::from_str(s).unwrap()),
+//         },
+//         counterparty_client_id: ClientId::from_str(counterparty_client_id.as_str()).unwrap(),
+//     }
+// }
+
+fn convert_err<T: ToString>(err: T) -> Error {
     Error::other_error(err.to_string())
 }
 
