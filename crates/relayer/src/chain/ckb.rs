@@ -232,33 +232,56 @@ impl CkbChain {
             .map_err(Error::key_base)?
             .into_ckb_keypair(self.network()?);
         let tx = signer::sign(tx, &inputs, vec![], key).map_err(Error::key_base)?;
-        let hash = self
-            .rt
-            .block_on(
-                self.rpc_client
-                    .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
+
+        let task = async {
+            let send_res = self
+                .rpc_client
+                .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough))
+                .await;
+            let hash = match send_res {
+                Ok(hash) => Ok(hash),
+                Err(e) => {
+                    let mut err_msg = format!("{e}");
+                    // Collecting debug info for ckb tx pool on duplicate tx error.
+                    // The error code is -1077.
+                    // https://github.com/nervosnetwork/ckb/tree/develop/rpc#error-poolrejectedduplicatedtransaction
+                    if err_msg.contains("-1077") {
+                        match self.rpc_client.get_raw_tx_pool(true).await {
+                            Ok(raw_tx_pool) => {
+                                err_msg = format!(
+                                    "{err_msg}\n== CKB raw tx pool ==\n{}",
+                                    serde_json::to_string(&raw_tx_pool)
+                                        .expect("jsonify ckb raw tx pool")
+                                );
+                            }
+                            Err(e) => {
+                                err_msg =
+                                    format!("{err_msg}\n== get ckb raw tx pool failed ==\n{e}");
+                            }
+                        }
+                    }
+                    Err(Error::send_tx(format!(
+                        "{err_msg}\n== transaction for debugging is below ==\n{}",
+                        serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
+                    )))
+                }
+            }?;
+
+            tracing::info!(
+                "ckb send_transaction success: {}, wait committed to block",
+                hex::encode(&hash)
+            );
+
+            utils::wait_ckb_transaction_committed(
+                &self.rpc_client,
+                hash,
+                Duration::from_secs(3),
+                0,
+                Duration::from_secs(30),
             )
-            .map_err(|e| {
-                Error::send_tx(format!(
-                    "{e}\n== transaction for debugging is below ==\n{}",
-                    serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
-                ))
-            })?;
-
-        tracing::info!(
-            "ckb send_transaction success: {}, wait committed to block",
-            hex::encode(&hash)
-        );
-
-        self.rt.block_on(utils::wait_ckb_transaction_committed(
-            &self.rpc_client,
-            hash,
-            Duration::from_secs(3),
-            0,
-            Duration::from_secs(30),
-        ))?;
-
-        Ok(())
+            .await
+        };
+        self.rt.block_on(task)
     }
 
     pub fn network(&self) -> Result<NetworkType, Error> {

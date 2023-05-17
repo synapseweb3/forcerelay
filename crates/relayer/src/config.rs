@@ -612,7 +612,9 @@ pub enum AddressType {
     Ckb {
         is_mainnet: bool,
     },
-    Axon { pk_type: String },
+    Axon {
+        pk_type: String,
+    },
 }
 
 impl Display for AddressType {

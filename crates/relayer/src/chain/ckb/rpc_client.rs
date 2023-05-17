@@ -2,7 +2,7 @@
 
 use ckb_jsonrpc_types::{
     BlockNumber, BlockView, CellWithStatus, ChainInfo, HeaderView, JsonBytes, OutPoint,
-    OutputsValidator, Transaction, TransactionWithStatusResponse, Uint32,
+    OutputsValidator, RawTxPool, Transaction, TransactionWithStatusResponse, Uint32,
 };
 use ckb_sdk::rpc::ckb_indexer::{Cell, Order, Pagination, SearchKey};
 use ckb_types::H256;
@@ -106,6 +106,10 @@ impl CkbReader for RpcClient {
             hash
         )
         .boxed()
+    }
+
+    fn get_raw_tx_pool(&self, verbose: bool) -> Rpc<RawTxPool> {
+        jsonrpc!("get_raw_tx_pool", Target::CKB, self, RawTxPool, verbose,).boxed()
     }
 
     fn get_live_cell(&self, out_point: &OutPoint, with_data: bool) -> Rpc<CellWithStatus> {
