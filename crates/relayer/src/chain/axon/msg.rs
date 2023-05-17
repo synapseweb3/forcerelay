@@ -8,6 +8,7 @@ use ibc_relayer_types::{
         ics23_commitment::commitment::CommitmentPrefix,
         ics24_host::identifier::ClientId,
     },
+    events::IbcEvent,
     tx_msg::Msg,
 };
 
@@ -53,5 +54,11 @@ impl TryFrom<Any> for contract::MsgConnectionOpenInit {
         Ok(MsgConnectionOpenInit::from_any(value)
             .map_err(|e| Error::protobuf_decode(conn_open_init::TYPE_URL.into(), e))?
             .into())
+    }
+}
+
+impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
+    fn from(value: contract::OwnableIBCHandlerEvents) -> Self {
+        todo!()
     }
 }

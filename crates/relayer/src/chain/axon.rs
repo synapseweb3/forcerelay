@@ -32,6 +32,7 @@ use eth_light_client_in_ckb_prover::Receipts;
 use eth_light_client_in_ckb_verification::trie;
 use ethers::{
     contract::ContractError,
+    prelude::EthLogDecode,
     providers::Middleware,
     types::{Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TxHash, U64},
     utils::{rlp, rlp::Encodable},
@@ -989,7 +990,8 @@ impl AxonChain {
 
 impl AxonChain {
     fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
-        let tx_receipt = match message.type_url.as_str() {
+        let type_url = message.type_url.clone();
+        let tx_receipt = match type_url.as_str() {
             conn_open_init::TYPE_URL => {
                 let msg: contract::MsgConnectionOpenInit = message.try_into()?;
                 let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
@@ -1008,6 +1010,29 @@ impl AxonChain {
             }
         };
         let tx_receipt = tx_receipt.ok_or(Error::send_tx(String::from("fail to send tx")))?;
+        let event = {
+            use contract::OwnableIBCHandlerEvents::*;
+            let mut events = tx_receipt
+                .logs
+                .into_iter()
+                .map(Into::into)
+                .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
+            match type_url.as_str() {
+                conn_open_init::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(OpenInitConnectionFilter(_))))
+                }
+                _ => {
+                    todo!()
+                }
+            }
+        }
+        .ok_or_else(|| {
+            Error::other_error(String::from(
+                "not find right event from AXON transaction receipt",
+            ))
+        })?
+        .unwrap()
+        .into();
         let tx_hash = tx_receipt.transaction_hash.0;
         let height = {
             let block_height = tx_receipt.block_number.ok_or_else(|| {
@@ -1018,12 +1043,11 @@ impl AxonChain {
             })?;
             Height::new(u64::MAX, block_height.as_u64()).unwrap()
         };
-        let event = IbcEventWithHeight {
-            event: NewBlock::new(height).into(),
+        Ok(IbcEventWithHeight {
+            event,
             height,
             tx_hash,
-        };
-        Ok(event)
+        })
     }
 }
 
