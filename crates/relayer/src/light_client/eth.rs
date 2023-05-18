@@ -716,47 +716,42 @@ impl LightClient {
 
     pub fn get_finality_updates_from(
         &self,
-        mut finality_slot: u64,
-        mut limit: u64,
+        finality_slot: u64,
+        limit: u64,
     ) -> Result<Vec<Update>, Error> {
-        let mut updates = vec![];
-        let mut consensus_client = self.rt.block_on(self.consensus_client.lock());
-        let fetch_updates = |end, slot| {
-            let futures = (0..end)
-                .map(|i| consensus_client.get_finality_update(slot + i))
-                .collect::<Vec<_>>();
-            self.rt
-                .block_on(futures::future::join_all(futures))
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()
-        };
-        while limit >= MAX_REQUEST_UPDATES {
-            let mut partial_updates = fetch_updates(MAX_REQUEST_UPDATES, finality_slot)
-                .map_err(|e| Error::rpc_response(e.to_string()))?
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
-            if partial_updates.len() != MAX_REQUEST_UPDATES as usize {
-                updates.append(&mut partial_updates);
-                return Ok(updates);
-            } else {
-                updates.append(&mut partial_updates);
-                finality_slot += MAX_REQUEST_UPDATES;
-                limit -= MAX_REQUEST_UPDATES;
+        let task = async {
+            let mut updates = vec![];
+            let mut consensus_client = self.consensus_client.lock().await;
+
+            let mut begin = finality_slot;
+            let mut count = limit;
+            while count > 0 {
+                let n = std::cmp::min(count, MAX_REQUEST_UPDATES);
+                let futs = (begin..begin + n)
+                    .map(|i| consensus_client.get_finality_update(i))
+                    .collect::<Vec<_>>();
+                let fetched_updates = futures::future::try_join_all(futs)
+                    .await
+                    .map_err(|e| Error::rpc_response(e.to_string()))?
+                    .into_iter()
+                    .flatten();
+
+                let prev_len = updates.len();
+                updates.extend(fetched_updates);
+                let fetched = (updates.len() - prev_len) as u64;
+                if fetched < n {
+                    break;
+                }
+                count -= fetched;
+                begin += fetched;
             }
-        }
-        if limit > 0 {
-            let mut partial_updates = fetch_updates(limit, finality_slot)
-                .map_err(|e| Error::rpc_response(e.to_string()))?
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
-            updates.append(&mut partial_updates);
-        }
-        updates
-            .iter()
-            .for_each(|update| consensus_client.cache_finality_update(update));
-        Ok(updates)
+            updates
+                .iter()
+                .for_each(|update| consensus_client.cache_finality_update(update));
+            Ok(updates)
+        };
+
+        self.rt.block_on(task)
     }
 }
 
