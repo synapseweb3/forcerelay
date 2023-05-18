@@ -148,7 +148,9 @@ impl ChainEndpoint for AxonChain {
         let contract = Contract::new(config.contract_address, Arc::clone(&client));
 
         let light_client = AxonLightClient::from_config(&config, rt.clone())?;
-        light_client.bootstrap(client.clone(), rpc_client.clone(), 0)?;
+        let metadata = rt.block_on(rpc_client.get_current_metadata())?;
+        let epoch_len = metadata.version.end - metadata.version.start + 1;
+        light_client.bootstrap(client.clone(), rpc_client.clone(), epoch_len)?;
 
         Ok(Self {
             rt,
@@ -957,7 +959,19 @@ impl AxonChain {
             .state_root;
         // maybe we won't get proof because the next block isn't mined yet, so here needs double check
         let proof = self.rpc_client.get_proof_by_id(next_number.into()).await?;
-        let validators = self.rpc_client.get_validators().await?;
+        let validators = self
+            .rpc_client
+            .get_current_metadata()
+            .await?
+            .verifier_list
+            .into_iter()
+            .map(|v| Validator {
+                bls_pub_key: v.bls_pub_key,
+                address: v.address,
+                propose_weight: v.propose_weight,
+                vote_weight: v.vote_weight,
+            })
+            .collect::<Vec<_>>();
 
         Ok((block, state_root, proof, validators))
     }

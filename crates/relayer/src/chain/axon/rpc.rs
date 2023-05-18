@@ -1,8 +1,8 @@
 use crate::error::Error;
 
 use async_trait::async_trait;
-use axon_tools::types::{AxonBlock, Proof, Validator};
-use ethers::types::BlockId;
+use axon_tools::types::{AxonBlock, CkbRelatedInfo, Metadata, Proof};
+use ethers::types::{BlockId, BlockNumber};
 use reqwest::Client;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -16,7 +16,11 @@ pub trait AxonRpc {
 
     async fn get_proof_by_id(&self, block_id: BlockId) -> Response<Proof>;
 
-    async fn get_validators(&self) -> Response<Vec<Validator>>;
+    async fn get_metadata_by_number(&self, block_number: BlockNumber) -> Response<Metadata>;
+
+    async fn get_current_metadata(&self) -> Response<Metadata>;
+
+    async fn get_ckb_related_info(&self) -> Response<CkbRelatedInfo>;
 }
 
 #[derive(Clone)]
@@ -81,7 +85,15 @@ impl AxonRpc for AxonRpcClient {
         jsonrpc!("axon_getProofById", self, Proof, block_id)
     }
 
-    async fn get_validators(&self) -> Response<Vec<Validator>> {
-        jsonrpc!("axon_getValidatorsById", self, Vec<Validator>)
+    async fn get_metadata_by_number(&self, block_number: BlockNumber) -> Response<Metadata> {
+        jsonrpc!("axon_getMetadataByNumber", self, Metadata, block_number)
+    }
+
+    async fn get_current_metadata(&self) -> Response<Metadata> {
+        jsonrpc!("axon_getCurrentMetadata", self, Metadata)
+    }
+
+    async fn get_ckb_related_info(&self) -> Response<CkbRelatedInfo> {
+        jsonrpc!("axon_getCkbRelatedInfo", self, CkbRelatedInfo)
     }
 }

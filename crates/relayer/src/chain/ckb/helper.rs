@@ -64,7 +64,7 @@ pub trait CellSearcher: CkbReader {
                 let errmsg = format!(
                     "no enough ckb ({searched_capacity}/{need_capacity}) on address: {address}"
                 );
-                return Err(Error::send_tx(errmsg.to_string()));
+                return Err(Error::send_tx(errmsg));
             }
 
             let mut live_cells = result
