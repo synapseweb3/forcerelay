@@ -352,6 +352,44 @@ pub async fn wait_ckb_transaction_committed(
     Ok(())
 }
 
+pub async fn collect_ckb_tx_pool_info_on_duplicate_tx(
+    rpc: &impl CkbReader,
+    send_tx_err: &Error,
+) -> Option<String> {
+    let err_msg = format!("{send_tx_err}");
+    // Collecting debug info for ckb tx pool on duplicate tx error.
+    // The error code is -1077.
+    // https://github.com/nervosnetwork/ckb/tree/develop/rpc#error-poolrejectedduplicatedtransaction
+    if err_msg.contains("PoolRejectedDuplicatedTransaction") || err_msg.contains("-1077") {
+        let mut pool_log = String::new();
+        match rpc.get_raw_tx_pool(true).await {
+            Ok(raw_tx_pool) => {
+                pool_log += &format!(
+                    "== CKB raw tx pool ==\n{}\n",
+                    serde_json::to_string(&raw_tx_pool).expect("jsonify ckb raw tx pool")
+                );
+            }
+            Err(e) => {
+                pool_log += &format!("== get ckb raw tx pool failed ==\n{e}");
+            }
+        }
+        match rpc.tx_pool_info().await {
+            Ok(tx_pool_info) => {
+                pool_log += &format!(
+                    "== CKB tx pool info ==\n{}",
+                    serde_json::to_string(&tx_pool_info).expect("jsonify ckb tx pool info")
+                );
+            }
+            Err(e) => {
+                pool_log += &format!("== get ckb tx pool info failed ==\n{e}");
+            }
+        }
+        Some(pool_log)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
