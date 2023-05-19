@@ -56,12 +56,16 @@ use ibc_relayer_types::{
         ics03_connection::{
             self,
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
-            msgs::conn_open_init,
+            msgs::{conn_open_ack, conn_open_confirm, conn_open_init, conn_open_try},
         },
         ics04_channel::{
             self,
             channel::{self, ChannelEnd, IdentifiedChannelEnd},
             events::OpenInit,
+            msgs::{
+                acknowledgement, chan_close_confirm, chan_close_init, chan_open_ack,
+                chan_open_confirm, chan_open_init, chan_open_try, recv_packet,
+            },
             packet::{PacketMsgType, Sequence},
         },
         ics23_commitment::{
@@ -1005,8 +1009,149 @@ impl AxonChain {
                     });
                 tx_receipt.map_err(convert_err)?
             }
-            _ => {
-                todo!()
+            conn_open_try::TYPE_URL => {
+                let msg: contract::MsgConnectionOpenTry = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .connection_open_try(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            conn_open_ack::TYPE_URL => {
+                let msg: contract::MsgConnectionOpenAck = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .connection_open_ack(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            conn_open_confirm::TYPE_URL => {
+                let msg: contract::MsgConnectionOpenConfirm = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .connection_open_confirm(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            chan_open_init::TYPE_URL => {
+                let msg: contract::MsgChannelOpenInit = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .channel_open_init(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            chan_open_try::TYPE_URL => {
+                let msg: contract::MsgChannelOpenTry = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .channel_open_try(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            chan_open_ack::TYPE_URL => {
+                let msg: contract::MsgChannelOpenAck = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .channel_open_ack(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            chan_open_confirm::TYPE_URL => {
+                let msg: contract::MsgChannelOpenConfirm = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .channel_open_confirm(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            chan_close_init::TYPE_URL => {
+                let msg: contract::MsgChannelCloseInit = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .channel_close_init(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            chan_close_confirm::TYPE_URL => {
+                let msg: contract::MsgChannelCloseConfirm = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .channel_close_confirm(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            recv_packet::TYPE_URL => {
+                let msg: contract::MsgPacketRecv = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self.contract.recv_packet(msg.clone()).send().await?.await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            acknowledgement::TYPE_URL => {
+                let msg: contract::MsgPacketAcknowledgement = message.try_into()?;
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
+                    self.rt.block_on(async {
+                        Ok(self
+                            .contract
+                            .acknowledge_packet(msg.clone())
+                            .send()
+                            .await?
+                            .await?)
+                    });
+                tx_receipt.map_err(convert_err)?
+            }
+            url => {
+                return Err(Error::other_error(format!(
+                    "not support message type url: {}",
+                    url
+                )))
             }
         };
         let tx_receipt = tx_receipt.ok_or(Error::send_tx(String::from("fail to send tx")))?;
@@ -1021,8 +1166,44 @@ impl AxonChain {
                 conn_open_init::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(OpenInitConnectionFilter(_))))
                 }
-                _ => {
-                    todo!()
+                conn_open_try::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(OpenTryConnectionFilter(_))))
+                }
+                conn_open_ack::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(OpenAckConnectionFilter(_))))
+                }
+                conn_open_confirm::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(OpenConfirmConnectionFilter(_))))
+                }
+                chan_open_init::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(OpenInitChannelFilter(_))))
+                }
+                chan_open_try::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(OpenTryChannelFilter(_))))
+                }
+                chan_open_ack::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(OpenAckChannelFilter(_))))
+                }
+                chan_open_confirm::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(OpenConfirmChannelFilter(_))))
+                }
+                chan_close_init::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(CloseInitChannelFilter(_))))
+                }
+                chan_close_confirm::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(CloseConfirmChannelFilter(_))))
+                }
+                recv_packet::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(ReceivePacketFilter(_))))
+                }
+                acknowledgement::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(AcknowledgePacketFilter(_))))
+                }
+                url => {
+                    return Err(Error::other_error(format!(
+                        "not support message type url: {}",
+                        url
+                    )))
                 }
             }
         }
