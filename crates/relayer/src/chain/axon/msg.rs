@@ -6,15 +6,33 @@ use ibc_relayer_types::{
     core::{
         ics03_connection::{
             self,
-            connection::Counterparty,
+            connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
             msgs::{
+                conn_open_ack::{self, MsgConnectionOpenAck},
+                conn_open_confirm::{self, MsgConnectionOpenConfirm},
                 conn_open_init::{self, MsgConnectionOpenInit},
                 conn_open_try::{self, MsgConnectionOpenTry},
             },
         },
-        ics04_channel::{packet::Packet, timeout::TimeoutHeight},
+        ics04_channel::{
+            self,
+            channel::ChannelEnd,
+            channel::{self, IdentifiedChannelEnd},
+            msgs::{
+                acknowledgement::{self, MsgAcknowledgement},
+                chan_close_confirm::{self, MsgChannelCloseConfirm},
+                chan_close_init::{self, MsgChannelCloseInit},
+                chan_open_ack::{self, MsgChannelOpenAck},
+                chan_open_confirm::{self, MsgChannelOpenConfirm},
+                chan_open_init::{self, MsgChannelOpenInit},
+                chan_open_try::{self, MsgChannelOpenTry},
+                recv_packet::{self, MsgRecvPacket},
+            },
+            packet::Packet,
+            timeout::TimeoutHeight,
+        },
         ics23_commitment::commitment::{CommitmentPrefix, CommitmentProofBytes},
-        ics24_host::identifier::{ClientId, ConnectionId},
+        ics24_host::identifier::{ChannelId, ClientId, ConnectionId},
     },
     events::IbcEvent,
     proofs::Proofs,
@@ -41,6 +59,13 @@ fn into_ethers_client_state(value: Option<Any>) -> Bytes {
 }
 
 fn into_ethers_connection_id(value: Option<ConnectionId>) -> String {
+    match value {
+        Some(v) => v.as_str().into(),
+        None => String::from(""),
+    }
+}
+
+fn into_ethers_channel_id(value: Option<ChannelId>) -> String {
     match value {
         Some(v) => v.as_str().into(),
         None => String::from(""),
@@ -104,8 +129,8 @@ impl From<contract::HeightData> for Height {
     }
 }
 
-impl From<Counterparty> for contract::CounterpartyData {
-    fn from(value: Counterparty) -> Self {
+impl From<connection::Counterparty> for contract::CounterpartyData {
+    fn from(value: connection::Counterparty) -> Self {
         let client_id: String = value.client_id().as_str().into();
         Self {
             client_id: value.client_id().as_str().into(),
@@ -118,11 +143,172 @@ impl From<Counterparty> for contract::CounterpartyData {
     }
 }
 
+impl From<contract::CounterpartyData> for connection::Counterparty {
+    fn from(value: contract::CounterpartyData) -> Self {
+        Self::new(
+            value.client_id.as_str().parse().unwrap(),
+            if value.connection_id.is_empty() {
+                None
+            } else {
+                Some(value.connection_id.as_str().parse().unwrap())
+            },
+            value
+                .prefix
+                .key_prefix
+                .as_ref()
+                .to_vec()
+                .try_into()
+                .unwrap(),
+        )
+    }
+}
+
 impl From<ics03_connection::version::Version> for contract::VersionData {
     fn from(value: ics03_connection::version::Version) -> Self {
         Self {
             identifier: value.identifier,
             features: value.features,
+        }
+    }
+}
+
+impl From<channel::Counterparty> for contract::ChannelCounterpartyData {
+    fn from(value: channel::Counterparty) -> Self {
+        Self {
+            port_id: value.port_id.as_str().into(),
+            channel_id: match value.channel_id {
+                Some(id) => id.as_str().into(),
+                None => String::from(""),
+            },
+        }
+    }
+}
+
+impl From<contract::ChannelCounterpartyData> for channel::Counterparty {
+    fn from(value: contract::ChannelCounterpartyData) -> Self {
+        Self {
+            port_id: value.port_id.as_str().parse().unwrap(),
+            channel_id: if value.channel_id.is_empty() {
+                None
+            } else {
+                Some(value.channel_id.as_str().parse().unwrap())
+            },
+        }
+    }
+}
+
+impl From<ChannelEnd> for contract::ChannelData {
+    fn from(value: ChannelEnd) -> Self {
+        Self {
+            state: value.state as u8,
+            ordering: value.ordering as u8,
+            counterparty: value.remote.into(),
+            connection_hops: value
+                .connection_hops
+                .into_iter()
+                .map(|h| h.as_str().into())
+                .collect(),
+            version: value.version.0,
+        }
+    }
+}
+
+impl From<contract::ChannelData> for ChannelEnd {
+    fn from(value: contract::ChannelData) -> Self {
+        Self {
+            state: channel::State::from_i32(value.state as i32).unwrap(),
+            ordering: channel::Order::from_i32(value.ordering as i32).unwrap(),
+            remote: value.counterparty.into(),
+            connection_hops: value
+                .connection_hops
+                .iter()
+                .map(|s| s.parse())
+                .collect::<Result<Vec<ConnectionId>, _>>()
+                .unwrap(),
+            version: ics04_channel::version::Version::new(value.version),
+        }
+    }
+}
+
+impl From<contract::ConnectionEndData> for ConnectionEnd {
+    fn from(value: contract::ConnectionEndData) -> Self {
+        Self::new(
+            connection::State::from_i32(value.state as i32).unwrap(),
+            value.client_id.parse().unwrap(),
+            value.counterparty.into(),
+            value
+                .versions
+                .into_iter()
+                .map(|v| ics03_connection::version::Version {
+                    identifier: v.identifier,
+                    features: v.features,
+                })
+                .collect::<Vec<_>>(),
+            std::time::Duration::new(value.delay_period, 0),
+        )
+    }
+}
+
+impl From<contract::IdentifiedChannelData> for IdentifiedChannelEnd {
+    fn from(value: contract::IdentifiedChannelData) -> Self {
+        let channel_end = ChannelEnd {
+            state: channel::State::from_i32(value.state as i32).unwrap(),
+            ordering: channel::Order::from_i32(value.ordering as i32).unwrap(),
+            remote: value.counterparty.into(),
+            connection_hops: value
+                .connection_hops
+                .iter()
+                .map(|s| s.parse())
+                .collect::<Result<Vec<ConnectionId>, _>>()
+                .unwrap(),
+            version: ics04_channel::version::Version::new(value.version),
+        };
+        Self {
+            port_id: value.port_id.parse().unwrap(),
+            channel_id: value.channel_id.parse().unwrap(),
+            channel_end,
+        }
+    }
+}
+
+impl From<contract::IdentifiedConnectionEndData> for IdentifiedConnectionEnd {
+    fn from(value: contract::IdentifiedConnectionEndData) -> Self {
+        Self {
+            connection_id: value.connection_id.parse().unwrap(),
+            connection_end: value.connection_end.into(),
+        }
+    }
+}
+
+impl From<contract::PacketData> for Packet {
+    fn from(value: contract::PacketData) -> Self {
+        Self {
+            sequence: value.sequence.into(),
+            source_port: value.source_port.as_str().parse().unwrap(),
+            source_channel: value.source_channel.as_str().parse().unwrap(),
+            destination_port: value.destination_port.as_str().parse().unwrap(),
+            destination_channel: value.destination_channel.as_str().parse().unwrap(),
+            data: value.data.as_ref().to_vec(),
+            timeout_height: TimeoutHeight::At(value.timeout_height.into()),
+            timeout_timestamp: Timestamp::from_nanoseconds(value.timeout_timestamp).unwrap(),
+        }
+    }
+}
+
+impl From<Packet> for contract::PacketData {
+    fn from(value: Packet) -> Self {
+        Self {
+            sequence: value.sequence.into(),
+            source_port: value.source_port.as_str().into(),
+            source_channel: value.source_channel.as_str().into(),
+            destination_port: value.destination_port.as_str().into(),
+            destination_channel: value.destination_channel.as_str().into(),
+            data: value.data.into(),
+            timeout_height: match value.timeout_height {
+                TimeoutHeight::At(h) => h.into(),
+                TimeoutHeight::Never => Default::default(),
+            },
+            timeout_timestamp: value.timeout_timestamp.nanoseconds(),
         }
     }
 }
@@ -166,7 +352,7 @@ impl From<MsgConnectionOpenTry> for contract::MsgConnectionOpenTry {
             proof_client: client_proof,
             proof_consensus: consensus_proof,
             consensus_height,
-            client_state_bytes: into_ethers_client_state(value.client_state),
+            client_state: into_ethers_client_state(value.client_state),
         }
     }
 }
@@ -181,18 +367,225 @@ impl TryFrom<Any> for contract::MsgConnectionOpenTry {
     }
 }
 
-impl From<contract::PacketData> for Packet {
-    fn from(value: contract::PacketData) -> Self {
+impl From<MsgConnectionOpenAck> for contract::MsgConnectionOpenAck {
+    fn from(value: MsgConnectionOpenAck) -> Self {
+        let (object_proof, client_proof, (consensus_proof, consensus_height), height) =
+            into_ethers_proofs(value.proofs);
         Self {
-            sequence: value.sequence.into(),
-            source_port: value.source_port.as_str().parse().unwrap(),
-            source_channel: value.source_channel.as_str().parse().unwrap(),
-            destination_port: value.destination_port.as_str().parse().unwrap(),
-            destination_channel: value.destination_channel.as_str().parse().unwrap(),
-            data: value.data.as_ref().to_vec(),
-            timeout_height: TimeoutHeight::At(value.timeout_height.into()),
-            timeout_timestamp: Timestamp::from_nanoseconds(value.timeout_timestamp).unwrap(),
+            connection_id: value.connection_id.as_str().into(),
+            counterparty_connection_id: value.counterparty_connection_id.as_str().into(),
+            version: value.version.into(),
+            client_state: into_ethers_client_state(value.client_state),
+            proof_height: height,
+            proof_try: object_proof,
+            proof_client: client_proof,
+            proof_consensus: consensus_proof,
+            consensus_height,
         }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgConnectionOpenAck {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgConnectionOpenAck::from_any(value)
+            .map_err(|e| Error::protobuf_decode(conn_open_ack::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgConnectionOpenConfirm> for contract::MsgConnectionOpenConfirm {
+    fn from(value: MsgConnectionOpenConfirm) -> Self {
+        let (object_proof, _, _, height) = into_ethers_proofs(value.proofs);
+        Self {
+            connection_id: value.connection_id.as_str().into(),
+            proof_height: height,
+            proof_ack: object_proof,
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgConnectionOpenConfirm {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgConnectionOpenConfirm::from_any(value)
+            .map_err(|e| Error::protobuf_decode(conn_open_confirm::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgChannelOpenInit> for contract::MsgChannelOpenInit {
+    fn from(value: MsgChannelOpenInit) -> Self {
+        Self {
+            port_id: value.port_id.as_str().into(),
+            channel: value.channel.into(),
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgChannelOpenInit {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgChannelOpenInit::from_any(value)
+            .map_err(|e| Error::protobuf_decode(chan_open_init::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgChannelOpenTry> for contract::MsgChannelOpenTry {
+    fn from(value: MsgChannelOpenTry) -> Self {
+        let (object_proof, _, _, height) = into_ethers_proofs(value.proofs);
+        Self {
+            port_id: value.port_id.as_str().into(),
+            previous_channel_id: into_ethers_channel_id(value.previous_channel_id),
+            channel: value.channel.into(),
+            counterparty_version: value.counterparty_version.to_string(),
+            proof_height: height,
+            proof_init: object_proof,
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgChannelOpenTry {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgChannelOpenTry::from_any(value)
+            .map_err(|e| Error::protobuf_decode(chan_open_try::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgChannelOpenAck> for contract::MsgChannelOpenAck {
+    fn from(value: MsgChannelOpenAck) -> Self {
+        let (object_proof, _, _, height) = into_ethers_proofs(value.proofs);
+        Self {
+            port_id: value.port_id.as_str().into(),
+            channel_id: value.channel_id.as_str().into(),
+            counterparty_channel_id: value.counterparty_channel_id.as_str().into(),
+            counterparty_version: value.counterparty_version.to_string(),
+            proof_height: height,
+            proof_try: object_proof,
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgChannelOpenAck {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgChannelOpenAck::from_any(value)
+            .map_err(|e| Error::protobuf_decode(chan_open_ack::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgChannelOpenConfirm> for contract::MsgChannelOpenConfirm {
+    fn from(value: MsgChannelOpenConfirm) -> Self {
+        let (object_proof, _, _, height) = into_ethers_proofs(value.proofs);
+        Self {
+            port_id: value.port_id.as_str().into(),
+            channel_id: value.channel_id.as_str().into(),
+            proof_height: height,
+            proof_ack: object_proof,
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgChannelOpenConfirm {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgChannelOpenConfirm::from_any(value)
+            .map_err(|e| Error::protobuf_decode(chan_open_confirm::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgChannelCloseInit> for contract::MsgChannelCloseInit {
+    fn from(value: MsgChannelCloseInit) -> Self {
+        Self {
+            port_id: value.port_id.as_str().into(),
+            channel_id: value.channel_id.as_str().into(),
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgChannelCloseInit {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgChannelCloseInit::from_any(value)
+            .map_err(|e| Error::protobuf_decode(chan_close_init::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgChannelCloseConfirm> for contract::MsgChannelCloseConfirm {
+    fn from(value: MsgChannelCloseConfirm) -> Self {
+        let (object_proof, _, _, height) = into_ethers_proofs(value.proofs);
+        Self {
+            port_id: value.port_id.as_str().into(),
+            channel_id: value.channel_id.as_str().into(),
+            proof_init: object_proof,
+            proof_height: height,
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgChannelCloseConfirm {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgChannelCloseConfirm::from_any(value)
+            .map_err(|e| Error::protobuf_decode(chan_close_confirm::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgRecvPacket> for contract::MsgPacketRecv {
+    fn from(value: MsgRecvPacket) -> Self {
+        let (object_proof, _, _, height) = into_ethers_proofs(value.proofs);
+        Self {
+            packet: value.packet.into(),
+            proof_height: height,
+            proof: object_proof,
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgPacketRecv {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgRecvPacket::from_any(value)
+            .map_err(|e| Error::protobuf_decode(recv_packet::TYPE_URL.into(), e))?
+            .into())
+    }
+}
+
+impl From<MsgAcknowledgement> for contract::MsgPacketAcknowledgement {
+    fn from(value: MsgAcknowledgement) -> Self {
+        let (object_proof, _, _, height) = into_ethers_proofs(value.proofs);
+        Self {
+            packet: value.packet.into(),
+            acknowledgement: value.acknowledgement.as_ref().to_vec().into(),
+            proof_height: height,
+            proof: object_proof,
+        }
+    }
+}
+
+impl TryFrom<Any> for contract::MsgPacketAcknowledgement {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        Ok(MsgAcknowledgement::from_any(value)
+            .map_err(|e| Error::protobuf_decode(acknowledgement::TYPE_URL.into(), e))?
+            .into())
     }
 }
 
@@ -333,6 +726,7 @@ impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
                 };
                 IbcEvent::CloseConfirmChannel(event)
             }
+            // Packet
             SendPacketFilter(event) => {
                 let event = channel_events::SendPacket {
                     packet: event.packet.into(),
@@ -345,7 +739,6 @@ impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
                 };
                 IbcEvent::ReceivePacket(event)
             }
-
             AcknowledgePacketFilter(event) => {
                 let event = channel_events::AcknowledgePacket {
                     packet: event.packet.into(),
