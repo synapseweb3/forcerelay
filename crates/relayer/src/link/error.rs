@@ -148,6 +148,14 @@ define_error! {
 
         UpdateClientFailed
              |_| { "failed to update client" },
+
+        FailCacheTxHash
+            { event: IbcEvent }
+            |e| {
+                format!("fail to cache tx hash for event {}",
+                    e.event)
+            },
+
    }
 }
 
