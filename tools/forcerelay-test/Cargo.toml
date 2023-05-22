@@ -6,7 +6,7 @@ edition = "2021"
 [dev-dependencies]
 ckb-sdk = "=2.4.0"
 ckb-jsonrpc-types = "0.106.0"
-ckb-types = "0.106.0"
+ckb-types = "0.110.0"
 hex = "0.4"
 
 eth_light_client_in_ckb-verification = { git = "https://github.com/synapseweb3/eth-light-client-in-ckb", branch = "release/v0.1.x" }
