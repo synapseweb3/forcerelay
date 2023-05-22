@@ -74466,10 +74466,6 @@ pub mod ownable_ibc_handler {
     )]
     #[ethevent(
         name = "CloseConfirmChannel",
-        abi = "CloseConfirmChannel(string,string)"
-    )]
-    #[ethevent(
-        name = "CloseConfirmChannel",
         abi = "CloseConfirmChannel(string,string,string,string,string)"
     )]
     pub struct CloseConfirmChannelFilter {
@@ -76928,7 +76924,7 @@ pub mod ownable_ibc_handler {
         Debug,
         PartialEq,
         Eq,
-        Hash
+        Hash,
     )]
     pub struct ChannelCloseConfirmReturn {
         pub attr: ChannelAttributes,
@@ -76942,7 +76938,7 @@ pub mod ownable_ibc_handler {
         Debug,
         PartialEq,
         Eq,
-        Hash
+        Hash,
     )]
     pub struct ChannelCloseInitReturn {
         pub attr: ChannelAttributes,
@@ -76968,7 +76964,7 @@ pub mod ownable_ibc_handler {
         Debug,
         PartialEq,
         Eq,
-        Hash
+        Hash,
     )]
     pub struct ChannelOpenAckReturn {
         pub attr: ChannelAttributes,
@@ -76982,7 +76978,7 @@ pub mod ownable_ibc_handler {
         Debug,
         PartialEq,
         Eq,
-        Hash
+        Hash,
     )]
     pub struct ChannelOpenConfirmReturn {
         pub attr: ChannelAttributes,
@@ -77137,7 +77133,7 @@ pub mod ownable_ibc_handler {
         Debug,
         PartialEq,
         Eq,
-        Hash
+        Hash,
     )]
     pub struct ConnectionOpenAckReturn {
         pub attr: ConnectionEndAttributes,
@@ -77151,7 +77147,7 @@ pub mod ownable_ibc_handler {
         Debug,
         PartialEq,
         Eq,
-        Hash
+        Hash,
     )]
     pub struct ConnectionOpenConfirmReturn {
         pub attr: ConnectionEndAttributes,
@@ -77614,7 +77610,7 @@ pub mod ownable_ibc_handler {
         Debug,
         PartialEq,
         Eq,
-        Hash
+        Hash,
     )]
     pub struct ChannelAttributes {
         pub port_id: ::std::string::String,
@@ -77665,7 +77661,7 @@ pub mod ownable_ibc_handler {
         Debug,
         PartialEq,
         Eq,
-        Hash
+        Hash,
     )]
     pub struct ConnectionEndAttributes {
         pub connection_id: ::std::string::String,
