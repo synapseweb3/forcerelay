@@ -300,6 +300,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "axon-tools"
+version = "0.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4d858895e2d8232900b764c1f3068780f94fada5b27c3b6ceb89557b528ae7c"
+dependencies = [
+ "bit-vec",
+ "blst",
+ "bytes",
+ "ethereum-types",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "axum"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3484,7 +3500,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "axon-tools",
+ "axon-tools 0.0.5",
  "bech32 0.9.1",
  "bitcoin",
  "bs58",
@@ -3629,7 +3645,7 @@ dependencies = [
 name = "ibc-relayer-types"
 version = "0.23.0"
 dependencies = [
- "axon-tools",
+ "axon-tools 0.0.8",
  "bls",
  "bytes",
  "derive_more",

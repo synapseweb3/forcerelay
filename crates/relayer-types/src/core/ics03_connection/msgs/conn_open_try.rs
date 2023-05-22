@@ -230,6 +230,7 @@ pub mod test_util {
 #[cfg(test)]
 mod tests {
     use crate::prelude::*;
+    use crate::tx_msg::Msg;
 
     use test_log::test;
 
@@ -357,6 +358,14 @@ mod tests {
         let raw_back = RawMsgConnectionOpenTry::from(msg.clone());
         let msg_back = MsgConnectionOpenTry::try_from(raw_back.clone()).unwrap();
         assert_eq!(raw, raw_back);
+        assert_eq!(msg, msg_back);
+    }
+    #[test]
+    fn to_and_from_any() {
+        let raw = get_dummy_raw_msg_conn_open_try(10, 34);
+        let msg = MsgConnectionOpenTry::try_from(raw.clone()).unwrap();
+        let any = msg.clone().to_any();
+        let msg_back = MsgConnectionOpenTry::from_any(any.clone()).unwrap();
         assert_eq!(msg, msg_back);
     }
 }
