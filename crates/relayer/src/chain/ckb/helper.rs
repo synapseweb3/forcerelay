@@ -2,16 +2,16 @@ use async_trait::async_trait;
 use ckb_sdk::{
     rpc::ckb_indexer::SearchKey,
     traits::{CellQueryOptions, LiveCell, PrimaryScriptType},
-    Address, NetworkType,
+    Address,
 };
 use ckb_types::{
     bytes::Bytes,
-    core::{Capacity, DepType, ScriptHashType, TransactionView},
-    h256, packed,
+    core::{Capacity, ScriptHashType, TransactionView},
+    packed,
     prelude::*,
 };
 
-use super::{prelude::CkbReader, rpc_client::RpcClient};
+use super::{prelude::CkbReader, rpc_client::RpcClient, sighash::get_secp256k1_celldep};
 use crate::error::Error;
 
 #[async_trait]
@@ -141,7 +141,7 @@ pub trait TxCompleter: CellSearcher {
             .as_advanced_builder()
             .output(change_cell)
             .output_data(Bytes::new().pack())
-            .cell_dep(get_secp256k1_celldep(address.network()))
+            .cell_dep(get_secp256k1_celldep().clone())
             .build();
         Ok((tx, inputs_cell_as_output))
     }
@@ -149,48 +149,3 @@ pub trait TxCompleter: CellSearcher {
 
 impl CellSearcher for RpcClient {}
 impl TxCompleter for RpcClient {}
-
-fn get_secp256k1_celldep(network_type: NetworkType) -> packed::CellDep {
-    let celldep = packed::CellDep::new_builder()
-        .dep_type(DepType::DepGroup.into())
-        .build();
-    match network_type {
-        NetworkType::Mainnet => celldep
-            .as_builder()
-            .out_point(
-                packed::OutPoint::new_builder()
-                    .tx_hash(
-                        h256!("0x71a7ba8fc96349fea0ed3a5c47992e3b4084b031a42264a018e0072e8172e46c")
-                            .pack(),
-                    )
-                    .index(0u32.pack())
-                    .build(),
-            )
-            .build(),
-        NetworkType::Testnet => celldep
-            .as_builder()
-            .out_point(
-                packed::OutPoint::new_builder()
-                    .tx_hash(
-                        h256!("0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37")
-                            .pack(),
-                    )
-                    .index(0u32.pack())
-                    .build(),
-            )
-            .build(),
-        NetworkType::Dev => celldep
-            .as_builder()
-            .out_point(
-                packed::OutPoint::new_builder()
-                    .tx_hash(
-                        h256!("0x29ed5663501cd171513155f8939ad2c9ffeb92aa4879d39cde987f8eb6274407")
-                            .pack(),
-                    )
-                    .index(0u32.pack())
-                    .build(),
-            )
-            .build(),
-        _ => celldep,
-    }
-}

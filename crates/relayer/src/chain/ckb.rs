@@ -77,6 +77,7 @@ use super::{
 mod assembler;
 mod communication;
 mod helper;
+mod sighash;
 mod signer;
 mod utils;
 
@@ -86,6 +87,8 @@ mod mock_rpc_client;
 mod rpc_client;
 #[cfg(test)]
 use mock_rpc_client as rpc_client;
+
+use sighash::init_sighash_celldep;
 
 #[cfg(test)]
 mod tests;
@@ -362,6 +365,8 @@ impl ChainEndpoint for CkbChain {
         let config: CkbChainConfig = config.try_into()?;
         let rpc_client = Arc::new(RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc));
         let storage = Storage::new(&config.data_dir)?;
+
+        rt.block_on(init_sighash_celldep(rpc_client.as_ref()))?;
 
         // check contract and lock type_id_args wether are on-chain deployed
         #[cfg(not(test))]
