@@ -185,9 +185,9 @@ mod tests {
     #[test]
     fn to_and_from_any() {
         let raw = get_dummy_raw_msg_conn_open_init();
-        let msg = MsgConnectionOpenInit::try_from(raw.clone()).unwrap();
+        let msg = MsgConnectionOpenInit::try_from(raw).unwrap();
         let any = msg.clone().to_any();
-        let msg_back = MsgConnectionOpenInit::from_any(any.clone()).unwrap();
+        let msg_back = MsgConnectionOpenInit::from_any(any).unwrap();
         assert_eq!(msg, msg_back);
     }
 }
