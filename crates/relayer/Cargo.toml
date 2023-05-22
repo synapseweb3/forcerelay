@@ -124,4 +124,4 @@ tempfile = "3.3.0"
 rand = "0.8.5"
 
 # Needed for generating (synthetic) light blocks.
-tendermint-testgen = { version = "0.30.0" }
+tendermint-testgen = { version = "0.32.0" }
