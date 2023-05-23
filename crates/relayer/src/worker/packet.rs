@@ -195,8 +195,7 @@ fn handle_packet_cmd<ChainA: ChainHandle, ChainB: ChainHandle>(
                     }
                     _ => (None, None, None),
                 };
-                if port_id.is_some() {
-                    let port_id = port_id.unwrap();
+                if let Some(port_id) = port_id {
                     let channel_id = channel_id.unwrap();
                     let sequence = sequence.unwrap().into();
                     link.a_to_b

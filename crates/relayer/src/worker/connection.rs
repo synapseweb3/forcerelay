@@ -46,8 +46,7 @@ pub fn spawn_connection_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
                                 OpenConfirmConnection(open_confirm) => open_confirm.0.connection_id,
                                 _ => None,
                             };
-                            if conn_id.is_some() {
-                                let conn_id = conn_id.unwrap();
+                            if let Some(conn_id) = conn_id {
                                 chains
                                     .a
                                     .cache_ics_tx_hash(

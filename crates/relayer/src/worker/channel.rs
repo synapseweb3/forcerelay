@@ -67,16 +67,12 @@ pub fn spawn_channel_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
                                 }
                                 _ => (None, None),
                             };
-                            if port_id.is_some() {
-                                let port_id = port_id.unwrap();
+                            if let Some(port_id) = port_id {
                                 let channel_id = channel_id.unwrap();
                                 chains
                                     .a
                                     .cache_ics_tx_hash(
-                                        CacheTxHashStatus::new_with_chan(
-                                            channel_id.clone(),
-                                            port_id.clone(),
-                                        ),
+                                        CacheTxHashStatus::new_with_chan(channel_id, port_id),
                                         tx_hash,
                                     )
                                     .map_err(|_| {
