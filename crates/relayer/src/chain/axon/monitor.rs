@@ -7,6 +7,7 @@ use crate::event::IbcEventWithHeight;
 use crate::light_client::AnyHeader;
 use crossbeam_channel as channel;
 use ethers::contract::stream::EventStreamMeta;
+use ethers::contract::EthEvent;
 use ethers::contract::LogMeta;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
@@ -187,19 +188,11 @@ impl AxonEventMonitor {
         let attr = Attributes::default();
         let height = meta.block_number.as_u64();
         let tx_hash = meta.transaction_hash;
-        let ibc_event = match event {
-            ContractEvents::CreateClientFilter(event) => {
-                info!("Axon event CreateClient: {:?}", event);
-                let attr = Attributes {
-                    client_id: event.client_id.parse().unwrap(),
-                    client_type: ClientType::Axon,
-                    consensus_height: Height::new(0, height).unwrap(),
-                };
-                IbcEvent::CreateClient(events::CreateClient(attr))
-            }
-            _ => todo!(),
-        };
-        IbcEventWithHeight::new_with_tx_hash(ibc_event, Height::new(0, height).unwrap(), tx_hash.0)
+        IbcEventWithHeight::new_with_tx_hash(
+            event.into(),
+            Height::new(0, height).unwrap(),
+            tx_hash.0,
+        )
     }
 
     fn process_batch(&mut self, batch: EventBatch) {

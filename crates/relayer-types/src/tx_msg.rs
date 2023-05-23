@@ -1,12 +1,12 @@
 use ibc_proto::google::protobuf::Any;
-use prost::{EncodeError, Message};
+use prost::{DecodeError, EncodeError, Message};
 
 use crate::core::ics24_host::error::ValidationError;
 use crate::prelude::*;
 
 pub trait Msg: Clone {
     type ValidationError;
-    type Raw: From<Self> + Message;
+    type Raw: From<Self> + TryInto<Self> + Message + Default;
 
     // TODO: Clarify what is this function supposed to do & its connection to ICS26 routing mod.
     fn route(&self) -> String;
@@ -35,6 +35,16 @@ pub trait Msg: Clone {
 
     fn validate_basic(&self) -> Result<(), ValidationError> {
         Ok(())
+    }
+
+    fn from_any(any: Any) -> Result<Self, DecodeError> {
+        let raw_msg = Self::Raw::decode(any.value.as_slice())?;
+        raw_msg.try_into().map_err(|_| {
+            DecodeError::new(format!(
+                "fail to convert Any to Msg for type_url {}",
+                any.type_url
+            ))
+        })
     }
 }
 
