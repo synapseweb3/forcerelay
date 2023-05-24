@@ -235,33 +235,44 @@ impl CkbChain {
             .map_err(Error::key_base)?
             .into_ckb_keypair(self.network()?);
         let tx = signer::sign(tx, &inputs, vec![], key).map_err(Error::key_base)?;
-        let hash = self
-            .rt
-            .block_on(
-                self.rpc_client
-                    .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
+
+        let task = async {
+            let send_res = self
+                .rpc_client
+                .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough))
+                .await;
+            let hash = match send_res {
+                Ok(hash) => Ok(hash),
+                Err(e) => {
+                    let pool_log = utils::collect_ckb_tx_pool_info_on_duplicate_tx(
+                        self.rpc_client.as_ref(),
+                        &e,
+                    )
+                    .await
+                    .unwrap_or_default();
+                    let tx_info = format!(
+                        "== transaction for debugging is below ==\n{}",
+                        serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
+                    );
+                    Err(Error::send_tx(format!("{e}\n{pool_log}\n{tx_info}\n")))
+                }
+            }?;
+
+            tracing::info!(
+                "ckb send_transaction success: {}, wait committed to block",
+                hex::encode(&hash)
+            );
+
+            utils::wait_ckb_transaction_committed(
+                &self.rpc_client,
+                hash,
+                Duration::from_secs(3),
+                0,
+                Duration::from_secs(60),
             )
-            .map_err(|e| {
-                Error::send_tx(format!(
-                    "{e}\n== transaction for debugging is below ==\n{}",
-                    serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
-                ))
-            })?;
-
-        tracing::info!(
-            "ckb send_transaction success: {}, wait committed to block",
-            hex::encode(&hash)
-        );
-
-        self.rt.block_on(utils::wait_ckb_transaction_committed(
-            &self.rpc_client,
-            hash,
-            Duration::from_secs(3),
-            0,
-            Duration::from_secs(60),
-        ))?;
-
-        Ok(())
+            .await
+        };
+        self.rt.block_on(task)
     }
 
     pub fn network(&self) -> Result<NetworkType, Error> {
