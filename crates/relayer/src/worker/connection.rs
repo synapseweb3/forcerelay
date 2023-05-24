@@ -1,8 +1,5 @@
 use core::time::Duration;
 use crossbeam_channel::Receiver;
-use ibc_relayer_types::events::IbcEvent::{
-    OpenAckConnection, OpenConfirmConnection, OpenTryConnection,
-};
 use tracing::{debug, error_span};
 
 use crate::chain::handle::CacheTxHashStatus;
@@ -39,52 +36,30 @@ pub fn spawn_connection_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
                         debug!("starts processing {:?}", last_event_with_height);
 
                         complete_handshake_on_new_block = false;
+                        use ibc_relayer_types::events::IbcEvent::*;
                         if let Some(event_with_height) = last_event_with_height {
                             let tx_hash = event_with_height.tx_hash;
-                            match event_with_height.event.clone() {
-                                OpenTryConnection(open_try) => {
-                                    let conn_id = open_try.0.connection_id.unwrap();
-                                    chains
-                                        .a
-                                        .cache_ics_tx_hash(
-                                            CacheTxHashStatus::new_with_conn(conn_id),
-                                            tx_hash,
-                                        )
-                                        .map_err(|_| {
-                                            TaskError::Fatal(RunError::connection(
-                                                ConnectionError::missing_connection_init_event(),
-                                            ))
-                                        })?;
-                                }
-                                OpenAckConnection(open_ack) => {
-                                    let conn_id = open_ack.0.connection_id.unwrap();
-                                    chains
-                                        .a
-                                        .cache_ics_tx_hash(
-                                            CacheTxHashStatus::new_with_conn(conn_id),
-                                            tx_hash,
-                                        )
-                                        .map_err(|_| {
-                                            TaskError::Fatal(RunError::connection(
-                                                ConnectionError::missing_connection_try_event(),
-                                            ))
-                                        })?;
-                                }
-                                OpenConfirmConnection(open_confirm) => {
-                                    let conn_id = open_confirm.0.connection_id.unwrap();
-                                    chains
-                                        .a
-                                        .cache_ics_tx_hash(
-                                            CacheTxHashStatus::new_with_conn(conn_id),
-                                            tx_hash,
-                                        )
-                                        .map_err(|_| {
-                                            TaskError::Fatal(RunError::connection(
-                                                ConnectionError::missing_connection_confirm_event(),
-                                            ))
-                                        })?;
-                                }
-                                _ => todo!(),
+                            let conn_id = match event_with_height.event.clone() {
+                                OpenInitConnection(open_init) => open_init.0.connection_id,
+                                OpenTryConnection(open_try) => open_try.0.connection_id,
+                                OpenAckConnection(open_ack) => open_ack.0.connection_id,
+                                OpenConfirmConnection(open_confirm) => open_confirm.0.connection_id,
+                                _ => None,
+                            };
+                            if let Some(conn_id) = conn_id {
+                                chains
+                                    .a
+                                    .cache_ics_tx_hash(
+                                        CacheTxHashStatus::new_with_conn(conn_id),
+                                        tx_hash,
+                                    )
+                                    .map_err(|_| {
+                                        TaskError::Fatal(RunError::connection(
+                                            ConnectionError::fail_cache_tx_hash(
+                                                event_with_height.event.clone(),
+                                            ),
+                                        ))
+                                    })?;
                             }
                             let mut handshake_connection = RelayConnection::restore_from_event(
                                 chains.a.clone(),
