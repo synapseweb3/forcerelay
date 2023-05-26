@@ -14,11 +14,13 @@ use ckb_types::{
 };
 use eth_light_client_in_ckb_verification::types::packed::{
     Client as PackedClient, ClientReader as PackedClientReader, ProofUpdate as PackedProofUpdate,
+    ClientInfo as PackedClientInfo, ClientInfoReader as PackedClientInfoReader,
+    ClientTypeArgs as PackedClientTypeArgs,
 };
 
 use super::{
     prelude::{CellSearcher, TxCompleter},
-    rpc_client::RpcClient,
+    rpc_client::RpcClient, utils,
 };
 use crate::error::Error;
 
@@ -58,8 +60,96 @@ async fn search_contract_cell<S: CellSearcher + Sync + ?Sized>(
     Ok(cell)
 }
 
+// fn create_multi_client_cells(client_num: u8) {
+//     let info_cell = todo!();
+//     let client_cells = todo!();
+
+// }
+
+pub struct UpdateCells {
+    oldest: LiveCell,
+    latest: LiveCell,
+    info: LiveCell,
+}
+
 #[async_trait]
 pub trait TxAssembler: CellSearcher + TxCompleter {
+    async fn fetch_update_cells(
+        &self,
+        contract_typeid_args: &H256,
+        client_type_args: &PackedClientTypeArgs,
+    ) -> Result<Option<UpdateCells>, Error> {
+        let contract_typescript = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
+        let type_hash = contract_typescript.calc_script_hash();
+        // There are at most 255 cells
+        let cells_count = u8::from(client_type_args.cells_count().as_reader());
+        let cells = self
+            .search_cells_by_typescript(&type_hash, client_type_args.as_slice(), cells_count as u32)
+            .await?;
+
+        // As for the error handling here, the only "allowable" error is that user supply a wrong client type args,
+        // and we can't find any cells for it on chain. Otherwise, it means the on-chain data is corrupted.
+        if cells.len() == 0 {
+            return Ok(None)
+        } else if cells.len() != cells_count as usize {
+            panic!(
+                "fetched client cells count not match: expect {}, actual {}",
+                cells_count,
+                cells.len()
+            );
+        }
+        
+        let mut client_cells = vec![];
+        let mut client_info_cell_opt = None;
+        for cell in cells {
+            if PackedClientReader::verify(&cell.output_data, false).is_ok() {
+                client_cells.push(cell);
+            } else if PackedClientInfoReader::verify(&cell.output_data, false).is_ok() {
+                let prev = client_info_cell_opt.replace(cell);
+                if prev.is_some() {
+                    panic!(
+                        "multi client cell has more than one client info:\nfirst:\n{:?}\nsecond:\n{:?}",
+                        PackedClientInfo::new_unchecked(prev.unwrap().output_data),
+                        PackedClientInfo::new_unchecked(cell.output_data),
+                    );
+                }
+            } else {
+                panic!("multi client cell has invalid data: {:?}", cell.output_data);
+            }
+        }
+
+        let Some(client_info_cell) = client_info_cell_opt else {
+            panic!("on-chain data corrupted: client info cell not found");
+        };
+        let client_info = PackedClientInfo::new_unchecked(client_info_cell.output_data.clone());
+        let latest_id = u8::from(client_info.last_id().as_reader());
+        // -1 is for the client info cell
+        let oldest_id = (latest_id + 1) % (cells_count - 1);
+
+        let oldest = None;
+        let latest = None;
+
+        for cell in client_cells {
+            let client = PackedClient::new_unchecked(cell.output_data.clone());
+            let client_id = u8::from(client.id().as_reader());
+            if client_id == latest_id {
+                latest.replace(cell).expect("on-chain data corrupted");
+            } else if client_id == oldest_id {
+                oldest.replace(cell).expect("on-chain data corrupted");
+            }
+        }
+        let (Some(oldest), Some(latest)) = (oldest, latest) else {
+            panic!("on-chain data corrupted: oldest or latest client not found");
+        };
+        let update_cells = UpdateCells {
+            oldest,
+            latest,
+            info: client_info_cell,
+        };
+
+        Ok(Some(update_cells))
+    }
+
     async fn fetch_packed_client(
         &self,
         contract_typeid_args: &H256,

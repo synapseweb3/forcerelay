@@ -35,6 +35,10 @@ pub fn app_config() -> config::Reader<Config> {
     APPLICATION.config.read()
 }
 
+pub fn app_config_path() -> Option<&'static PathBuf>{
+    APPLICATION.config_path()
+}
+
 /// Cli Application
 #[derive(Debug)]
 pub struct CliApp {
