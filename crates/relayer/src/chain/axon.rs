@@ -171,7 +171,7 @@ impl ChainEndpoint for AxonChain {
             .map_err(|_| Error::web_socket(url.into()))?;
         let key_entry = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
         let wallet = key_entry.into_ether_wallet();
-        let client = Arc::new(SignerMiddleware::new(client.clone(), wallet));
+        let client = Arc::new(SignerMiddleware::new(client, wallet));
 
         let contract = Contract::new(config.contract_address, Arc::clone(&client));
 
@@ -1020,8 +1020,8 @@ impl AxonChain {
                 let bytes = msg.header.value.as_slice();
                 let type_url = msg.header.type_url;
                 let to = match type_url.as_str() {
-                    "HEADER_URL" => self.config.ckb_light_client_contract_address.clone(),
-                    "CELL_URL" => self.config.image_cell_contract_address.clone(),
+                    "HEADER_TYPE_URL" => self.config.ckb_light_client_contract_address,
+                    "CELL_TYPE_URL" => self.config.image_cell_contract_address,
                     type_url => {
                         return Err(Error::other_error(format!("unknown type_url {}", type_url)))
                     }
