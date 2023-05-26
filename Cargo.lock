@@ -284,9 +284,9 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "axon-tools"
-version = "0.0.8"
+version = "0.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4d858895e2d8232900b764c1f3068780f94fada5b27c3b6ceb89557b528ae7c"
+checksum = "4743b240d15489552e5723df36de15905ebb28afabb42d93a0438dc61ad8cc70"
 dependencies = [
  "bit-vec",
  "blst",
