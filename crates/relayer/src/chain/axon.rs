@@ -15,7 +15,10 @@ use tracing::warn;
 
 use crate::{
     account::Balance,
-    chain::{axon::contract::HeightData, requests::QueryHeight},
+    chain::{
+        axon::contract::{HeightData, UpdateClientFilter},
+        requests::QueryHeight,
+    },
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::{axon::AxonChainConfig, filter::port, ChainConfig},
     connection::ConnectionMsgType,
@@ -31,10 +34,15 @@ use crate::{
 use eth_light_client_in_ckb_prover::Receipts;
 use eth_light_client_in_ckb_verification::trie;
 use ethers::{
+    abi::{AbiDecode, AbiEncode},
     contract::ContractError,
-    prelude::EthLogDecode,
-    providers::Middleware,
-    types::{Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TxHash, U64},
+    prelude::{k256::ecdsa::SigningKey, EthLogDecode, SignerMiddleware},
+    providers::{Middleware, Provider, Ws},
+    signers::Wallet,
+    types::{
+        Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TransactionRequest, TxHash,
+        H160, U64,
+    },
     utils::{rlp, rlp::Encodable},
 };
 use futures::TryFutureExt;
@@ -52,6 +60,7 @@ use ibc_relayer_types::{
         ics02_client::{
             error::Error as ClientError,
             events::{NewBlock, UpdateClient},
+            msgs::update_client,
         },
         ics03_connection::{
             self,
@@ -78,6 +87,7 @@ use ibc_relayer_types::{
     proofs::Proofs,
     signer::Signer,
     timestamp::Timestamp,
+    tx_msg::Msg,
     Height,
 };
 use itertools::Itertools;
@@ -88,7 +98,7 @@ use self::{
     monitor::AxonEventMonitor,
 };
 
-type ContractProvider = ethers::providers::Provider<ethers::providers::Ws>;
+type ContractProvider = SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>;
 type Contract = OwnableIBCHandler<ContractProvider>;
 type ContractEvents = OwnableIBCHandlerEvents;
 
@@ -148,14 +158,18 @@ impl ChainEndpoint for AxonChain {
 
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: AxonChainConfig = config.try_into()?;
-        let keybase = KeyRing::new_secp256k1(Default::default(), "axon", &config.id).unwrap();
+        let keybase = KeyRing::new_secp256k1(Default::default(), "axon", &config.id)
+            .map_err(Error::key_base)?;
 
         let url = config.websocket_addr.clone();
         let rpc_client = rpc::AxonRpcClient::new(&url.clone().into());
-        let client = Arc::new(
-            rt.block_on(ContractProvider::connect(url.to_string()))
-                .map_err(|_| Error::web_socket(url.into()))?,
-        );
+        let client = rt
+            .block_on(Provider::<Ws>::connect(url.to_string()))
+            .map_err(|_| Error::web_socket(url.into()))?;
+        let key_entry = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
+        let wallet = key_entry.into_ether_wallet();
+        let client = Arc::new(SignerMiddleware::new(client.clone(), wallet));
+
         let contract = Contract::new(config.contract_address, Arc::clone(&client));
 
         let light_client = AxonLightClient::from_config(&config, rt.clone())?;

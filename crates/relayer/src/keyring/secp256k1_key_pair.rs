@@ -8,6 +8,7 @@ use bitcoin::{
 use ckb_hash::blake2b_256;
 use ckb_sdk::{AddressPayload, NetworkType};
 use digest::Digest;
+use ethers::{prelude::k256::ecdsa::SigningKey, signers::Wallet};
 use generic_array::{typenum::U32, GenericArray};
 use hdpath::StandardHDPath;
 use ripemd::Ripemd160;
@@ -253,6 +254,11 @@ impl Secp256k1KeyPair {
             account: payload.display_with_network(network, false),
             ..self
         }
+    }
+
+    pub fn into_ether_wallet(self) -> Wallet<SigningKey> {
+        let setrect_bytes = self.private_key.secret_bytes();
+        Wallet::from_bytes(&setrect_bytes).unwrap()
     }
 
     #[cfg(test)]
