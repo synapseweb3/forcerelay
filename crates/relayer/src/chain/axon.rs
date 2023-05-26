@@ -8,7 +8,10 @@ use std::{
     thread,
 };
 
-use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
+use axon_tools::{
+    ckb_light_client::CellBlockUpdate,
+    types::{AxonBlock, Proof as AxonProof, Validator},
+};
 use bytes::Bytes;
 use eth2_types::Hash256;
 use tracing::warn;
@@ -1010,6 +1013,26 @@ impl AxonChain {
     fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
         let type_url = message.type_url.clone();
         let tx_receipt = match type_url.as_str() {
+            update_client::TYPE_URL => {
+                let msg = update_client::MsgUpdateClient::from_any(message).map_err(|e| {
+                    Error::other_error(format!("fail to decode MsgUpdateClient {}", e))
+                })?;
+                let bytes = msg.header.value.as_slice();
+                let type_url = msg.header.type_url;
+                let to = match type_url.as_str() {
+                    "HEADER_URL" => self.config.ckb_light_client_contract_address.clone(),
+                    "CELL_URL" => self.config.image_cell_contract_address.clone(),
+                    type_url => {
+                        return Err(Error::other_error(format!("unknown type_url {}", type_url)))
+                    }
+                };
+
+                let tx = TransactionRequest::new().to(to).data(bytes.to_vec());
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> = self
+                    .rt
+                    .block_on(async { Ok(self.client.send_transaction(tx, None).await?.await?) });
+                tx_receipt.map_err(convert_err)?
+            }
             conn_open_init::TYPE_URL => {
                 let msg: contract::MsgConnectionOpenInit = message.try_into()?;
                 let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
@@ -1177,6 +1200,7 @@ impl AxonChain {
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
             match type_url.as_str() {
+                update_client::TYPE_URL => Some(Ok(UpdateClientFilter(Default::default()))),
                 conn_open_init::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(OpenInitConnectionFilter(_))))
                 }
