@@ -134,7 +134,7 @@ pub fn compute_fork_data_root(
 pub fn is_aggregate_valid(sig: &SignatureBytes, msg: H256, pks: &[&PublicKey]) -> bool {
     let valid = AggregateSignature::deserialize(sig.as_ref())
         .ok()
-        .map(|signature| signature.eth_fast_aggregate_verify(msg, pks));
+        .map(|signature| signature.fast_aggregate_verify(msg, pks));
     valid.unwrap_or(false)
 }
 
