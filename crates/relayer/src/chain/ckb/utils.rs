@@ -1,5 +1,6 @@
+use ckb_hash::BLAKE2B_LEN;
 use ckb_jsonrpc_types::Status;
-use ckb_types::H256;
+use ckb_types::{packed::CellInput, H256};
 use eth2_types::EthSpec;
 use eth_light_client_in_ckb_verification::mmr::{self, HeaderWithCache};
 use eth_light_client_in_ckb_verification::types::{
@@ -350,6 +351,17 @@ pub async fn wait_ckb_transaction_committed(
         }
     }
     Ok(())
+}
+
+// Calculate type id for multi-client creation.
+pub fn calculate_type_id(first_input: &CellInput, cell_count: usize) -> [u8; BLAKE2B_LEN] {
+    let mut blake2b = ckb_hash::new_blake2b();
+    blake2b.update(first_input.as_slice());
+    blake2b.update(&(cell_count as u64).to_le_bytes());
+
+    let mut ret = [0u8; BLAKE2B_LEN];
+    blake2b.finalize(&mut ret);
+    ret
 }
 
 #[cfg(test)]

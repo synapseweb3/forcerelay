@@ -13,14 +13,15 @@ use ckb_types::{
     H256,
 };
 use eth_light_client_in_ckb_verification::types::packed::{
-    Client as PackedClient, ClientReader as PackedClientReader, ProofUpdate as PackedProofUpdate,
-    ClientInfo as PackedClientInfo, ClientInfoReader as PackedClientInfoReader,
-    ClientTypeArgs as PackedClientTypeArgs,
+    Client as PackedClient, ClientInfo as PackedClientInfo,
+    ClientInfoReader as PackedClientInfoReader, ClientReader as PackedClientReader,
+    ClientTypeArgs as PackedClientTypeArgs, Hash as PackedHash, ProofUpdate as PackedProofUpdate,
 };
 
 use super::{
     prelude::{CellSearcher, TxCompleter},
-    rpc_client::RpcClient, utils,
+    rpc_client::RpcClient,
+    utils,
 };
 use crate::error::Error;
 
@@ -60,16 +61,10 @@ async fn search_contract_cell<S: CellSearcher + Sync + ?Sized>(
     Ok(cell)
 }
 
-// fn create_multi_client_cells(client_num: u8) {
-//     let info_cell = todo!();
-//     let client_cells = todo!();
-
-// }
-
 pub struct UpdateCells {
-    oldest: LiveCell,
-    latest: LiveCell,
-    info: LiveCell,
+    pub oldest: LiveCell,
+    pub latest: LiveCell,
+    pub info: LiveCell,
 }
 
 #[async_trait]
@@ -90,7 +85,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         // As for the error handling here, the only "allowable" error is that user supply a wrong client type args,
         // and we can't find any cells for it on chain. Otherwise, it means the on-chain data is corrupted.
         if cells.len() == 0 {
-            return Ok(None)
+            return Ok(None);
         } else if cells.len() != cells_count as usize {
             panic!(
                 "fetched client cells count not match: expect {}, actual {}",
@@ -98,14 +93,14 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
                 cells.len()
             );
         }
-        
+
         let mut client_cells = vec![];
         let mut client_info_cell_opt = None;
         for cell in cells {
             if PackedClientReader::verify(&cell.output_data, false).is_ok() {
                 client_cells.push(cell);
             } else if PackedClientInfoReader::verify(&cell.output_data, false).is_ok() {
-                let prev = client_info_cell_opt.replace(cell);
+                let prev = client_info_cell_opt.replace(cell.clone());
                 if prev.is_some() {
                     panic!(
                         "multi client cell has more than one client info:\nfirst:\n{:?}\nsecond:\n{:?}",
@@ -126,8 +121,8 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         // -1 is for the client info cell
         let oldest_id = (latest_id + 1) % (cells_count - 1);
 
-        let oldest = None;
-        let latest = None;
+        let mut oldest = None;
+        let mut latest = None;
 
         for cell in client_cells {
             let client = PackedClient::new_unchecked(cell.output_data.clone());
@@ -177,14 +172,69 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         address: &Address,
         clients: Vec<PackedClient>,
         client_info: PackedClientInfo,
+        lock_typeid_args: &H256,
+        contract_typeid_args: &H256,
         packed_proof_update: PackedProofUpdate,
-    ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error>
-    {
-        let type_script: packed::Script = todo!();
-        let lock_script: packed::Script = todo!();
+    ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error> {
+        let cells_count = (clients.len() + 1) as u8;
 
-        let type_celldep: packed::CellDep = todo!();
-        let lock_celldep: packed::CellDep = todo!();
+        let contract_script = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
+        let contract_script_hash = contract_script.calc_script_hash();
+        let contract_celldep = {
+            let contract_cell =
+                search_contract_cell(self, &contract_script, contract_typeid_args).await?;
+            packed::CellDep::new_builder()
+                .out_point(contract_cell.out_point)
+                .dep_type(DepType::Code.into())
+                .build()
+        };
+        let lock_script = make_typeid_script(lock_typeid_args.as_bytes().to_vec());
+        let lock_celldep = {
+            let cell = search_contract_cell(self, &lock_script, lock_typeid_args).await?;
+            packed::CellDep::new_builder()
+                .out_point(cell.out_point)
+                .dep_type(DepType::Code.into())
+                .build()
+        };
+
+        // We have to get one input cell to calculate the type id for those new cells.
+        let mut _excessive_capacity = 0;
+        let input_cells = self
+            .search_cells_by_address_and_capacity(address, 1, &mut _excessive_capacity)
+            .await?;
+        let inputs_capacity: u64 = input_cells
+            .iter()
+            .map(|c| Unpack::<u64>::unpack(&c.output.capacity()))
+            .sum();
+        let (inputs, mut inputs_as_cell_outputs): (Vec<packed::CellInput>, Vec<packed::CellOutput>) =
+            input_cells
+                .into_iter()
+                .map(|cell| {
+                    let input = packed::CellInput::new(cell.out_point, 0);
+                    let input_as_cell_output = cell.output;
+                    (input, input_as_cell_output)
+                })
+                .unzip();
+
+        // TODO: how to avoid those tedious type conversions?
+        let type_script: packed::Script = {
+            let first = inputs.first().expect("input cell not found");
+            let type_id = {
+                let type_id = utils::calculate_type_id(first, cells_count as usize);
+                PackedHash::from_slice(type_id.as_slice()).expect("build type id")
+            };
+            let client_type_args = PackedClientTypeArgs::new_builder()
+                .cells_count(packed::Byte::new(cells_count))
+                .type_id(type_id)
+                .build();
+            let args = packed::Bytes::from_slice(client_type_args.as_slice())
+                .expect("build type script args");
+            packed::Script::new_builder()
+                .code_hash(contract_script_hash)
+                .hash_type(ScriptHashType::Type.into())
+                .args(args)
+                .build()
+        };
 
         let mut outputs_data = vec![client_info.as_slice().pack()];
         outputs_data.extend(clients.into_iter().map(|client| client.as_slice().pack()));
@@ -209,17 +259,20 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             witness_args.as_bytes().pack()
         };
         let tx = TransactionView::new_advanced_builder()
+            .inputs(inputs)
             .outputs(outputs)
             .outputs_data(outputs_data)
             .witness(witness)
-            .cell_dep(type_celldep)
+            .cell_dep(contract_celldep)
             .cell_dep(lock_celldep)
             .build();
 
         let fee_rate = 3000;
-        self
-            .complete_tx_with_secp256k1_change(tx, address, 0, fee_rate)
+        let (tx, mut new_inputs_as_cell_outputs) = self
+            .complete_tx_with_secp256k1_change(tx, address, inputs_capacity, fee_rate)
             .await?;
+        inputs_as_cell_outputs.append(&mut new_inputs_as_cell_outputs);
+        Ok((tx, inputs_as_cell_outputs))
     }
 
     async fn assemble_update_multi_client_transaction(
@@ -228,22 +281,47 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         oldest_cell: LiveCell,
         info_cell: LiveCell,
         updated_client: PackedClient,
+        client_type_args: &PackedClientTypeArgs,
+        lock_typeid_args: &H256,
+        contract_typeid_args: &H256,
         packed_proof_update: PackedProofUpdate,
-    ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error>
-    {
-        let type_script: packed::Script = todo!();
-        let lock_script: packed::Script = todo!();
+    ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error> {
+        let contract_script = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
+        let contract_script_hash = contract_script.calc_script_hash();
+        let contract_celldep = {
+            let contract_cell =
+                search_contract_cell(self, &contract_script, contract_typeid_args).await?;
+            packed::CellDep::new_builder()
+                .out_point(contract_cell.out_point)
+                .dep_type(DepType::Code.into())
+                .build()
+        };
 
-        let type_celldep: packed::CellDep = todo!();
-        let lock_celldep: packed::CellDep = todo!();
+        let lock_script = make_typeid_script(lock_typeid_args.as_bytes().to_vec());
+        let lock_celldep = {
+            let cell = search_contract_cell(self, &lock_script, lock_typeid_args).await?;
+            packed::CellDep::new_builder()
+                .out_point(cell.out_point)
+                .dep_type(DepType::Code.into())
+                .build()
+        };
+        let type_script: packed::Script = {
+            let args = packed::Bytes::from_slice(client_type_args.as_slice())
+                .expect("build type script args");
+            packed::Script::new_builder()
+                .code_hash(contract_script_hash)
+                .hash_type(ScriptHashType::Type.into())
+                .args(args)
+                .build()
+        };
 
         let (new_info_output, new_info_output_data) = {
             let last_id = {
-                let oldest_client = PackedClient::new_unchecked(oldest_cell.output_data);
+                let oldest_client = PackedClient::new_unchecked(oldest_cell.output_data.clone());
                 u8::from(oldest_client.id().as_reader())
             };
 
-            let info = PackedClientInfo::new_unchecked(info_cell.output_data)
+            let info = PackedClientInfo::new_unchecked(info_cell.output_data.clone())
                 .as_builder()
                 .last_id(last_id.into())
                 .build();
@@ -268,12 +346,19 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
 
         // Later handling outside requires the CellOutput form of inputs.
         let input_cells = [oldest_cell, info_cell];
-        let inputs_capacity: u64 = input_cells.iter().map(|c| Unpack::<u64>::unpack(&c.output.capacity())).sum();
-        let (inputs, inputs_as_cell_outputs): (Vec<packed::CellInput>, Vec<packed::CellOutput>) = input_cells.into_iter().map(|cell| {
-            let input = packed::CellInput::new(cell.out_point, 0);
-            let input_as_cell_output = cell.output;
-            (input, input_as_cell_output)
-        }).unzip();
+        let inputs_capacity: u64 = input_cells
+            .iter()
+            .map(|c| Unpack::<u64>::unpack(&c.output.capacity()))
+            .sum();
+        let (inputs, mut inputs_as_cell_outputs): (Vec<packed::CellInput>, Vec<packed::CellOutput>) =
+            input_cells
+                .into_iter()
+                .map(|cell| {
+                    let input = packed::CellInput::new(cell.out_point, 0);
+                    let input_as_cell_output = cell.output;
+                    (input, input_as_cell_output)
+                })
+                .unzip();
 
         let witness = {
             let input_type_args = packed::BytesOpt::new_builder()
@@ -289,7 +374,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             .outputs([new_info_output, new_client_output])
             .outputs_data([new_info_output_data, new_client_output_data])
             .witness(witness)
-            .cell_dep(type_celldep)
+            .cell_dep(contract_celldep)
             .cell_dep(lock_celldep)
             .build();
 

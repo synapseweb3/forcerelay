@@ -5,8 +5,8 @@ use ckb_types::packed::CellOutput;
 use ckb_types::prelude::*;
 use eth2_types::MainnetEthSpec;
 use eth_light_client_in_ckb_verification::types::{
-    packed::Client as PackedClient, prelude::Unpack, packed::ClientInfo as PackedClinetInfo,
-    packed::ClientTypeArgs as PackedClientTypeArgs,
+    packed::Client as PackedClient, packed::ClientInfo as PackedClinetInfo,
+    packed::ClientTypeArgs as PackedClientTypeArgs, prelude::Unpack,
 };
 use ibc_proto::ibc::apps::fee::v1::{
     QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse,
@@ -97,7 +97,7 @@ mod tests;
 
 pub mod prelude {
     pub use super::{
-        assembler::{ TxAssembler, UpdateCells },
+        assembler::{TxAssembler, UpdateCells},
         communication::{CkbReader, CkbWriter, Response},
         helper::{CellSearcher, TxCompleter},
     };
@@ -133,21 +133,31 @@ impl CkbChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let chain_id = self.id().to_string();
         let client_type_args: PackedClientTypeArgs = todo!();
-        let client_info: PackedClinetInfo = todo!();
         let client_count = {
             let cells_count = u8::from(client_type_args.cells_count().as_reader());
-            cells_count.checked_sub(1).expect(&format!("invalid cells count: {cells_count}"))
+            cells_count
+                .checked_sub(1)
+                .expect(&format!("invalid cells count: {cells_count}"))
         };
-        let minimal_updates_count = u8::from(client_info.minimal_updates_count().as_reader());
+        // let minimal_updates_count = u8::from(client_info.minimal_updates_count().as_reader());
+        // TODO: use config value
+        let minimal_updates_count = 1;
 
         // let UpdateCells { oldest, latest, info, }
-        let update_cells = self.rpc_client
+        let update_cells = self
+            .rpc_client
             .fetch_update_cells(
                 &self.config.lightclient_contract_typeargs,
-                &client_type_args
-            ).await?;
-        
-        if let Some(UpdateCells { oldest, latest, info}) = update_cells {
+                &client_type_args,
+            )
+            .await?;
+
+        if let Some(UpdateCells {
+            oldest: _,
+            latest,
+            info: _,
+        }) = update_cells
+        {
             let latest_client = PackedClient::new_unchecked(latest.output_data);
             self.cached_onchain_packed_client = Some(latest_client);
 
@@ -174,30 +184,43 @@ impl CkbChain {
                 &self.storage,
                 None,
             )?;
-        
-        if packed_client.maximal_slot().unpack() - packed_client.minimal_slot().unpack() + 1 < minimal_updates_count as u64 {
+
+        if packed_client.maximal_slot().unpack() - packed_client.minimal_slot().unpack() + 1
+            < minimal_updates_count as u64
+        {
             // TODO: better error type
             if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
                 return Err(err.into());
             }
-            return Err(Error::other_error("not enough updates to create multi-client".to_owned()));
+            return Err(Error::other_error(
+                "not enough updates to create multi-client".to_owned(),
+            ));
         }
-        
-        let clients = (0..client_count).map(|i| {
-            let client = packed_client.clone();
-            let client = client
-                .as_builder()
-                .id(i.into())
-                .build();
-            client
-        }).collect::<Vec<_>>();
+
+        let clients = (0..client_count)
+            .map(|i| {
+                let client = packed_client.clone();
+                let client = client.as_builder().id(i.into()).build();
+                client
+            })
+            .collect::<Vec<_>>();
         let client_info = PackedClinetInfo::new_builder()
             .last_id(0.into())
             .minimal_updates_count(minimal_updates_count.into())
             .build();
 
         let tx_assembler_address = self.tx_assembler_address()?;
-        let (tx, inputs) = self.rpc_client.assemble_create_multi_client_transaction(&tx_assembler_address, clients, packed_proof_update).await?;
+        let (tx, inputs) = self
+            .rpc_client
+            .assemble_create_multi_client_transaction(
+                &tx_assembler_address,
+                clients,
+                client_info,
+                &self.config.lightclient_lock_typeargs,
+                &self.config.lightclient_contract_typeargs,
+                packed_proof_update,
+            )
+            .await?;
         self.sign_and_send_transaction(tx, inputs).map_err(|err| {
             if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
                 return err.into();
@@ -215,12 +238,12 @@ impl CkbChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let chain_id = self.id().to_string();
         let client_type_args: PackedClientTypeArgs = todo!();
-        let client_info: PackedClinetInfo = todo!();
         let client_count = {
             let cells_count = u8::from(client_type_args.cells_count().as_reader());
-            cells_count.checked_sub(1).expect(&format!("invalid cells count: {cells_count}"))
+            cells_count
+                .checked_sub(1)
+                .expect(&format!("invalid cells count: {cells_count}"))
         };
-        let minimal_updates_count = u8::from(client_info.minimal_updates_count().as_reader());
 
         let Some(UpdateCells { oldest, latest, info}) = self.rpc_client
             .fetch_update_cells(
@@ -232,6 +255,11 @@ impl CkbChain {
         };
         let latest_client = PackedClient::new_unchecked(latest.output_data);
         self.cached_onchain_packed_client = Some(latest_client);
+
+        let minimal_updates_count = {
+            let client_info = PackedClinetInfo::new_unchecked(info.output_data);
+            u8::from(client_info.minimal_updates_count().as_reader())
+        };
 
         utils::align_native_and_onchain_updates(
             &chain_id,
@@ -247,20 +275,34 @@ impl CkbChain {
                 &self.storage,
                 None,
             )?;
-        
-        if updated_client.maximal_slot().unpack() - updated_client.minimal_slot().unpack() + 1 < minimal_updates_count as u64 {
+
+        if updated_client.maximal_slot().unpack() - updated_client.minimal_slot().unpack() + 1
+            < minimal_updates_count as u64
+        {
             // TODO: better error type
             if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
                 return Err(err.into());
             }
             // TODO: This may require some handling outside to retry.
-            return Err(Error::other_error("not enough updates to update multi-client".to_owned()));
+            return Err(Error::other_error(
+                "not enough updates to update multi-client".to_owned(),
+            ));
         }
 
         let tx_assembler_address = self.tx_assembler_address()?;
-        let (tx, inputs) = self.rpc_client.assemble_update_multi_client_transaction(
-            &tx_assembler_address, oldest, info, updated_client, packed_proof_update
-        ).await?;
+        let (tx, inputs) = self
+            .rpc_client
+            .assemble_update_multi_client_transaction(
+                &tx_assembler_address,
+                oldest,
+                info,
+                updated_client,
+                &client_type_args,
+                &self.config.lightclient_lock_typeargs,
+                &self.config.lightclient_contract_typeargs,
+                packed_proof_update,
+            )
+            .await?;
         self.sign_and_send_transaction(tx, inputs).map_err(|err| {
             if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
                 return err.into();
