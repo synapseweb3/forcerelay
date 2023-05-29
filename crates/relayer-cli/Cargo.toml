@@ -53,7 +53,7 @@ serde                    = { version = "1.0", features = ["serde_derive"] }
 serde_json               = "1"
 signal-hook              = "0.3.15"
 subtle-encoding          = "0.5"
-tokio                    = { version = "1.0", features = ["full"] }
+tokio                    = { version = "1.28", features = ["full"] }
 tracing                  = "0.1.36"
 tracing-subscriber       = { version = "0.3.14", features = ["fmt", "env-filter", "json"]}
 
