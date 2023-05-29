@@ -8,14 +8,20 @@ use std::{
     thread,
 };
 
-use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
+use axon_tools::{
+    ckb_light_client::CellBlockUpdate,
+    types::{AxonBlock, Proof as AxonProof, Validator},
+};
 use bytes::Bytes;
 use eth2_types::Hash256;
 use tracing::warn;
 
 use crate::{
     account::Balance,
-    chain::{axon::contract::HeightData, requests::QueryHeight},
+    chain::{
+        axon::contract::{HeightData, UpdateClientFilter},
+        requests::QueryHeight,
+    },
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::{axon::AxonChainConfig, filter::port, ChainConfig},
     connection::ConnectionMsgType,
@@ -31,10 +37,15 @@ use crate::{
 use eth_light_client_in_ckb_prover::Receipts;
 use eth_light_client_in_ckb_verification::trie;
 use ethers::{
+    abi::{AbiDecode, AbiEncode},
     contract::ContractError,
-    prelude::EthLogDecode,
-    providers::Middleware,
-    types::{Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TxHash, U64},
+    prelude::{k256::ecdsa::SigningKey, EthLogDecode, SignerMiddleware},
+    providers::{Middleware, Provider, Ws},
+    signers::Wallet,
+    types::{
+        Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TransactionRequest, TxHash,
+        H160, U64,
+    },
     utils::{rlp, rlp::Encodable},
 };
 use futures::TryFutureExt;
@@ -52,6 +63,7 @@ use ibc_relayer_types::{
         ics02_client::{
             error::Error as ClientError,
             events::{NewBlock, UpdateClient},
+            msgs::update_client,
         },
         ics03_connection::{
             self,
@@ -78,6 +90,7 @@ use ibc_relayer_types::{
     proofs::Proofs,
     signer::Signer,
     timestamp::Timestamp,
+    tx_msg::Msg,
     Height,
 };
 use itertools::Itertools;
@@ -88,7 +101,7 @@ use self::{
     monitor::AxonEventMonitor,
 };
 
-type ContractProvider = ethers::providers::Provider<ethers::providers::Ws>;
+type ContractProvider = SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>;
 type Contract = OwnableIBCHandler<ContractProvider>;
 type ContractEvents = OwnableIBCHandlerEvents;
 
@@ -148,14 +161,18 @@ impl ChainEndpoint for AxonChain {
 
     fn bootstrap(config: ChainConfig, rt: Arc<TokioRuntime>) -> Result<Self, Error> {
         let config: AxonChainConfig = config.try_into()?;
-        let keybase = KeyRing::new_secp256k1(Default::default(), "axon", &config.id).unwrap();
+        let keybase = KeyRing::new_secp256k1(Default::default(), "axon", &config.id)
+            .map_err(Error::key_base)?;
 
         let url = config.websocket_addr.clone();
         let rpc_client = rpc::AxonRpcClient::new(&url.clone().into());
-        let client = Arc::new(
-            rt.block_on(ContractProvider::connect(url.to_string()))
-                .map_err(|_| Error::web_socket(url.into()))?,
-        );
+        let client = rt
+            .block_on(Provider::<Ws>::connect(url.to_string()))
+            .map_err(|_| Error::web_socket(url.into()))?;
+        let key_entry = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
+        let wallet = key_entry.into_ether_wallet();
+        let client = Arc::new(SignerMiddleware::new(client, wallet));
+
         let contract = Contract::new(config.contract_address, Arc::clone(&client));
 
         let light_client = AxonLightClient::from_config(&config, rt.clone())?;
@@ -996,6 +1013,26 @@ impl AxonChain {
     fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
         let type_url = message.type_url.clone();
         let tx_receipt = match type_url.as_str() {
+            update_client::TYPE_URL => {
+                let msg = update_client::MsgUpdateClient::from_any(message).map_err(|e| {
+                    Error::other_error(format!("fail to decode MsgUpdateClient {}", e))
+                })?;
+                let bytes = msg.header.value.as_slice();
+                let type_url = msg.header.type_url;
+                let to = match type_url.as_str() {
+                    "HEADER_TYPE_URL" => self.config.ckb_light_client_contract_address,
+                    "CELL_TYPE_URL" => self.config.image_cell_contract_address,
+                    type_url => {
+                        return Err(Error::other_error(format!("unknown type_url {}", type_url)))
+                    }
+                };
+
+                let tx = TransactionRequest::new().to(to).data(bytes.to_vec());
+                let tx_receipt: eyre::Result<Option<TransactionReceipt>> = self
+                    .rt
+                    .block_on(async { Ok(self.client.send_transaction(tx, None).await?.await?) });
+                tx_receipt.map_err(convert_err)?
+            }
             conn_open_init::TYPE_URL => {
                 let msg: contract::MsgConnectionOpenInit = message.try_into()?;
                 let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
@@ -1163,6 +1200,7 @@ impl AxonChain {
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
             match type_url.as_str() {
+                update_client::TYPE_URL => Some(Ok(UpdateClientFilter(Default::default()))),
                 conn_open_init::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(OpenInitConnectionFilter(_))))
                 }

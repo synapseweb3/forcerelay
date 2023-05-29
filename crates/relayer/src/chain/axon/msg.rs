@@ -4,6 +4,7 @@ use ethers::types::Bytes;
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::{
     core::{
+        ics02_client::events as client_events,
         ics03_connection::{
             self,
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
@@ -747,8 +748,19 @@ impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
             }
             WriteAcknowledgementFilter(event) => todo!(),
             CreateClientFilter(_) => todo!(),
+            UpdateClientFilter(event) => {
+                let event = client_events::UpdateClient {
+                    common: client_events::Attributes {
+                        client_id: event.client_id.parse().unwrap(),
+                        client_type:
+                            ibc_relayer_types::core::ics02_client::client_type::ClientType::Axon,
+                        consensus_height: Height::new(0, 1).unwrap(),
+                    },
+                    header: None,
+                };
+                IbcEvent::UpdateClient(event)
+            }
             OwnershipTransferredFilter(_) => todo!(),
-            UpdateClientFilter(_) => todo!(),
         };
         event
     }

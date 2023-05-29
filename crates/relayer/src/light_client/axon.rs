@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
 use ethers::prelude::{Provider, Ws};
 use futures::TryFutureExt;
@@ -43,7 +44,7 @@ impl LightClient {
 
     pub fn bootstrap<T: AxonRpc + Sync + Send + 'static>(
         &self,
-        provider: Arc<Provider<Ws>>,
+        provider: Arc<SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>>,
         rpc: T,
         epoch_len: u64,
     ) -> Result<(), Error> {
