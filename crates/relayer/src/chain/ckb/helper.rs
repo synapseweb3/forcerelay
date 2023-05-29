@@ -67,7 +67,8 @@ pub trait CellSearcher: CkbReader {
             .hash_type(ScriptHashType::Type.into())
             .args(type_args.pack())
             .build();
-        self.search_cells(&typescript, PrimaryScriptType::Type, limit).await
+        self.search_cells(&typescript, PrimaryScriptType::Type, limit)
+            .await
     }
 
     async fn search_cells_by_address_and_capacity(

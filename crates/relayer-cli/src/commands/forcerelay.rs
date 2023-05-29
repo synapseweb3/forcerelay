@@ -9,10 +9,10 @@ use abscissa_core::{Command, Runnable};
 use tracing::error_span;
 
 use ibc_relayer::chain::handle::{CachingChainHandle, ChainHandle};
+use ibc_relayer::config::GLOBAL_CONFIG_PATH;
 use ibc_relayer::event::monitor::{Error as EventError, ErrorDetail as EventErrorDetail};
 use ibc_relayer::registry::SharedRegistry;
 use ibc_relayer::supervisor::forcerelay::handle_eth_ckb_event_batch;
-use ibc_relayer::config::CHAIN_CONFIG_PATH;
 use ibc_relayer::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 
@@ -40,9 +40,9 @@ impl Runnable for EthCkbCmd {
     fn run(&self) {
         let config = (*app_config()).clone();
         let config_path = app_config_path().expect("config path isn't set");
-        if let Err(e) = CHAIN_CONFIG_PATH.set(config_path) {
+        if let Err(e) = GLOBAL_CONFIG_PATH.set(config_path) {
             let path = e.into();
-            let cur_path = CHAIN_CONFIG_PATH.get().unwrap();
+            let cur_path = GLOBAL_CONFIG_PATH.get().unwrap();
             assert_eq!(path, cur_path, "config path is changed");
         }
 

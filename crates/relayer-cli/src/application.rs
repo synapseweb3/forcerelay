@@ -35,7 +35,7 @@ pub fn app_config() -> config::Reader<Config> {
     APPLICATION.config.read()
 }
 
-pub fn app_config_path() -> Option<&'static PathBuf>{
+pub fn app_config_path() -> Option<&'static PathBuf> {
     APPLICATION.config_path()
 }
 

@@ -175,7 +175,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         lock_typeid_args: &H256,
         contract_typeid_args: &H256,
         packed_proof_update: PackedProofUpdate,
-    ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error> {
+    ) -> Result<(TransactionView, Vec<packed::CellOutput>, H256), Error> {
         let cells_count = (clients.len() + 1) as u8;
 
         let contract_script = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
@@ -216,16 +216,16 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
                 })
                 .unzip();
 
-        // TODO: how to avoid those tedious type conversions?
-        let type_script: packed::Script = {
+        let new_cells_type_id = {
             let first = inputs.first().expect("input cell not found");
-            let type_id = {
-                let type_id = utils::calculate_type_id(first, cells_count as usize);
-                PackedHash::from_slice(type_id.as_slice()).expect("build type id")
-            };
+            let type_id = utils::calculate_type_id(first, cells_count as usize);
+            H256(type_id)
+        };
+        let type_script: packed::Script = {
+            let packed_type_id = PackedHash::from_slice(new_cells_type_id.0.as_slice()).expect("build type id");
             let client_type_args = PackedClientTypeArgs::new_builder()
                 .cells_count(packed::Byte::new(cells_count))
-                .type_id(type_id)
+                .type_id(packed_type_id)
                 .build();
             let args = packed::Bytes::from_slice(client_type_args.as_slice())
                 .expect("build type script args");
@@ -272,7 +272,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             .complete_tx_with_secp256k1_change(tx, address, inputs_capacity, fee_rate)
             .await?;
         inputs_as_cell_outputs.append(&mut new_inputs_as_cell_outputs);
-        Ok((tx, inputs_as_cell_outputs))
+        Ok((tx, inputs_as_cell_outputs, new_cells_type_id))
     }
 
     async fn assemble_update_multi_client_transaction(
@@ -344,7 +344,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             (output, output_data)
         };
 
-        // Later handling outside requires the CellOutput form of inputs.
+        // Later handling requires the CellOutput form of inputs.
         let input_cells = [oldest_cell, info_cell];
         let inputs_capacity: u64 = input_cells
             .iter()
