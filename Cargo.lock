@@ -1423,15 +1423,15 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.15.5"
+version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d79fbe8970a77e3e34151cc13d3b3e248aa0faaecb9f6091fa07ebefe5ad60"
+checksum = "c926e00cc70edefdc64d3a5ff31cc65bb97a3460097762bd23afb4d8145fccf8"
 dependencies = [
  "encode_unicode",
  "lazy_static",
  "libc",
  "unicode-width",
- "windows-sys 0.42.0",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1839,7 +1839,7 @@ version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af3c796f3b0b408d9fd581611b47fa850821fcb84aa640b83a3c1a5be2d691f2"
 dependencies = [
- "console 0.15.5",
+ "console 0.15.7",
  "shell-words",
  "tempfile",
  "zeroize",
@@ -3569,7 +3569,7 @@ dependencies = [
  "clap 3.2.23",
  "clap_complete 3.2.5",
  "color-eyre",
- "console 0.15.5",
+ "console 0.15.7",
  "crossbeam-channel 0.5.7",
  "dialoguer 0.10.3",
  "dirs-next",
@@ -3828,7 +3828,7 @@ version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d207dc617c7a380ab07ff572a6e52fa202a2a8f355860ac9c38e23f8196be1b"
 dependencies = [
- "console 0.15.5",
+ "console 0.14.1",
  "lazy_static",
  "number_prefix",
  "regex",
