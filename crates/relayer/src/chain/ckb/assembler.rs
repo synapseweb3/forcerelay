@@ -172,6 +172,135 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         }
     }
 
+    async fn assemble_create_multi_client_transaction(
+        &self,
+        address: &Address,
+        clients: Vec<PackedClient>,
+        client_info: PackedClientInfo,
+        packed_proof_update: PackedProofUpdate,
+    ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error>
+    {
+        let type_script: packed::Script = todo!();
+        let lock_script: packed::Script = todo!();
+
+        let type_celldep: packed::CellDep = todo!();
+        let lock_celldep: packed::CellDep = todo!();
+
+        let mut outputs_data = vec![client_info.as_slice().pack()];
+        outputs_data.extend(clients.into_iter().map(|client| client.as_slice().pack()));
+        let outputs = outputs_data
+            .iter()
+            .map(|data| {
+                packed::CellOutput::new_builder()
+                    .lock(lock_script.clone())
+                    .type_(Some(type_script.clone()).pack())
+                    .build_exact_capacity(Capacity::bytes(data.len()).unwrap())
+                    .expect("build ibc contract output")
+            })
+            .collect::<Vec<_>>();
+
+        let witness = {
+            let input_type_args = packed::BytesOpt::new_builder()
+                .set(Some(packed_proof_update.as_slice().pack()))
+                .build();
+            let witness_args = packed::WitnessArgs::new_builder()
+                .input_type(input_type_args)
+                .build();
+            witness_args.as_bytes().pack()
+        };
+        let tx = TransactionView::new_advanced_builder()
+            .outputs(outputs)
+            .outputs_data(outputs_data)
+            .witness(witness)
+            .cell_dep(type_celldep)
+            .cell_dep(lock_celldep)
+            .build();
+
+        let fee_rate = 3000;
+        self
+            .complete_tx_with_secp256k1_change(tx, address, 0, fee_rate)
+            .await?;
+    }
+
+    async fn assemble_update_multi_client_transaction(
+        &self,
+        address: &Address,
+        oldest_cell: LiveCell,
+        info_cell: LiveCell,
+        updated_client: PackedClient,
+        packed_proof_update: PackedProofUpdate,
+    ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error>
+    {
+        let type_script: packed::Script = todo!();
+        let lock_script: packed::Script = todo!();
+
+        let type_celldep: packed::CellDep = todo!();
+        let lock_celldep: packed::CellDep = todo!();
+
+        let (new_info_output, new_info_output_data) = {
+            let last_id = {
+                let oldest_client = PackedClient::new_unchecked(oldest_cell.output_data);
+                u8::from(oldest_client.id().as_reader())
+            };
+
+            let info = PackedClientInfo::new_unchecked(info_cell.output_data)
+                .as_builder()
+                .last_id(last_id.into())
+                .build();
+            let output_data = info.as_slice().pack();
+            let output = packed::CellOutput::new_builder()
+                .lock(lock_script.clone())
+                .type_(Some(type_script.clone()).pack())
+                .build_exact_capacity(Capacity::bytes(output_data.len()).unwrap())
+                .expect("build ibc contract output");
+            (output, output_data)
+        };
+
+        let (new_client_output, new_client_output_data) = {
+            let output_data = updated_client.as_slice().pack();
+            let output = packed::CellOutput::new_builder()
+                .lock(lock_script.clone())
+                .type_(Some(type_script.clone()).pack())
+                .build_exact_capacity(Capacity::bytes(output_data.len()).unwrap())
+                .expect("build ibc contract output");
+            (output, output_data)
+        };
+
+        // Later handling outside requires the CellOutput form of inputs.
+        let input_cells = [oldest_cell, info_cell];
+        let inputs_capacity: u64 = input_cells.iter().map(|c| Unpack::<u64>::unpack(&c.output.capacity())).sum();
+        let (inputs, inputs_as_cell_outputs): (Vec<packed::CellInput>, Vec<packed::CellOutput>) = input_cells.into_iter().map(|cell| {
+            let input = packed::CellInput::new(cell.out_point, 0);
+            let input_as_cell_output = cell.output;
+            (input, input_as_cell_output)
+        }).unzip();
+
+        let witness = {
+            let input_type_args = packed::BytesOpt::new_builder()
+                .set(Some(packed_proof_update.as_slice().pack()))
+                .build();
+            let witness_args = packed::WitnessArgs::new_builder()
+                .input_type(input_type_args)
+                .build();
+            witness_args.as_bytes().pack()
+        };
+        let tx = TransactionView::new_advanced_builder()
+            .inputs(inputs)
+            .outputs([new_info_output, new_client_output])
+            .outputs_data([new_info_output_data, new_client_output_data])
+            .witness(witness)
+            .cell_dep(type_celldep)
+            .cell_dep(lock_celldep)
+            .build();
+
+        let fee_rate = 3000;
+        let (tx, mut new_inputs_as_cell_outputs) = self
+            .complete_tx_with_secp256k1_change(tx, address, inputs_capacity, fee_rate)
+            .await?;
+        inputs_as_cell_outputs.append(&mut new_inputs_as_cell_outputs);
+        Ok((tx, inputs_as_cell_outputs))
+    }
+
     async fn assemble_updates_into_transaction(
         &self,
         address: &Address,
