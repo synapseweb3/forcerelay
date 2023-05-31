@@ -40,11 +40,7 @@ impl Runnable for EthCkbCmd {
     fn run(&self) {
         let config = (*app_config()).clone();
         let config_path = app_config_path().expect("config path isn't set");
-        if let Err(e) = GLOBAL_CONFIG_PATH.set(config_path) {
-            let path = e.into();
-            let cur_path = GLOBAL_CONFIG_PATH.get().unwrap();
-            assert_eq!(path, cur_path, "config path is changed");
-        }
+        GLOBAL_CONFIG_PATH.set(config_path.clone()).expect("fail to set config path");
 
         let registry = SharedRegistry::<CachingChainHandle>::new(config);
         let eth = Arc::new(registry.get_or_spawn(&self.eth_chain).unwrap_or_else(|e| {

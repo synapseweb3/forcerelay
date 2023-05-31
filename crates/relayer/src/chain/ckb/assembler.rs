@@ -118,8 +118,12 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         };
         let client_info = PackedClientInfo::new_unchecked(client_info_cell.output_data.clone());
         let latest_id = u8::from(client_info.last_id().as_reader());
-        // -1 is for the client info cell
-        let oldest_id = (latest_id + 1) % (cells_count - 1);
+        
+        let oldest_id = if latest_id + 2 < cells_count {
+            latest_id + 1
+        } else {
+            0
+        };
 
         let mut oldest = None;
         let mut latest = None;
@@ -127,10 +131,13 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         for cell in client_cells {
             let client = PackedClient::new_unchecked(cell.output_data.clone());
             let client_id = u8::from(client.id().as_reader());
+            println!("client: {client}");
+            dbg!(latest_id);
+            dbg!(oldest_id);
             if client_id == latest_id {
-                latest.replace(cell).expect("on-chain data corrupted");
+                latest.replace(cell);
             } else if client_id == oldest_id {
-                oldest.replace(cell).expect("on-chain data corrupted");
+                oldest.replace(cell);
             }
         }
         let (Some(oldest), Some(latest)) = (oldest, latest) else {
@@ -176,27 +183,37 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         contract_typeid_args: &H256,
         packed_proof_update: PackedProofUpdate,
     ) -> Result<(TransactionView, Vec<packed::CellOutput>, H256), Error> {
-        let cells_count = (clients.len() + 1) as u8;
-
-        let contract_script = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
-        let contract_script_hash = contract_script.calc_script_hash();
-        let contract_celldep = {
-            let contract_cell =
-                search_contract_cell(self, &contract_script, contract_typeid_args).await?;
-            packed::CellDep::new_builder()
-                .out_point(contract_cell.out_point)
-                .dep_type(DepType::Code.into())
-                .build()
+        // Build lock script
+        let (lock_script, lock_contract_celldep) = {
+            let lock_contract = make_typeid_script(lock_typeid_args.as_bytes().to_vec());
+            let lock_contract_hash = lock_contract.calc_script_hash();
+            let lock_contract_celldep = {
+                let cell = search_contract_cell(self, &lock_contract, lock_typeid_args).await?;
+                packed::CellDep::new_builder()
+                    .out_point(cell.out_point)
+                    .dep_type(DepType::Code.into())
+                    .build()
+            };
+            let lock_script = packed::Script::new_builder()
+                .code_hash(lock_contract_hash)
+                .hash_type(ScriptHashType::Type.into())
+                // TODO: currently using empty lock
+                // .args(...)
+                .build();
+            (lock_script, lock_contract_celldep)
         };
-        let lock_script = make_typeid_script(lock_typeid_args.as_bytes().to_vec());
-        let lock_celldep = {
-            let cell = search_contract_cell(self, &lock_script, lock_typeid_args).await?;
+
+        // Build type script
+        let lc_contract = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
+        let lc_contract_hash = lc_contract.calc_script_hash();
+        let lc_contract_celldep = {
+            let cell =
+                search_contract_cell(self, &lc_contract, contract_typeid_args).await?;
             packed::CellDep::new_builder()
                 .out_point(cell.out_point)
                 .dep_type(DepType::Code.into())
                 .build()
         };
-
         // We have to get one input cell to calculate the type id for those new cells.
         let mut _excessive_capacity = 0;
         let input_cells = self
@@ -216,28 +233,30 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
                 })
                 .unzip();
 
+        let cells_count = (clients.len() + 1) as u8;
         let new_cells_type_id = {
             let first = inputs.first().expect("input cell not found");
             let type_id = utils::calculate_type_id(first, cells_count as usize);
             H256(type_id)
         };
         let type_script: packed::Script = {
-            let packed_type_id = PackedHash::from_slice(new_cells_type_id.0.as_slice()).expect("build type id");
+            let packed_type_id = PackedHash::new_builder()
+                .set(new_cells_type_id.0.map(packed::Byte::new))
+                .build();
             let client_type_args = PackedClientTypeArgs::new_builder()
                 .cells_count(packed::Byte::new(cells_count))
                 .type_id(packed_type_id)
                 .build();
-            let args = packed::Bytes::from_slice(client_type_args.as_slice())
-                .expect("build type script args");
+            let args = client_type_args.as_slice().pack();
             packed::Script::new_builder()
-                .code_hash(contract_script_hash)
+                .code_hash(lc_contract_hash)
                 .hash_type(ScriptHashType::Type.into())
                 .args(args)
                 .build()
         };
 
-        let mut outputs_data = vec![client_info.as_slice().pack()];
-        outputs_data.extend(clients.into_iter().map(|client| client.as_slice().pack()));
+        let mut outputs_data = clients.into_iter().map(|client| client.as_slice().pack()).collect::<Vec<_>>();
+        outputs_data.push(client_info.as_slice().pack());
         let outputs = outputs_data
             .iter()
             .map(|data| {
@@ -263,8 +282,8 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             .outputs(outputs)
             .outputs_data(outputs_data)
             .witness(witness)
-            .cell_dep(contract_celldep)
-            .cell_dep(lock_celldep)
+            .cell_dep(lc_contract_celldep)
+            .cell_dep(lock_contract_celldep)
             .build();
 
         let fee_rate = 3000;
@@ -278,41 +297,61 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
     async fn assemble_update_multi_client_transaction(
         &self,
         address: &Address,
-        oldest_cell: LiveCell,
-        info_cell: LiveCell,
+        update_cells: UpdateCells,
         updated_client: PackedClient,
         client_type_args: &PackedClientTypeArgs,
         lock_typeid_args: &H256,
         contract_typeid_args: &H256,
         packed_proof_update: PackedProofUpdate,
     ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error> {
-        let contract_script = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
-        let contract_script_hash = contract_script.calc_script_hash();
-        let contract_celldep = {
-            let contract_cell =
-                search_contract_cell(self, &contract_script, contract_typeid_args).await?;
-            packed::CellDep::new_builder()
-                .out_point(contract_cell.out_point)
-                .dep_type(DepType::Code.into())
-                .build()
+        let UpdateCells {
+            oldest: oldest_cell,
+            latest: latest_cell,
+            info: info_cell,
+        } = update_cells;
+        let latest_client_cell_dep = packed::CellDep::new_builder()
+            .out_point(latest_cell.out_point)
+            .dep_type(DepType::Code.into())
+            .build();
+
+        // Build lock script
+        let (lock_script, lock_contract_celldep) = {
+            let lock_contract = make_typeid_script(lock_typeid_args.as_bytes().to_vec());
+            let lock_contract_hash = lock_contract.calc_script_hash();
+            let lock_contract_celldep = {
+                let cell = search_contract_cell(self, &lock_contract, lock_typeid_args).await?;
+                packed::CellDep::new_builder()
+                    .out_point(cell.out_point)
+                    .dep_type(DepType::Code.into())
+                    .build()
+            };
+            let lock_script = packed::Script::new_builder()
+                .code_hash(lock_contract_hash)
+                .hash_type(ScriptHashType::Type.into())
+                // TODO: currently using empty lock
+                // .args(...)
+                .build();
+            (lock_script, lock_contract_celldep)
         };
 
-        let lock_script = make_typeid_script(lock_typeid_args.as_bytes().to_vec());
-        let lock_celldep = {
-            let cell = search_contract_cell(self, &lock_script, lock_typeid_args).await?;
-            packed::CellDep::new_builder()
-                .out_point(cell.out_point)
-                .dep_type(DepType::Code.into())
-                .build()
-        };
-        let type_script: packed::Script = {
-            let args = packed::Bytes::from_slice(client_type_args.as_slice())
-                .expect("build type script args");
-            packed::Script::new_builder()
-                .code_hash(contract_script_hash)
+        // Build type script
+        let (type_script, lc_contract_celldep) = {
+            let lc_contract = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
+            let lc_contract_hash = lc_contract.calc_script_hash();
+            let lc_contract_celldep = {
+                let cell =
+                    search_contract_cell(self, &lc_contract, contract_typeid_args).await?;
+                packed::CellDep::new_builder()
+                    .out_point(cell.out_point)
+                    .dep_type(DepType::Code.into())
+                    .build()
+            };
+            let type_script: packed::Script = packed::Script::new_builder()
+                .code_hash(lc_contract_hash)
                 .hash_type(ScriptHashType::Type.into())
-                .args(args)
-                .build()
+                .args(client_type_args.as_slice().pack())
+                .build();
+            (type_script, lc_contract_celldep)
         };
 
         let (new_info_output, new_info_output_data) = {
@@ -345,7 +384,7 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         };
 
         // Later handling requires the CellOutput form of inputs.
-        let input_cells = [oldest_cell, info_cell];
+        let input_cells = [info_cell, oldest_cell];
         let inputs_capacity: u64 = input_cells
             .iter()
             .map(|c| Unpack::<u64>::unpack(&c.output.capacity()))
@@ -373,9 +412,12 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             .inputs(inputs)
             .outputs([new_info_output, new_client_output])
             .outputs_data([new_info_output_data, new_client_output_data])
+            // place holder
+            .witness(Default::default())
             .witness(witness)
-            .cell_dep(contract_celldep)
-            .cell_dep(lock_celldep)
+            .cell_dep(latest_client_cell_dep)
+            .cell_dep(lc_contract_celldep)
+            .cell_dep(lock_contract_celldep)
             .build();
 
         let fee_rate = 3000;

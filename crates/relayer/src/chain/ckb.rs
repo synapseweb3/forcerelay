@@ -124,11 +124,10 @@ pub struct CkbChain {
     pub cached_network: RwLock<Option<NetworkType>>,
     pub cached_tx_assembler_address: RwLock<Option<Address>>,
     pub cached_onchain_packed_client: Option<PackedClient>,
-    pub cached_onchain_packed_multi_client: Option<(Vec<PackedClient>, PackedClinetInfo)>,
 }
 
 impl CkbChain {
-    async fn create_eth_multi_client(
+    fn create_eth_multi_client(
         &mut self,
         mut header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
@@ -144,12 +143,15 @@ impl CkbChain {
             };
 
             let update_cells = self
-                .rpc_client
-                .fetch_update_cells(
-                    &self.config.lightclient_contract_typeargs,
-                    &client_type_args,
-                )
-                .await?;
+                .rt
+                .block_on(
+                    self
+                        .rpc_client
+                        .fetch_update_cells(
+                            &self.config.lightclient_contract_typeargs,
+                            &client_type_args,
+                        )
+                )?;
             if let Some(UpdateCells {
                 oldest: _,
                 latest,
@@ -221,16 +223,19 @@ impl CkbChain {
 
         let tx_assembler_address = self.tx_assembler_address()?;
         let (tx, inputs, type_id) = self
-            .rpc_client
-            .assemble_create_multi_client_transaction(
-                &tx_assembler_address,
-                clients,
-                client_info,
-                &self.config.lightclient_lock_typeargs,
-                &self.config.lightclient_contract_typeargs,
-                packed_proof_update,
-            )
-            .await?;
+            .rt
+            .block_on(
+                self
+                .rpc_client
+                .assemble_create_multi_client_transaction(
+                    &tx_assembler_address,
+                    clients,
+                    client_info,
+                    &self.config.lightclient_lock_typeargs,
+                    &self.config.lightclient_contract_typeargs,
+                    packed_proof_update,
+                )
+            )?;
         self.sign_and_send_transaction(tx, inputs).map_err(|err| {
             if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
                 return err.into();
@@ -246,7 +251,7 @@ impl CkbChain {
         Ok(vec![])
     }
 
-    async fn update_eth_multi_client(
+    fn update_eth_multi_client(
         &mut self,
         mut header_updates: Vec<EthUpdate>,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
@@ -255,7 +260,7 @@ impl CkbChain {
             let Some(type_id) = self.config.client_type_args.type_id.as_ref()
             else {
                 // TODO: better error
-                return Err(Error::other_error("no client type args".to_owned()));
+                return Err(Error::other_error("no type id in client type args".to_owned()));
             };
             let type_id = PackedHash::from_slice(type_id.0.as_slice()).expect("build type id");
             PackedClientTypeArgs::new_builder()
@@ -264,19 +269,25 @@ impl CkbChain {
                 .build()
         };
 
-        let Some(UpdateCells { oldest, latest, info}) = self.rpc_client
-            .fetch_update_cells(
-                &self.config.lightclient_contract_typeargs,
-                &client_type_args
-            ).await?
+        let Some(update_cells) = self
+            .rt
+            .block_on(
+                self
+                    .rpc_client
+                    .fetch_update_cells(
+                        &self.config.lightclient_contract_typeargs,
+                        &client_type_args
+                    )
+            )?
         else {
             return Err(Error::other_error("no multi-client cells found".to_owned()));
         };
-        let latest_client = PackedClient::new_unchecked(latest.output_data);
+
+        let latest_client = PackedClient::new_unchecked(update_cells.latest.output_data.clone());
         self.cached_onchain_packed_client = Some(latest_client);
 
         let minimal_updates_count = {
-            let client_info = PackedClinetInfo::new_unchecked(info.output_data.clone());
+            let client_info = PackedClinetInfo::new_unchecked(update_cells.info.output_data.clone());
             u8::from(client_info.minimal_updates_count().as_reader())
         };
 
@@ -287,13 +298,17 @@ impl CkbChain {
             self.cached_onchain_packed_client.as_ref(),
         )?;
 
-        let (prev_slot_opt, updated_client, packed_proof_update) =
+        let (prev_slot_opt, mut updated_client, packed_proof_update) =
             utils::get_verified_packed_client_and_proof_update(
                 &chain_id,
                 &header_updates,
                 &self.storage,
-                None,
+                self.cached_onchain_packed_client.as_ref(),
             )?;
+        updated_client = {
+            let oldest_client = PackedClient::new_unchecked(update_cells.oldest.output_data.clone());
+            updated_client.as_builder().id(oldest_client.id()).build()
+        };
 
         if updated_client.maximal_slot().unpack() - updated_client.minimal_slot().unpack() + 1
             < minimal_updates_count as u64
@@ -310,18 +325,20 @@ impl CkbChain {
 
         let tx_assembler_address = self.tx_assembler_address()?;
         let (tx, inputs) = self
-            .rpc_client
-            .assemble_update_multi_client_transaction(
-                &tx_assembler_address,
-                oldest,
-                info,
-                updated_client,
-                &client_type_args,
-                &self.config.lightclient_lock_typeargs,
-                &self.config.lightclient_contract_typeargs,
-                packed_proof_update,
-            )
-            .await?;
+            .rt
+            .block_on(
+                self
+                    .rpc_client
+                    .assemble_update_multi_client_transaction(
+                        &tx_assembler_address,
+                        update_cells,
+                        updated_client,
+                        &client_type_args,
+                        &self.config.lightclient_lock_typeargs,
+                        &self.config.lightclient_contract_typeargs,
+                        packed_proof_update,
+                    )
+            )?;
         self.sign_and_send_transaction(tx, inputs).map_err(|err| {
             if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
                 return err.into();
@@ -612,7 +629,6 @@ impl ChainEndpoint for CkbChain {
             cached_network: RwLock::new(None),
             cached_tx_assembler_address: RwLock::new(None),
             cached_onchain_packed_client: None,
-            cached_onchain_packed_multi_client: None,
         };
         ckb.print_status_log()?;
 
@@ -663,13 +679,12 @@ impl ChainEndpoint for CkbChain {
             .map(|client| client.lightclient_update)
             .collect();
 
-        let rt = self.rt.handle().clone();
         match tracked_msgs.tracking_id {
             TrackingId::Static(NonCosmos::ETH_CREATE_CLIENT) => {
-                rt.block_on(self.create_eth_multi_client(updates))
+                self.create_eth_multi_client(updates)
             }
             TrackingId::Static(NonCosmos::ETH_UPDATE_CLIENT) => {
-                rt.block_on(self.update_eth_multi_client(updates))
+                self.update_eth_multi_client(updates)
             }
             _ => Err(Error::send_tx("unknown msg".to_owned())),
         }
