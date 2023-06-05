@@ -30,8 +30,8 @@ eth2_types       = { git = "https://github.com/synapseweb3/lighthouse", rev = "2
 tree_hash_derive = { git = "https://github.com/synapseweb3/lighthouse", rev = "2c246d6" }
 tree_hash        = { git = "https://github.com/synapseweb3/lighthouse", rev = "2c246d6" }
 
-eth_light_client_in_ckb-verification = { git = "https://github.com/yangby-cryptape/eth-light-client-in-ckb", rev = "5a5dc2ee18736d492d0a73de691a375f0daf9ff3" }
-eth_light_client_in_ckb-prover = { git = "https://github.com/yangby-cryptape/eth-light-client-in-ckb", rev = "5a5dc2ee18736d492d0a73de691a375f0daf9ff3" }
+eth_light_client_in_ckb-verification = { version = "0.2.0-alpha", git = "https://github.com/whfuyn/eth-light-client-in-ckb", rev = "6c2760343a42cd1f6074cd11620291da9467b60e" }
+eth_light_client_in_ckb-prover = { version = "0.2.0-alpha", git = "https://github.com/whfuyn/eth-light-client-in-ckb", rev = "6c2760343a42cd1f6074cd11620291da9467b60e" }
 axon-tools = { version = "0.0.8", features = ["proof", "impl-serde", "abi"] }
 
 subtle-encoding = "0.5"

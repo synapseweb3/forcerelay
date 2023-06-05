@@ -69,11 +69,12 @@ pub struct UpdateCells {
 
 #[async_trait]
 pub trait TxAssembler: CellSearcher + TxCompleter {
-    async fn fetch_update_cells(
+    async fn fetch_multi_client_cells(
         &self,
         contract_typeid_args: &H256,
         client_type_args: &PackedClientTypeArgs,
-    ) -> Result<Option<UpdateCells>, Error> {
+    ) -> Result<Option<(Vec<LiveCell>, LiveCell)>, Error>
+    {
         let contract_typescript = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
         let type_hash = contract_typescript.calc_script_hash();
         // There are at most 255 cells
@@ -116,9 +117,49 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         let Some(client_info_cell) = client_info_cell_opt else {
             panic!("on-chain data corrupted: client info cell not found");
         };
+        Ok(Some((client_cells, client_info_cell)))
+    }
+
+    async fn fetch_clients_and_info(
+        &self,
+        contract_typeid_args: &H256,
+        client_type_args: &PackedClientTypeArgs,
+    ) -> Result<Option<(Vec<PackedClient>, PackedClientInfo)>, Error> {
+        let (client_cells, client_info_cell) = match self
+            .fetch_multi_client_cells(contract_typeid_args, client_type_args)
+            .await?
+        {
+            Some(cells) => cells,
+            None => return Ok(None),
+        };
+
+        let mut clients = vec![];
+        for cell in client_cells {
+            let client = PackedClient::new_unchecked(cell.output_data.clone());
+            clients.push(client);
+        }
+
+        let client_info = PackedClientInfo::new_unchecked(client_info_cell.output_data.clone());
+        Ok(Some((clients, client_info)))
+    }
+
+    async fn fetch_update_cells(
+        &self,
+        contract_typeid_args: &H256,
+        client_type_args: &PackedClientTypeArgs,
+    ) -> Result<Option<UpdateCells>, Error> {
+        let (client_cells, client_info_cell) = match self
+            .fetch_multi_client_cells(contract_typeid_args, client_type_args)
+            .await?
+        {
+            Some(cells) => cells,
+            None => return Ok(None),
+        };
+
+        let cells_count = u8::from(client_type_args.cells_count().as_reader());
         let client_info = PackedClientInfo::new_unchecked(client_info_cell.output_data.clone());
         let latest_id = u8::from(client_info.last_id().as_reader());
-        
+
         let oldest_id = if latest_id + 2 < cells_count {
             latest_id + 1
         } else {
@@ -131,9 +172,6 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         for cell in client_cells {
             let client = PackedClient::new_unchecked(cell.output_data.clone());
             let client_id = u8::from(client.id().as_reader());
-            println!("client: {client}");
-            dbg!(latest_id);
-            dbg!(oldest_id);
             if client_id == latest_id {
                 latest.replace(cell);
             } else if client_id == oldest_id {
@@ -428,86 +466,86 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
         Ok((tx, inputs_as_cell_outputs))
     }
 
-    async fn assemble_updates_into_transaction(
-        &self,
-        address: &Address,
-        packed_client: PackedClient,
-        packed_proof_update: PackedProofUpdate,
-        lock_typeid_args: &H256,
-        contract_typeid_args: &H256,
-        client_id: &String,
-    ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error> {
-        // find celldeps by searching live cells according typeid_args
-        let contract_typescript = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
-        let contract_cell_dep = {
-            let contract_cell =
-                search_contract_cell(self, &contract_typescript, contract_typeid_args).await?;
-            packed::CellDep::new_builder()
-                .out_point(contract_cell.out_point)
-                .dep_type(DepType::Code.into())
-                .build()
-        };
-        let mock_lockscript = make_typeid_script(lock_typeid_args.as_bytes().to_vec());
-        let mock_lock_celldep = {
-            let mock_cell = search_contract_cell(self, &mock_lockscript, lock_typeid_args).await?;
-            packed::CellDep::new_builder()
-                .out_point(mock_cell.out_point)
-                .dep_type(DepType::Code.into())
-                .build()
-        };
-        // search light-client cell by lightclient contract type_id hash
-        let contract_typehash = contract_typescript.calc_script_hash();
-        let lightclient_cell_opt = self
-            .search_cell_by_typescript(&contract_typehash, &client_id.as_bytes().to_vec())
-            .await?;
-        // build Lightclient Lockscript and Typescript
-        let pubkey_hash = address.payload().args();
-        let lightclient_lock =
-            make_lightclient_script(mock_lockscript.calc_script_hash(), pubkey_hash.to_vec());
-        let lightclient_type =
-            make_lightclient_script(contract_typehash, client_id.clone().into_bytes());
-        // assemble Lightclient output cell
-        let output_data = packed_client.as_slice().pack();
-        let output_cell = packed::CellOutput::new_builder()
-            .lock(lightclient_lock)
-            .type_(Some(lightclient_type).pack())
-            .build_exact_capacity(Capacity::bytes(output_data.len()).unwrap())
-            .expect("build ibc contract output");
-        let mut inputs_cell_as_output = vec![];
-        let mut inputs_cell = vec![];
-        let mut inputs_capacity: u64 = 0;
-        if let Some(lightclient_cell) = lightclient_cell_opt {
-            inputs_cell.push(packed::CellInput::new(lightclient_cell.out_point, 0));
-            inputs_capacity += Unpack::<u64>::unpack(&lightclient_cell.output.capacity());
-            inputs_cell_as_output.push(lightclient_cell.output);
-        }
-        // assemble Lightclient witness
-        let witness = {
-            let input_type_args = packed::BytesOpt::new_builder()
-                .set(Some(packed_proof_update.as_slice().pack()))
-                .build();
-            let witness_args = packed::WitnessArgs::new_builder()
-                .input_type(input_type_args)
-                .build();
-            witness_args.as_bytes()
-        };
-        // assemble transaction
-        let tx = TransactionView::new_advanced_builder()
-            .inputs(inputs_cell)
-            .output(output_cell)
-            .output_data(output_data)
-            .witness(witness.pack())
-            .cell_dep(contract_cell_dep)
-            .cell_dep(mock_lock_celldep)
-            .build();
-        let fee_rate = 3000;
-        let (tx, mut new_inputs) = self
-            .complete_tx_with_secp256k1_change(tx, address, inputs_capacity, fee_rate)
-            .await?;
-        // collect input cells to support signing process (calculating input group)
-        inputs_cell_as_output.append(&mut new_inputs);
-        Ok((tx, inputs_cell_as_output))
-    }
+    // async fn assemble_updates_into_transaction(
+    //     &self,
+    //     address: &Address,
+    //     packed_client: PackedClient,
+    //     packed_proof_update: PackedProofUpdate,
+    //     lock_typeid_args: &H256,
+    //     contract_typeid_args: &H256,
+    //     client_id: &String,
+    // ) -> Result<(TransactionView, Vec<packed::CellOutput>), Error> {
+    //     // find celldeps by searching live cells according typeid_args
+    //     let contract_typescript = make_typeid_script(contract_typeid_args.as_bytes().to_vec());
+    //     let contract_cell_dep = {
+    //         let contract_cell =
+    //             search_contract_cell(self, &contract_typescript, contract_typeid_args).await?;
+    //         packed::CellDep::new_builder()
+    //             .out_point(contract_cell.out_point)
+    //             .dep_type(DepType::Code.into())
+    //             .build()
+    //     };
+    //     let mock_lockscript = make_typeid_script(lock_typeid_args.as_bytes().to_vec());
+    //     let mock_lock_celldep = {
+    //         let mock_cell = search_contract_cell(self, &mock_lockscript, lock_typeid_args).await?;
+    //         packed::CellDep::new_builder()
+    //             .out_point(mock_cell.out_point)
+    //             .dep_type(DepType::Code.into())
+    //             .build()
+    //     };
+    //     // search light-client cell by lightclient contract type_id hash
+    //     let contract_typehash = contract_typescript.calc_script_hash();
+    //     let lightclient_cell_opt = self
+    //         .search_cell_by_typescript(&contract_typehash, &client_id.as_bytes().to_vec())
+    //         .await?;
+    //     // build Lightclient Lockscript and Typescript
+    //     let pubkey_hash = address.payload().args();
+    //     let lightclient_lock =
+    //         make_lightclient_script(mock_lockscript.calc_script_hash(), pubkey_hash.to_vec());
+    //     let lightclient_type =
+    //         make_lightclient_script(contract_typehash, client_id.clone().into_bytes());
+    //     // assemble Lightclient output cell
+    //     let output_data = packed_client.as_slice().pack();
+    //     let output_cell = packed::CellOutput::new_builder()
+    //         .lock(lightclient_lock)
+    //         .type_(Some(lightclient_type).pack())
+    //         .build_exact_capacity(Capacity::bytes(output_data.len()).unwrap())
+    //         .expect("build ibc contract output");
+    //     let mut inputs_cell_as_output = vec![];
+    //     let mut inputs_cell = vec![];
+    //     let mut inputs_capacity: u64 = 0;
+    //     if let Some(lightclient_cell) = lightclient_cell_opt {
+    //         inputs_cell.push(packed::CellInput::new(lightclient_cell.out_point, 0));
+    //         inputs_capacity += Unpack::<u64>::unpack(&lightclient_cell.output.capacity());
+    //         inputs_cell_as_output.push(lightclient_cell.output);
+    //     }
+    //     // assemble Lightclient witness
+    //     let witness = {
+    //         let input_type_args = packed::BytesOpt::new_builder()
+    //             .set(Some(packed_proof_update.as_slice().pack()))
+    //             .build();
+    //         let witness_args = packed::WitnessArgs::new_builder()
+    //             .input_type(input_type_args)
+    //             .build();
+    //         witness_args.as_bytes()
+    //     };
+    //     // assemble transaction
+    //     let tx = TransactionView::new_advanced_builder()
+    //         .inputs(inputs_cell)
+    //         .output(output_cell)
+    //         .output_data(output_data)
+    //         .witness(witness.pack())
+    //         .cell_dep(contract_cell_dep)
+    //         .cell_dep(mock_lock_celldep)
+    //         .build();
+    //     let fee_rate = 3000;
+    //     let (tx, mut new_inputs) = self
+    //         .complete_tx_with_secp256k1_change(tx, address, inputs_capacity, fee_rate)
+    //         .await?;
+    //     // collect input cells to support signing process (calculating input group)
+    //     inputs_cell_as_output.append(&mut new_inputs);
+    //     Ok((tx, inputs_cell_as_output))
+    // }
 }
 
 impl TxAssembler for RpcClient {}

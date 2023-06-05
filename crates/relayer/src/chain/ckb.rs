@@ -133,6 +133,7 @@ impl CkbChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let chain_id = self.id().to_string();
         let client_type_args = &self.config.client_type_args;
+        let minimal_updates_count = self.config.minimal_updates_count;
         if let Some(type_id) = client_type_args.type_id.as_ref() {
             let client_type_args: PackedClientTypeArgs = {
                 let type_id = PackedHash::from_slice(type_id.0.as_slice()).expect("build type id");
@@ -178,9 +179,6 @@ impl CkbChain {
                 .checked_sub(1)
                 .expect(&format!("invalid cells count: {cells_count}"))
         };
-        // let minimal_updates_count = u8::from(client_info.minimal_updates_count().as_reader());
-        // TODO: use config value
-        let minimal_updates_count = 1;
 
         utils::align_native_and_onchain_updates(
             &chain_id,
@@ -350,106 +348,6 @@ impl CkbChain {
         Ok(vec![])
     }
 
-    // fn create_eth_client(
-    //     &mut self,
-    //     mut header_updates: Vec<EthUpdate>,
-    // ) -> Result<Vec<IbcEventWithHeight>, Error> {
-    //     let chain_id = self.id().to_string();
-    //     self.cached_onchain_packed_client = self.rt.block_on(
-    //         self.rpc_client
-    //             .fetch_packed_client(&self.config.lightclient_contract_typeargs, &chain_id),
-    //     )?;
-
-    //     if let Some(packed_client) = self.cached_onchain_packed_client.as_ref() {
-    //         let onchain_base_slot = packed_client.minimal_slot().unpack();
-    //         return Err(Error::light_client_verification(
-    //             chain_id.to_owned(),
-    //             LightClientError::missing_last_block_id(utils::into_height(onchain_base_slot)),
-    //         ));
-    //     }
-
-    //     utils::align_native_and_onchain_updates(
-    //         &chain_id,
-    //         &mut header_updates,
-    //         &self.storage,
-    //         None.as_ref(),
-    //     )?;
-    //     let (prev_slot_opt, packed_client, packed_proof_update) =
-    //         utils::get_verified_packed_client_and_proof_update(
-    //             &chain_id,
-    //             &header_updates,
-    //             &self.storage,
-    //             None,
-    //         )?;
-
-    //     let tx_assembler_address = self.tx_assembler_address()?;
-    //     let (tx, inputs) = self
-    //         .rt
-    //         .block_on(self.rpc_client.assemble_updates_into_transaction(
-    //             &tx_assembler_address,
-    //             packed_client,
-    //             packed_proof_update,
-    //             &self.config.lightclient_lock_typeargs,
-    //             &self.config.lightclient_contract_typeargs,
-    //             &chain_id,
-    //         ))?;
-    //     self.sign_and_send_transaction(tx, inputs).map_err(|err| {
-    //         if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
-    //             return err.into();
-    //         }
-    //         err
-    //     })?;
-
-    //     self.print_status_log()?;
-    //     Ok(vec![])
-    // }
-
-    // pub(crate) fn update_eth_client(
-    //     &mut self,
-    //     mut header_updates: Vec<EthUpdate>,
-    // ) -> Result<Vec<IbcEventWithHeight>, Error> {
-    //     let chain_id = self.id().to_string();
-    //     self.cached_onchain_packed_client = self.rt.block_on(
-    //         self.rpc_client
-    //             .fetch_packed_client(&self.config.lightclient_contract_typeargs, &chain_id),
-    //     )?;
-
-    //     utils::align_native_and_onchain_updates(
-    //         &chain_id,
-    //         &mut header_updates,
-    //         &self.storage,
-    //         self.cached_onchain_packed_client.as_ref(),
-    //     )?;
-    //     let (prev_slot_opt, packed_client, packed_proof_update) =
-    //         utils::get_verified_packed_client_and_proof_update(
-    //             &chain_id,
-    //             &header_updates,
-    //             &self.storage,
-    //             self.cached_onchain_packed_client.as_ref(),
-    //         )?;
-
-    //     let tx_assembler_address = self.tx_assembler_address()?;
-    //     let (tx, inputs) = self
-    //         .rt
-    //         .block_on(self.rpc_client.assemble_updates_into_transaction(
-    //             &tx_assembler_address,
-    //             packed_client,
-    //             packed_proof_update,
-    //             &self.config.lightclient_lock_typeargs,
-    //             &self.config.lightclient_contract_typeargs,
-    //             &chain_id,
-    //         ))?;
-    //     self.sign_and_send_transaction(tx, inputs).map_err(|err| {
-    //         if let Err(err) = self.storage.rollback_to(prev_slot_opt) {
-    //             return err.into();
-    //         }
-    //         err
-    //     })?;
-
-    //     self.print_status_log()?;
-    //     Ok(vec![])
-    // }
-
     pub fn sign_and_send_transaction(
         &mut self,
         tx: TransactionView,
@@ -541,17 +439,42 @@ impl CkbChain {
     }
 
     fn print_status_log(&self) -> Result<(), Error> {
-        let onchain_packed_client_opt = self.rt.block_on(self.rpc_client.fetch_packed_client(
-            &self.config.lightclient_contract_typeargs,
-            &self.id().to_string(),
-        ))?;
+        let contract_typeid_args = &self.config.lightclient_contract_typeargs;
+        let client_type_args = &self.config.client_type_args;
+
         let mut status_log = String::new();
-        if let Some(packed_client) = onchain_packed_client_opt {
-            let client = packed_client.unpack();
-            status_log += &format!("on-chain status: {client}, ");
+
+        if let Some(type_id) = client_type_args.type_id.as_ref() {
+            let packed_client_type_args: PackedClientTypeArgs = {
+                let type_id = PackedHash::from_slice(type_id.0.as_slice()).expect("build type id");
+                PackedClientTypeArgs::new_builder()
+                    .cells_count(client_type_args.cells_count.into())
+                    .type_id(type_id)
+                    .build()
+            };
+            let clients_and_info_opt = self.rt.block_on(
+                self.rpc_client
+                    .fetch_clients_and_info(
+                        contract_typeid_args,
+                        &packed_client_type_args,
+                    )
+            )?;
+            if let Some((clients, info)) = clients_and_info_opt {
+                let clients_msg = clients.iter().map(|c| {
+                    format!("{}", c.unpack())
+                })
+                .collect::<Vec<String>>()
+                .join("\n");
+
+                let info_msg = format!("{}", info.unpack());
+                status_log += &format!("on-chain status:\n{clients_msg}\n{info_msg}\n")
+            } else {
+                status_log += "on-chain status: NONE, ";
+            }
         } else {
             status_log += "on-chain status: NONE, ";
         }
+
         if let (Some(start_slot), Some(end_slot)) = (
             self.storage.get_base_beacon_header_slot()?,
             self.storage.get_tip_beacon_header_slot()?,
@@ -563,6 +486,31 @@ impl CkbChain {
         tracing::info!("[STATUS] {status_log}");
         Ok(())
     }
+
+    // fn print_status_log(&self) -> Result<(), Error> {
+    //     // TODO
+    //     let onchain_packed_client_opt = self.rt.block_on(self.rpc_client.fetch_packed_client(
+    //         &self.config.lightclient_contract_typeargs,
+    //         &self.id().to_string(),
+    //     ))?;
+    //     let mut status_log = String::new();
+    //     if let Some(packed_client) = onchain_packed_client_opt {
+    //         let client = packed_client.unpack();
+    //         status_log += &format!("on-chain status: {client}, ");
+    //     } else {
+    //         status_log += "on-chain status: NONE, ";
+    //     }
+    //     if let (Some(start_slot), Some(end_slot)) = (
+    //         self.storage.get_base_beacon_header_slot()?,
+    //         self.storage.get_tip_beacon_header_slot()?,
+    //     ) {
+    //         status_log += &format!("native status: [{start_slot}, {end_slot}]");
+    //     } else {
+    //         status_log += "native status: NONE";
+    //     }
+    //     tracing::info!("[STATUS] {status_log}");
+    //     Ok(())
+    // }
 }
 
 impl ChainEndpoint for CkbChain {
