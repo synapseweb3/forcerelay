@@ -123,6 +123,7 @@ pub fn delete_key(config: &ChainConfig, key_name: &str) -> eyre::Result<()> {
         ChainType::Eth => todo!(),
         ChainType::Axon => todo!(),
         ChainType::Ckb => todo!(),
+        ChainType::Ckb4Ibc => todo!(),
     }
     Ok(())
 }
@@ -140,6 +141,7 @@ pub fn delete_all_keys(config: &ChainConfig) -> eyre::Result<()> {
         ChainType::Eth => todo!(),
         ChainType::Axon => todo!(),
         ChainType::Ckb => todo!(),
+        ChainType::Ckb4Ibc => todo!(),
     }
     Ok(())
 }

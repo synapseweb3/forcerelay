@@ -1,5 +1,6 @@
 pub mod axon;
 pub mod ckb;
+pub mod ckb4ibc;
 pub mod client;
 pub mod cosmos;
 pub mod counterparty;
@@ -24,6 +25,7 @@ pub enum ChainType {
     Eth,
     Axon,
     Ckb,
+    Ckb4Ibc,
 }
 
 impl<'de> Deserialize<'de> for ChainType {

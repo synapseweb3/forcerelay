@@ -82,11 +82,11 @@ mod signer;
 mod utils;
 
 #[cfg(test)]
-mod mock_rpc_client;
+pub mod mock_rpc_client;
 #[cfg(not(test))]
-mod rpc_client;
+pub mod rpc_client;
 #[cfg(test)]
-use mock_rpc_client as rpc_client;
+pub use mock_rpc_client as rpc_client;
 
 use sighash::init_sighash_celldep;
 

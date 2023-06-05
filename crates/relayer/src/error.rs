@@ -596,6 +596,34 @@ define_error! {
 
         QueriedProofNotFound
             |_| { "Requested proof with query but no proof was returned." },
+
+        ExtractChanTxError
+            {tx_hash: String}
+            |e| {format_args!("Can not extract channel end from this tx: {}", e.tx_hash)},
+
+        ConvertChannelEnd
+            |_| { "convert channel end error" },
+
+        CkbChanIdInvalid
+            {s: String}
+            |e| {format_args!("Cannot convert {} as a ckb channel id (u16)", e.s)},
+
+        CkbPortIdInvalid
+            {s: String}
+            |e| {format_args!("Cannot convert {} as a ckb port id", e.s)},
+
+        CkbConnIdInvalid
+            {s: String}
+            |e| {format_args!("Cannot convert {} as a ckb conn id", e.s)},
+
+        CkbClientIdInvalid
+            {s: String}
+            |e| {format_args!("Cannot convert {} as a ckb client id", e.s)},
+        Capacity
+        |_| {"capacity error"},
+
+        EmptyConnectionHops
+        |_| {"empty connection hops"}
     }
 }
 
