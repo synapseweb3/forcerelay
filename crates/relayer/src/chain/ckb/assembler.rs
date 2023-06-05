@@ -173,8 +173,9 @@ pub trait TxAssembler: CellSearcher + TxCompleter {
             let client = PackedClient::new_unchecked(cell.output_data.clone());
             let client_id = u8::from(client.id().as_reader());
             if client_id == latest_id {
-                latest.replace(cell);
-            } else if client_id == oldest_id {
+                latest.replace(cell.clone());
+            }
+            if client_id == oldest_id {
                 oldest.replace(cell);
             }
         }
