@@ -88,8 +88,6 @@ pub mod rpc_client;
 #[cfg(test)]
 pub use mock_rpc_client as rpc_client;
 
-use sighash::init_sighash_celldep;
-
 #[cfg(test)]
 mod tests;
 
@@ -366,15 +364,16 @@ impl ChainEndpoint for CkbChain {
         let rpc_client = Arc::new(RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc));
         let storage = Storage::new(&config.data_dir)?;
 
-        rt.block_on(init_sighash_celldep(rpc_client.as_ref()))?;
-
-        // check contract and lock type_id_args wether are on-chain deployed
         #[cfg(not(test))]
         {
             use ckb_sdk::constants::TYPE_ID_CODE_HASH;
             use ckb_types::prelude::Pack;
             use prelude::CellSearcher;
+            use sighash::init_sighash_celldep;
 
+            rt.block_on(init_sighash_celldep(rpc_client.as_ref()))?;
+
+            // check if contract and lock type_id_args are on-chain deployed
             let contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
                 &TYPE_ID_CODE_HASH.pack(),
                 &config.lightclient_contract_typeargs.as_bytes().to_owned(),
