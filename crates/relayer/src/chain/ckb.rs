@@ -459,7 +459,10 @@ impl CkbChain {
                         &packed_client_type_args,
                     )
             )?;
-            if let Some((clients, info)) = clients_and_info_opt {
+            if let Some((mut clients, info)) = clients_and_info_opt {
+                clients.sort_by_key(|c| {
+                    u8::from(c.id().as_reader())
+                });
                 let clients_msg = clients.iter().map(|c| {
                     format!("{}", c.unpack())
                 })
