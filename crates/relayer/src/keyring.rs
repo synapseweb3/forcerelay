@@ -286,6 +286,7 @@ pub fn list_keys(config: &ChainConfig) -> Result<Vec<(String, AnySigningKeyPair)
         ChainType::Eth => "eth",
         ChainType::Axon => "axon",
         ChainType::Ckb => "ckb",
+        ChainType::Ckb4Ibc => "ckb4ibc",
     };
     let keys = {
         let keyring = KeyRing::new_secp256k1(Store::Test, account_prefix, config.id())?;

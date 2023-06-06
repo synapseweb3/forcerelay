@@ -147,6 +147,7 @@ fn subscribe(
             ChainConfig::Eth(_) => "".parse().unwrap(),
             ChainConfig::Ckb(_) => "".parse().unwrap(),
             ChainConfig::Axon(_) => "".parse().unwrap(),
+            ChainConfig::Ckb4Ibc(_) => "".parse().unwrap(),
         },
         compat_mode,
         rt,
