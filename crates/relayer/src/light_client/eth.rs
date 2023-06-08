@@ -299,11 +299,15 @@ impl<R: ConsensusRpc> ConsensusClient<R> {
 
         if self.store.finalized_header.slot > previous_stored_finalized_slot {
             self.store_finality_update(&finality_update, true).await?;
-            self.start_emiting_headers(
+
+            // Avoid emitting too many headers at once (at most 32). If some headers
+            // are missing, ETH-CKB relay will fall back to chasing mode.
+            let begin_slot = std::cmp::max(
                 previous_stored_finalized_slot,
-                self.store.finalized_header.slot,
-            )
-            .await?;
+                self.store.finalized_header.slot.saturating_sub(32),
+            );
+            self.start_emiting_headers(begin_slot, self.store.finalized_header.slot)
+                .await?;
         }
         Ok(())
     }
