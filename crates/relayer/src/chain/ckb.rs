@@ -5,7 +5,7 @@ use ckb_types::packed::CellOutput;
 use ckb_types::prelude::*;
 use eth2_types::MainnetEthSpec;
 use eth_light_client_in_ckb_verification::types::{
-    packed::Client as PackedClient, packed::ClientInfo as PackedClinetInfo,
+    packed::Client as PackedClient, packed::ClientInfo as PackedClientInfo,
     packed::ClientTypeArgs as PackedClientTypeArgs, prelude::Unpack, packed::Hash as PackedHash,
 };
 use ibc_proto::ibc::apps::fee::v1::{
@@ -214,7 +214,7 @@ impl CkbChain {
                 client
             })
             .collect::<Vec<_>>();
-        let client_info = PackedClinetInfo::new_builder()
+        let client_info = PackedClientInfo::new_builder()
             .last_id(0.into())
             .minimal_updates_count(minimal_updates_count.into())
             .build();
@@ -285,7 +285,7 @@ impl CkbChain {
         self.cached_onchain_packed_client = Some(latest_client);
 
         let minimal_updates_count = {
-            let client_info = PackedClinetInfo::new_unchecked(update_cells.info.output_data.clone());
+            let client_info = PackedClientInfo::new_unchecked(update_cells.info.output_data.clone());
             u8::from(client_info.minimal_updates_count().as_reader())
         };
 
@@ -489,31 +489,6 @@ impl CkbChain {
         tracing::info!("[STATUS] {status_log}");
         Ok(())
     }
-
-    // fn print_status_log(&self) -> Result<(), Error> {
-    //     // TODO
-    //     let onchain_packed_client_opt = self.rt.block_on(self.rpc_client.fetch_packed_client(
-    //         &self.config.lightclient_contract_typeargs,
-    //         &self.id().to_string(),
-    //     ))?;
-    //     let mut status_log = String::new();
-    //     if let Some(packed_client) = onchain_packed_client_opt {
-    //         let client = packed_client.unpack();
-    //         status_log += &format!("on-chain status: {client}, ");
-    //     } else {
-    //         status_log += "on-chain status: NONE, ";
-    //     }
-    //     if let (Some(start_slot), Some(end_slot)) = (
-    //         self.storage.get_base_beacon_header_slot()?,
-    //         self.storage.get_tip_beacon_header_slot()?,
-    //     ) {
-    //         status_log += &format!("native status: [{start_slot}, {end_slot}]");
-    //     } else {
-    //         status_log += "native status: NONE";
-    //     }
-    //     tracing::info!("[STATUS] {status_log}");
-    //     Ok(())
-    // }
 }
 
 impl ChainEndpoint for CkbChain {
