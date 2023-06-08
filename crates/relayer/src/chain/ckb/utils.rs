@@ -189,7 +189,7 @@ where
 }
 
 pub fn get_verified_packed_client_and_proof_update<S, E>(
-    chain_id: &String,
+    chain_id: &str,
     header_updates: &Vec<EthUpdate>,
     storage: &S,
     onchain_packed_client_opt: Option<&PackedClient>,
