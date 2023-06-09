@@ -141,7 +141,7 @@ pub trait TxCompleter: CellSearcher {
             .as_advanced_builder()
             .output(change_cell)
             .output_data(Bytes::new().pack())
-            .cell_dep(get_secp256k1_celldep().clone())
+            .cell_dep(get_secp256k1_celldep(address.network()))
             .build();
         Ok((tx, inputs_cell_as_output))
     }
