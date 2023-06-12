@@ -55,7 +55,7 @@ hex = "0.4"
 axon-tools = { version = "0.0.10", features = ["impl-serde", "proof"] }
 
 [dependencies.tendermint]
-version = "0.30.0"
+version = "0.32.0"
 default-features = false
 
 [dependencies.tendermint-proto]
