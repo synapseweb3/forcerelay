@@ -162,7 +162,7 @@ impl ChainEndpoint for AxonChain {
             .map_err(Error::key_base)?;
 
         let url = config.websocket_addr.clone();
-        let rpc_client = rpc::AxonRpcClient::new(&url.clone().into());
+        let rpc_client = rpc::AxonRpcClient::new(&config.rpc_addr.clone().into());
         let client = rt
             .block_on(Provider::<Ws>::connect(url.to_string()))
             .map_err(|_| Error::web_socket(url.into()))?;
