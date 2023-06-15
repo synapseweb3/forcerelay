@@ -32,7 +32,7 @@ tree_hash        = { git = "https://github.com/synapseweb3/lighthouse", rev = "2
 
 eth_light_client_in_ckb-verification = { version = "0.2.1", git = "https://github.com/synapseweb3/eth-light-client-in-ckb", tag = "v0.2.1" }
 eth_light_client_in_ckb-prover = { version = "0.2.1", git = "https://github.com/synapseweb3/eth-light-client-in-ckb", tag = "v0.2.1" }
-axon-tools = { version = "0.0.8", features = ["proof", "impl-serde", "abi"] }
+axon-tools = { version = "0.0.10", features = ["proof", "impl-serde", "abi", "ckb-light-client"] }
 
 subtle-encoding = "0.5"
 humantime-serde = "1.1.1"
@@ -88,6 +88,10 @@ ckb-types = "0.106.0"
 ckb-jsonrpc-types = "0.106.0"
 jsonrpc-core = "18.0"
 strum = { version = "0.24.1", features = ["derive"] }
+
+ckb-ics-axon = {git = "https://github.com/synapseweb3/ckb-ics.git", rev = "de03f20"}
+cstr_core = "0.2.6"
+rlp = "0.5.2"
 
 [dependencies.num-bigint]
 version = "0.4"

@@ -203,6 +203,7 @@ pub fn add_key(
         ChainType::Eth => "eth",
         ChainType::Axon => "axon",
         ChainType::Ckb => "ckb",
+        ChainType::Ckb4Ibc => "ckb4ibc",
     };
     let key_pair = {
         let mut keyring = KeyRing::new_secp256k1(Store::Test, account_prefix, config.id())?;
@@ -234,6 +235,7 @@ pub fn restore_key(
         ChainType::Eth => "eth",
         ChainType::Axon => "axon",
         ChainType::Ckb => "ckb",
+        ChainType::Ckb4Ibc => "ckb4ibc",
     };
     let key_pair = {
         let mut keyring = KeyRing::new_secp256k1(Store::Test, account_prefix, config.id())?;

@@ -86,13 +86,11 @@ mod signer;
 mod utils;
 
 #[cfg(test)]
-mod mock_rpc_client;
+pub mod mock_rpc_client;
 #[cfg(not(test))]
-mod rpc_client;
+pub mod rpc_client;
 #[cfg(test)]
-use mock_rpc_client as rpc_client;
-
-use sighash::init_sighash_celldep;
+pub use mock_rpc_client as rpc_client;
 
 #[cfg(test)]
 mod tests;
@@ -329,33 +327,46 @@ impl CkbChain {
             .map_err(Error::key_base)?
             .into_ckb_keypair(self.network()?);
         let tx = signer::sign(tx, &inputs, vec![], key).map_err(Error::key_base)?;
-        let hash = self
-            .rt
-            .block_on(
-                self.rpc_client
-                    .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough)),
+
+        let task = async {
+            let send_res = self
+                .rpc_client
+                .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough))
+                .await;
+            let hash = match send_res {
+                Ok(hash) => Ok(hash),
+                Err(e) => {
+                    let pool_log = utils::collect_ckb_tx_pool_info_on_duplicate_tx(
+                        self.rpc_client.as_ref(),
+                        &e,
+                    )
+                    .await
+                    .unwrap_or_default();
+                    let tx_info = format!(
+                        "== transaction for debugging is below ==\n{}",
+                        serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
+                    );
+                    Err(Error::send_tx(format!("{e}\n{pool_log}\n{tx_info}\n")))
+                }
+            }?;
+
+            tracing::info!(
+                "ckb send_transaction success: {}, wait committed to block",
+                hex::encode(&hash)
+            );
+
+            utils::wait_ckb_transaction_committed(
+                &self.rpc_client,
+                hash,
+                Duration::from_secs(3),
+                0,
+                Duration::from_secs(60),
             )
-            .map_err(|e| {
-                Error::send_tx(format!(
-                    "{e}\n== transaction for debugging is below ==\n{}",
-                    serde_json::to_string(&JsonTx::from(tx)).expect("jsonify ckb tx")
-                ))
-            })?;
-
-        tracing::info!(
-            "ckb send_transaction success: {}, wait committed to block",
-            hex::encode(&hash)
-        );
-        self.rt.block_on(utils::wait_ckb_transaction_committed(
-            &self.rpc_client,
-            hash,
-            Duration::from_secs(3),
-            0,
-            Duration::from_secs(60),
-        ))?;
-        tracing::info!("transaction committed to block");
-
-        Ok(())
+            .await?;
+            tracing::info!("transaction committed to block");
+            Ok(())
+        };
+        self.rt.block_on(task)
     }
 
     pub fn network(&self) -> Result<NetworkType, Error> {
@@ -472,14 +483,15 @@ impl ChainEndpoint for CkbChain {
         let rpc_client = Arc::new(RpcClient::new(&config.ckb_rpc, &config.ckb_indexer_rpc));
         let storage = Storage::new(&config.data_dir)?;
 
-        rt.block_on(init_sighash_celldep(rpc_client.as_ref()))?;
-
-        // check contract and lock type_id_args wether are on-chain deployed
         #[cfg(not(test))]
         {
             use ckb_sdk::constants::TYPE_ID_CODE_HASH;
             use prelude::CellSearcher;
+            use sighash::init_sighash_celldep;
 
+            rt.block_on(init_sighash_celldep(rpc_client.as_ref()))?;
+
+            // check if contract and lock type_id_args are on-chain deployed
             let contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
                 &TYPE_ID_CODE_HASH.pack(),
                 &config.lightclient_contract_typeargs.as_bytes().to_owned(),

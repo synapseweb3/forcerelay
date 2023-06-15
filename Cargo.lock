@@ -284,9 +284,9 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "axon-tools"
-version = "0.0.8"
+version = "0.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4d858895e2d8232900b764c1f3068780f94fada5b27c3b6ceb89557b528ae7c"
+checksum = "4743b240d15489552e5723df36de15905ebb28afabb42d93a0438dc61ad8cc70"
 dependencies = [
  "bit-vec",
  "blst",
@@ -945,6 +945,18 @@ checksum = "038ad6840c4a89f4cd76b50621c4e6d82ca5f0d09fba707b1025016218d4a2d8"
 dependencies = [
  "blake2b-ref",
  "blake2b-rs",
+]
+
+[[package]]
+name = "ckb-ics-axon"
+version = "0.1.0"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=de03f20#de03f20d68f0a202d9398775861cf8256326ab11"
+dependencies = [
+ "bytes",
+ "ethereum-types",
+ "rlp",
+ "rlp-derive",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -1608,6 +1620,16 @@ checksum = "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3"
 dependencies = [
  "generic-array",
  "typenum",
+]
+
+[[package]]
+name = "cstr_core"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd98742e4fdca832d40cab219dc2e3048de17d873248f83f17df47c1bea70956"
+dependencies = [
+ "cty",
+ "memchr",
 ]
 
 [[package]]
@@ -3490,10 +3512,12 @@ dependencies = [
  "bs58",
  "bytes",
  "ckb-hash",
+ "ckb-ics-axon",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
  "crossbeam-channel 0.5.7",
+ "cstr_core",
  "digest 0.10.6",
  "dirs-next",
  "ed25519",
@@ -3529,6 +3553,7 @@ dependencies = [
  "reqwest-retry",
  "retry",
  "ripemd",
+ "rlp",
  "secp256k1",
  "semver",
  "serde",

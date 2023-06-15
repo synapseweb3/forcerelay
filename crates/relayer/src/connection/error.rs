@@ -183,6 +183,12 @@ define_error! {
                     e.tries, e.total_delay.as_secs(), e.description)
             },
 
+        FailCacheTxHash
+            { event: IbcEvent }
+            |e| {
+                format!("fail to cache tx hash for connection event {}",
+                    e.event)
+            },
     }
 }
 

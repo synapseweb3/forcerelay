@@ -1,6 +1,7 @@
 //! Relayer configuration
 pub mod axon;
 pub mod ckb;
+pub mod ckb4ibc;
 pub mod cosmos;
 pub mod error;
 pub mod eth;
@@ -34,6 +35,7 @@ use crate::extension_options::ExtensionOptionDynamicFeeTx;
 pub use crate::config::Error as ConfigError;
 use axon::AxonChainConfig;
 use ckb::ChainConfig as CkbChainConfig;
+use ckb4ibc::ChainConfig as Ckb4IbcChainConfig;
 use cosmos::ChainConfig as CosmosChainConfig;
 pub use error::Error;
 use eth::EthChainConfig;
@@ -195,6 +197,7 @@ pub enum ChainConfig {
     Cosmos(CosmosChainConfig),
     Eth(EthChainConfig),
     Ckb(CkbChainConfig),
+    Ckb4Ibc(Ckb4IbcChainConfig),
     Axon(AxonChainConfig),
 }
 
@@ -205,6 +208,7 @@ impl ChainConfig {
             ChainConfig::Eth(c) => &c.id,
             ChainConfig::Ckb(c) => &c.id,
             ChainConfig::Axon(c) => &c.id,
+            ChainConfig::Ckb4Ibc(c) => &c.id,
         }
     }
 
@@ -214,6 +218,7 @@ impl ChainConfig {
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
             ChainConfig::Axon(_) => todo!(),
+            ChainConfig::Ckb4Ibc(_) => todo!(),
         }
     }
 
@@ -223,6 +228,7 @@ impl ChainConfig {
             ChainConfig::Eth(c) => &c.key_name,
             ChainConfig::Ckb(c) => &c.key_name,
             ChainConfig::Axon(c) => &c.key_name,
+            ChainConfig::Ckb4Ibc(c) => &c.key_name,
         }
     }
 
@@ -272,6 +278,7 @@ impl ChainConfig {
             ChainConfig::Eth(_) => ChainType::Eth,
             ChainConfig::Ckb(_) => ChainType::Ckb,
             ChainConfig::Axon(_) => ChainType::Axon,
+            ChainConfig::Ckb4Ibc(_) => ChainType::Ckb4Ibc,
         }
     }
 
@@ -281,6 +288,7 @@ impl ChainConfig {
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
             ChainConfig::Axon(_) => todo!(),
+            ChainConfig::Ckb4Ibc(_) => todo!(),
         }
     }
 }
@@ -374,6 +382,20 @@ impl TryFrom<ChainConfig> for CkbChainConfig {
 
     fn try_from(value: ChainConfig) -> Result<Self, Self::Error> {
         if let ChainConfig::Ckb(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Ckb config".to_owned()),
+            )))
+        }
+    }
+}
+
+impl TryFrom<ChainConfig> for Ckb4IbcChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Ckb4Ibc(value) = value {
             Ok(value)
         } else {
             Err(RelayerError::config(ConfigError::encode(

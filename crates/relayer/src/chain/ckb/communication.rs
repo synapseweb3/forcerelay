@@ -1,6 +1,6 @@
 use ckb_jsonrpc_types::{
     BlockNumber, BlockView, CellWithStatus, ChainInfo, HeaderView, JsonBytes, OutPoint,
-    OutputsValidator, Transaction, TransactionWithStatusResponse,
+    OutputsValidator, RawTxPool, Transaction, TransactionWithStatusResponse, TxPoolInfo,
 };
 use ckb_sdk::rpc::ckb_indexer::{Cell, Pagination, SearchKey};
 use ckb_types::H256;
@@ -34,6 +34,11 @@ pub trait CkbReader {
         limit: u32,
         cursor: Option<JsonBytes>,
     ) -> Response<Pagination<Cell>>;
+
+    // For debugging purposes.
+    fn get_raw_tx_pool(&self, verbose: bool) -> Response<RawTxPool>;
+
+    fn tx_pool_info(&self) -> Response<TxPoolInfo>;
 }
 
 pub trait CkbWriter {
