@@ -277,15 +277,9 @@ where
     let packed_proof_update = {
         let updates_items = finalized_headers
             .iter()
-            .map(|header| {
-                packed::FinalityUpdate::new_builder()
-                    .finalized_header(header.inner.pack())
-                    .build()
-            })
+            .map(|header| header.inner.pack())
             .collect::<Vec<_>>();
-        let updates = packed::FinalityUpdateVec::new_builder()
-            .set(updates_items)
-            .build();
+        let updates = packed::HeaderVec::new_builder().set(updates_items).build();
         packed::ProofUpdate::new_builder()
             .new_headers_mmr_root(packed_headers_mmr_root)
             .new_headers_mmr_proof(packed_headers_mmr_proof)
@@ -331,7 +325,8 @@ pub async fn wait_ckb_transaction_committed(
             .expect("wait transaction response");
         if tx.tx_status.status == Status::Rejected {
             return Err(Error::send_tx(format!(
-                "transaction {hash:#x} had been rejected"
+                "transaction {hash:#x} had been rejected, reason: {}",
+                tx.tx_status.reason.unwrap_or_else(|| "unknown".to_string())
             )));
         }
         if tx.tx_status.status != Status::Committed {
