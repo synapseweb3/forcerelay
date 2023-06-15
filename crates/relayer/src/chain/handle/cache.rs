@@ -510,4 +510,12 @@ impl<Handle: ChainHandle> ChainHandle for CachingChainHandle<Handle> {
     ) -> Result<QueryIncentivizedPacketResponse, Error> {
         self.inner.query_incentivized_packet(request)
     }
+
+    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
+        &mut self,
+        cached_status: CacheTxHashStatus,
+        tx_hash: T,
+    ) -> Result<(), Error> {
+        self.inner.cache_ics_tx_hash(cached_status, tx_hash)
+    }
 }
