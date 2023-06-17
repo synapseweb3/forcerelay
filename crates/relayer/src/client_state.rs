@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::clients::ics07_axon::client_state::ClientState as AxonClientState;
-use ibc_relayer_types::clients::ics07_ckb::client_state::ClientState as CkbClientState;
+use ibc_relayer_types::clients::ics07_ckb::client_state::{
+    ClientState as CkbClientState, CLIENT_STATE_TYPE_URL as CKB_CLIENT_STATE_TYPE_URL,
+};
 use ibc_relayer_types::clients::ics07_eth::client_state::{
     ClientState as EthClientState, CLIENT_STATE_TYPE_URL as ETH_CLIENT_STATE_TYPE_URL,
 };
@@ -182,7 +184,13 @@ impl From<AnyClientState> for Any {
                     value: json.into_bytes(),
                 }
             }
-            AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Ckb(value) => {
+                let json = serde_json::to_string(&value).expect("jsonify clientstate");
+                Any {
+                    type_url: CKB_CLIENT_STATE_TYPE_URL.to_owned(),
+                    value: json.into_bytes(),
+                }
+            }
             AnyClientState::Axon(_) => todo!(),
             #[cfg(test)]
             AnyClientState::Mock(value) => Any {
@@ -199,7 +207,7 @@ impl ClientState for AnyClientState {
         match self {
             AnyClientState::Tendermint(tm_state) => tm_state.chain_id(),
             AnyClientState::Eth(_) => todo!(),
-            AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Ckb(ckb_state) => ckb_state.chain_id(),
             AnyClientState::Axon(_) => todo!(),
 
             #[cfg(test)]
@@ -250,7 +258,7 @@ impl ClientState for AnyClientState {
         match self {
             AnyClientState::Tendermint(tm_state) => tm_state.expired(elapsed_since_latest),
             AnyClientState::Eth(_) => todo!(),
-            AnyClientState::Ckb(_) => todo!(),
+            AnyClientState::Ckb(_) => false,
             AnyClientState::Axon(_) => todo!(),
 
             #[cfg(test)]

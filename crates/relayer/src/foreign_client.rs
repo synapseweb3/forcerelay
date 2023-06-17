@@ -5,17 +5,20 @@
 //! refers to light clients running *locally* as part of the relayer.
 
 use core::{fmt, time::Duration};
+use std::str::FromStr;
 use std::thread;
 use std::time::Instant;
 
+use ckb_types::H256;
 use ibc_proto::google::protobuf::Any;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use itertools::Itertools;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use flex_error::define_error;
 use ibc_relayer_types::core::ics02_client::client_state::ClientState;
 use ibc_relayer_types::core::ics02_client::error::Error as ClientError;
-use ibc_relayer_types::core::ics02_client::events::UpdateClient;
+use ibc_relayer_types::core::ics02_client::events::{Attributes, CreateClient, UpdateClient};
 use ibc_relayer_types::core::ics02_client::header::Header;
 use ibc_relayer_types::core::ics02_client::msgs::create_client::MsgCreateClient;
 use ibc_relayer_types::core::ics02_client::msgs::misbehaviour::MsgSubmitMisbehaviour;
@@ -31,8 +34,8 @@ use ibc_relayer_types::Height;
 
 use crate::chain::client::ClientSettings;
 use crate::chain::handle::ChainHandle;
-use crate::chain::requests::*;
 use crate::chain::tracking::TrackedMsgs;
+use crate::chain::{requests::*, ChainType};
 use crate::client_state::AnyClientState;
 use crate::consensus_state::AnyConsensusState;
 use crate::error::Error as RelayerError;
@@ -634,6 +637,19 @@ impl<DstChain: ChainHandle, SrcChain: ChainHandle> ForeignClient<DstChain, SrcCh
         &self,
         options: CreateOptions,
     ) -> Result<IbcEventWithHeight, ForeignClientError> {
+        let config = self.dst_chain.config().unwrap();
+        if matches!(config.r#type(), ChainType::Ckb4Ibc) {
+            let client_id = format!("{:x}", H256::from(config.ckb4ibc().client_id()));
+            return Ok(IbcEventWithHeight {
+                event: IbcEvent::CreateClient(CreateClient(Attributes {
+                    client_id: ClientId::from_str(&client_id).unwrap(),
+                    client_type: ClientType::Ckb4Ibc,
+                    consensus_height: Height::new(1, u64::MAX).unwrap(),
+                })),
+                height: Height::new(1, u64::MAX).unwrap(),
+                tx_hash: [0; 32],
+            });
+        }
         let new_msg = self.build_create_client(options)?;
 
         let res = self

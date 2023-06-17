@@ -1,4 +1,5 @@
 mod chan;
+mod client;
 mod conn;
 
 use std::{borrow::Borrow, cell::Ref, collections::HashMap};
@@ -15,6 +16,9 @@ use ckb_types::core::TransactionView;
 use ckb_types::packed::{Byte32, CellInput, OutPoint};
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::{
+    core::ics02_client::msgs::update_client::{
+        MsgUpdateClient, TYPE_URL as UPDATE_CLIENT_TYPE_URL,
+    },
     core::ics03_connection::msgs::{
         conn_open_ack::MsgConnectionOpenAck, conn_open_ack::TYPE_URL as CONN_OPEN_ACK_TYPE_URL,
         conn_open_confirm::MsgConnectionOpenConfirm,
@@ -43,8 +47,11 @@ use ibc_relayer_types::{
         },
         ics24_host::identifier::{ChannelId, PortId},
     },
+    events::IbcEvent,
     tx_msg::Msg,
 };
+
+use self::client::convert_update_client;
 
 use super::utils::get_script_hash;
 
@@ -60,6 +67,9 @@ pub trait MsgToTxConverter {
     fn get_ibc_channel_input(&self, channel_id: &ChannelId, port_id: &PortId) -> CellInput;
 
     fn get_client_outpoint(&self) -> OutPoint;
+    fn get_conn_contract_outpoint(&self) -> OutPoint;
+    fn get_chan_contract_outpoint(&self) -> OutPoint;
+    fn get_packet_contract_outpoint(&self) -> OutPoint;
 
     fn get_channel_code_hash(&self) -> Byte32;
 
@@ -72,6 +82,8 @@ pub trait MsgToTxConverter {
     fn get_packet_cell_input(&self, chan: ChannelId, port: PortId, seq: Sequence) -> CellInput;
 
     fn get_packet_owner(&self) -> [u8; 32];
+
+    fn get_config(&self) -> &ChainConfig;
 }
 
 pub struct Converter<'a> {
@@ -81,6 +93,9 @@ pub struct Converter<'a> {
     pub packet_input_data: Ref<'a, HashMap<(ChannelId, PortId, Sequence), CellInput>>,
     pub config: &'a ChainConfig,
     pub client_outpoint: &'a OutPoint,
+    pub chan_contract_outpoint: &'a OutPoint,
+    pub packet_contract_outpoint: &'a OutPoint,
+    pub conn_contract_outpoint: &'a OutPoint,
     pub packet_owner: [u8; 32],
 }
 
@@ -112,20 +127,32 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         self.client_outpoint.clone()
     }
 
+    fn get_conn_contract_outpoint(&self) -> OutPoint {
+        self.conn_contract_outpoint.clone()
+    }
+
+    fn get_chan_contract_outpoint(&self) -> OutPoint {
+        self.chan_contract_outpoint.clone()
+    }
+
+    fn get_packet_contract_outpoint(&self) -> OutPoint {
+        self.packet_contract_outpoint.clone()
+    }
+
     fn get_channel_code_hash(&self) -> Byte32 {
-        get_script_hash(self.config.channel_type_args.clone())
+        get_script_hash(&self.config.channel_type_args)
     }
 
     fn get_packet_code_hash(&self) -> Byte32 {
-        get_script_hash(self.config.packet_type_args.clone())
+        get_script_hash(&self.config.packet_type_args)
     }
 
     fn get_connection_code_hash(&self) -> Byte32 {
-        get_script_hash(self.config.connection_type_args.clone())
+        get_script_hash(&self.config.connection_type_args)
     }
 
     fn get_client_id(&self) -> [u8; 32] {
-        self.config.client_id
+        self.config.client_id()
     }
 
     fn get_packet_cell_input(
@@ -143,13 +170,24 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     fn get_packet_owner(&self) -> [u8; 32] {
         self.packet_owner
     }
+
+    fn get_config(&self) -> &ChainConfig {
+        self.config
+    }
+}
+
+pub struct CkbTxInfo {
+    pub unsigned_tx: Option<TransactionView>,
+    pub envelope: Envelope,
+    pub input_capacity: u64,
+    pub event: Option<IbcEvent>,
 }
 
 // Return a transaction which needs to be added relayer's input in it and to be signed.
 pub fn convert_msg_to_ckb_tx<C: MsgToTxConverter>(
     msg: Any,
     converter: &C,
-) -> Result<(TransactionView, Envelope, u64), Error> {
+) -> Result<CkbTxInfo, Error> {
     match msg.type_url.as_str() {
         // connection
         CONN_OPEN_INIT_TYPE_URL => {
@@ -208,6 +246,11 @@ pub fn convert_msg_to_ckb_tx<C: MsgToTxConverter>(
             let msg = MsgAcknowledgement::from_any(msg)
                 .map_err(|e| Error::protobuf_decode(ACK_TYPE_URL.to_string(), e))?;
             convert_ack_packet_to_tx(msg, converter)
+        }
+        UPDATE_CLIENT_TYPE_URL => {
+            let msg = MsgUpdateClient::from_any(msg)
+                .map_err(|e| Error::protobuf_decode(UPDATE_CLIENT_TYPE_URL.to_string(), e))?;
+            convert_update_client(msg, converter)
         }
         _ => todo!(),
     }
