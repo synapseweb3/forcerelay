@@ -2,8 +2,8 @@ import requests
 import json
 import time
 
-checkpoint_slot = 5787808
-checkpoint = '0xe06056afdb9a0a9fd7fbaf89bb0e96eced24de0104bc5b7e3960c115d6990f90'
+checkpoint_slot = 6681760
+checkpoint = '0x51cd6fb4ee0efd15c8ec91e50226ee8aeca2d5bc31422cd69a8a9acf9660318e'
 
 rpc = 'https://www.lightclientdata.org'
 
@@ -27,25 +27,19 @@ with open('./mock_data/updates.json', 'w') as f:
 
 finlaity_update_url = '{}/eth/v1/beacon/light_client/finality_update'.format(rpc)
 
+fin_upds = []
+while len(fin_upds) < 3:
+    fin_upd = requests.get(finlaity_update_url).json()
+    if fin_upds:
+        last_fin_upd = fin_upds[-1]
+        if fin_upd['data']['finalized_header']['beacon']['slot'] == last_fin_upd['data']['finalized_header']['beacon']['slot']:
+            continue
+    fin_upds.append(fin_upd)
+    with open(f'./mock_data/finality_update{len(fin_upds)}.json', 'w') as f:
+        f.write(json.dumps(fin_upd, indent=4))
 
-finality_update = requests.get(finlaity_update_url).json()
-with open('./mock_data/finality_update1.json', 'w') as f:
-    f.write(json.dumps(finality_update, indent=4))
-
-time.sleep(30)
-data = requests.get(finlaity_update_url).json()
-
-while data['data']['finalized_header']['slot'] == finality_update['data']['finalized_header']['slot']:
-    with open('./mock_data/finality_update1.json', 'w') as f:
-        f.write(json.dumps(data, indent=4))
-    time.sleep(30)
-    data = requests.get(finlaity_update_url).json()
-
-with open('./mock_data/finality_update2.json', 'w') as f:
-    f.write(json.dumps(data, indent=4))
-
-end_slot = int(data['data']['finalized_header']['slot'])
-start_slot = int(finality_update['data']['finalized_header']['slot'])
+end_slot = int(fin_upds[-1]['data']['finalized_header']['beacon']['slot'])
+start_slot = int(fin_upds[0]['data']['finalized_header']['beacon']['slot'])
 
 for slot in range(start_slot, end_slot):
     req = '{}/eth/v1/beacon/headers/{}'.format(rpc, slot)

@@ -2288,8 +2288,8 @@ dependencies = [
 
 [[package]]
 name = "eth_light_client_in_ckb-prover"
-version = "0.1.0"
-source = "git+https://github.com/synapseweb3/eth-light-client-in-ckb?branch=release/v0.1.x#0113793945a4ddace94e420420881ee38d95b4bb"
+version = "0.2.1"
+source = "git+https://github.com/synapseweb3/eth-light-client-in-ckb?tag=v0.2.1#5e8549d20f8c91da7362cb1c87823c53fd7cd205"
 dependencies = [
  "cita_trie",
  "eth_light_client_in_ckb-verification",
@@ -2302,8 +2302,8 @@ dependencies = [
 
 [[package]]
 name = "eth_light_client_in_ckb-verification"
-version = "0.1.0"
-source = "git+https://github.com/synapseweb3/eth-light-client-in-ckb?branch=release/v0.1.x#0113793945a4ddace94e420420881ee38d95b4bb"
+version = "0.2.1"
+source = "git+https://github.com/synapseweb3/eth-light-client-in-ckb?tag=v0.2.1#5e8549d20f8c91da7362cb1c87823c53fd7cd205"
 dependencies = [
  "ckb-merkle-mountain-range",
  "eth2_hashing",
