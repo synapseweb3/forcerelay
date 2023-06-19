@@ -18,19 +18,13 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
             else:
                 self.send_response(404)
-        elif self.path == '/eth/v1/beacon/light_client/bootstrap/0xe06056afdb9a0a9fd7fbaf89bb0e96eced24de0104bc5b7e3960c115d6990f90':
+        elif self.path == '/eth/v1/beacon/light_client/bootstrap/0x51cd6fb4ee0efd15c8ec91e50226ee8aeca2d5bc31422cd69a8a9acf9660318e':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             content = open(dir + '/mock_data/bootstrap.json', 'rb').read()
             self.wfile.write(content)
-        elif self.path == '/eth/v1/beacon/light_client/updates?start_period=706&count=128':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            content = open(dir + '/mock_data/updates.json', 'rb').read()
-            self.wfile.write(content)
-        elif self.path == '/eth/v1/beacon/light_client/updates?start_period=706&count=1':
+        elif '/eth/v1/beacon/light_client/updates' in self.path:
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -45,8 +39,11 @@ class Handler(BaseHTTPRequestHandler):
             if count <= 5:
                 content = open(dir + '/mock_data/finality_update1.json', 'rb').read()
                 self.wfile.write(content)
-            else:
+            elif count <= 10:
                 content = open(dir + '/mock_data/finality_update2.json', 'rb').read()
+                self.wfile.write(content)
+            else:
+                content = open(dir + '/mock_data/finality_update3.json', 'rb').read()
                 self.wfile.write(content)
         else:
             print(self.path)

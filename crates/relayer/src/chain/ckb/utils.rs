@@ -1,5 +1,6 @@
+use ckb_hash::BLAKE2B_LEN;
 use ckb_jsonrpc_types::Status;
-use ckb_types::H256;
+use ckb_types::{packed::CellInput, H256};
 use eth2_types::EthSpec;
 use eth_light_client_in_ckb_verification::mmr::{self, HeaderWithCache};
 use eth_light_client_in_ckb_verification::types::{
@@ -188,7 +189,7 @@ where
 }
 
 pub fn get_verified_packed_client_and_proof_update<S, E>(
-    chain_id: &String,
+    chain_id: &str,
     header_updates: &Vec<EthUpdate>,
     storage: &S,
     onchain_packed_client_opt: Option<&PackedClient>,
@@ -276,15 +277,9 @@ where
     let packed_proof_update = {
         let updates_items = finalized_headers
             .iter()
-            .map(|header| {
-                packed::FinalityUpdate::new_builder()
-                    .finalized_header(header.inner.pack())
-                    .build()
-            })
+            .map(|header| header.inner.pack())
             .collect::<Vec<_>>();
-        let updates = packed::FinalityUpdateVec::new_builder()
-            .set(updates_items)
-            .build();
+        let updates = packed::HeaderVec::new_builder().set(updates_items).build();
         packed::ProofUpdate::new_builder()
             .new_headers_mmr_root(packed_headers_mmr_root)
             .new_headers_mmr_proof(packed_headers_mmr_proof)
@@ -330,7 +325,8 @@ pub async fn wait_ckb_transaction_committed(
             .expect("wait transaction response");
         if tx.tx_status.status == Status::Rejected {
             return Err(Error::send_tx(format!(
-                "transaction {hash:#x} had been rejected"
+                "transaction {hash:#x} had been rejected, reason: {}",
+                tx.tx_status.reason.unwrap_or_else(|| "unknown".to_string())
             )));
         }
         if tx.tx_status.status != Status::Committed {
@@ -350,6 +346,17 @@ pub async fn wait_ckb_transaction_committed(
         }
     }
     Ok(())
+}
+
+// Calculate type id for multi-client creation.
+pub fn calculate_type_id(first_input: &CellInput, cell_count: usize) -> [u8; BLAKE2B_LEN] {
+    let mut blake2b = ckb_hash::new_blake2b();
+    blake2b.update(first_input.as_slice());
+    blake2b.update(&(cell_count as u64).to_le_bytes());
+
+    let mut ret = [0u8; BLAKE2B_LEN];
+    blake2b.finalize(&mut ret);
+    ret
 }
 
 pub async fn collect_ckb_tx_pool_info_on_duplicate_tx(

@@ -14,7 +14,12 @@ use core::{
     str::FromStr,
     time::Duration,
 };
-use std::{fs, fs::File, io::Write, path::Path};
+use std::{
+    fs,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+};
 use tendermint_rpc::Url;
 
 use ibc_proto::google::protobuf::Any;
@@ -34,8 +39,12 @@ use ckb4ibc::ChainConfig as Ckb4IbcChainConfig;
 use cosmos::ChainConfig as CosmosChainConfig;
 pub use error::Error;
 use eth::EthChainConfig;
+use tokio::sync::OnceCell;
 
 use self::filter::PacketFilter;
+
+// FIXME: This is a bad workaround to update config.
+pub static GLOBAL_CONFIG_PATH: OnceCell<PathBuf> = OnceCell::const_new();
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GasPrice {

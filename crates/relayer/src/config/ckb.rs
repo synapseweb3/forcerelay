@@ -12,6 +12,16 @@ pub struct ChainConfig {
     pub ckb_indexer_rpc: Url,
     pub lightclient_contract_typeargs: H256,
     pub lightclient_lock_typeargs: H256,
+    pub client_type_args: ClientTypeArgs,
+    pub minimal_updates_count: u8,
     pub key_name: String,
     pub data_dir: PathBuf,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ClientTypeArgs {
+    // Hash, 32 bytes
+    pub type_id: Option<H256>,
+    // Number of client cells, plus one info cell
+    pub cells_count: u8,
 }

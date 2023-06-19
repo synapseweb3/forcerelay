@@ -29,6 +29,20 @@ pub trait CellSearcher: CkbReader {
         Ok(result.objects.first().cloned().map(Into::into))
     }
 
+    async fn search_cells(
+        &self,
+        script: &packed::Script,
+        script_type: PrimaryScriptType,
+        limit: u32,
+    ) -> Result<Vec<LiveCell>, Error> {
+        let search: SearchKey = CellQueryOptions::new(script.clone(), script_type).into();
+        let result = self
+            .fetch_live_cells(search, limit, None)
+            .await
+            .map_err(|e| Error::rpc_response(e.to_string()))?;
+        Ok(result.objects.into_iter().map(Into::into).collect())
+    }
+
     async fn search_cell_by_typescript(
         &self,
         code_hash: &packed::Byte32,
@@ -40,6 +54,21 @@ pub trait CellSearcher: CkbReader {
             .args(type_args.pack())
             .build();
         self.search_cell(&typescript, PrimaryScriptType::Type).await
+    }
+
+    async fn search_cells_by_typescript(
+        &self,
+        code_hash: &packed::Byte32,
+        type_args: &[u8],
+        limit: u32,
+    ) -> Result<Vec<LiveCell>, Error> {
+        let typescript = packed::Script::new_builder()
+            .code_hash(code_hash.clone())
+            .hash_type(ScriptHashType::Type.into())
+            .args(type_args.pack())
+            .build();
+        self.search_cells(&typescript, PrimaryScriptType::Type, limit)
+            .await
     }
 
     async fn search_cells_by_address_and_capacity(

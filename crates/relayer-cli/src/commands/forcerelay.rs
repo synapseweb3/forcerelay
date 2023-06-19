@@ -9,6 +9,7 @@ use abscissa_core::{Command, Runnable};
 use tracing::error_span;
 
 use ibc_relayer::chain::handle::{CachingChainHandle, ChainHandle};
+use ibc_relayer::config::GLOBAL_CONFIG_PATH;
 use ibc_relayer::event::monitor::{Error as EventError, ErrorDetail as EventErrorDetail};
 use ibc_relayer::registry::SharedRegistry;
 use ibc_relayer::supervisor::forcerelay::handle_eth_ckb_event_batch;
@@ -38,6 +39,11 @@ pub struct EthCkbCmd {
 impl Runnable for EthCkbCmd {
     fn run(&self) {
         let config = (*app_config()).clone();
+        let config_path = app_config_path().expect("config path isn't set");
+        GLOBAL_CONFIG_PATH
+            .set(config_path.clone())
+            .expect("fail to set config path");
+
         let registry = SharedRegistry::<CachingChainHandle>::new(config);
         let eth = Arc::new(registry.get_or_spawn(&self.eth_chain).unwrap_or_else(|e| {
             Output::error(format!("Forcerelay failed to start ethereum: {e}")).exit()
