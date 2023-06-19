@@ -5,7 +5,9 @@ use ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState as RawConsensus
 use ibc_proto::ibc::mock::ConsensusState as RawMockConsensusState;
 use ibc_proto::protobuf::Protobuf;
 use ibc_relayer_types::clients::ics07_axon::consensus_state::ConsensusState as AxonConsensusState;
-use ibc_relayer_types::clients::ics07_ckb::consensus_state::ConsensusState as CkbConsensusState;
+use ibc_relayer_types::clients::ics07_ckb::consensus_state::{
+    ConsensusState as CkbConsensusState, CKB_CONSENSUS_STATE_TYPE_URL,
+};
 use ibc_relayer_types::clients::ics07_eth::consensus_state::ConsensusState as EthConsensusState;
 use ibc_relayer_types::clients::ics07_tendermint::consensus_state::{
     ConsensusState as TmConsensusState, TENDERMINT_CONSENSUS_STATE_TYPE_URL,
@@ -42,7 +44,7 @@ impl AnyConsensusState {
         match self {
             Self::Tendermint(cs_state) => cs_state.timestamp.into(),
             Self::Eth(_) => todo!(),
-            Self::Ckb(_) => todo!(),
+            Self::Ckb(ckb_state) => ckb_state.timestamp(),
             Self::Axon(_) => todo!(),
 
             #[cfg(test)]
@@ -97,7 +99,14 @@ impl From<AnyConsensusState> for Any {
                     .expect("encoding to `Any` from `AnyConsensusState::Tendermint`"),
             },
             AnyConsensusState::Eth(_) => todo!(),
-            AnyConsensusState::Ckb(_) => todo!(),
+            AnyConsensusState::Ckb(value) => {
+                let json = serde_json::to_string(&value)
+                    .expect("encoding to `Any` from `AnyConsensusState::Ckb`");
+                Any {
+                    type_url: CKB_CONSENSUS_STATE_TYPE_URL.to_string(),
+                    value: json.into_bytes(),
+                }
+            }
             AnyConsensusState::Axon(_) => todo!(),
             #[cfg(test)]
             AnyConsensusState::Mock(value) => Any {

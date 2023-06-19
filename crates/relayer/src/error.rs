@@ -601,6 +601,10 @@ define_error! {
             {tx_hash: String}
             |e| {format_args!("Can not extract channel end from this tx: {}", e.tx_hash)},
 
+        ExtractConnTxError
+            {tx_hash: String}
+            |e| {format_args!("Can not extract ibc connections from this tx: {}", e.tx_hash)},
+
         ConvertChannelEnd
             |_| { "convert channel end error" },
 
@@ -619,11 +623,18 @@ define_error! {
         CkbClientIdInvalid
             {s: String}
             |e| {format_args!("Cannot convert {} as a ckb client id", e.s)},
-        Capacity
-        |_| {"capacity error"},
+
+        CkbNoneWitness
+            |_| { "Trying to get witness to decode an object but no witness in the tx" },
+
+        CkbDecodeWitnessArgs
+            |_| { "Cannot decode a witness" },
+
+        CkbDecodeEnvelope
+            |_| { "Cannot decode an envelope" },
 
         EmptyConnectionHops
-        |_| {"empty connection hops"}
+        |_| {"empty connection hops"},
     }
 }
 

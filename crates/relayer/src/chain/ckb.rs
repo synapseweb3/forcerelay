@@ -77,9 +77,9 @@ use super::{
 mod assembler;
 mod communication;
 mod helper;
-mod sighash;
+pub mod sighash;
 mod signer;
-mod utils;
+pub mod utils;
 
 #[cfg(test)]
 pub mod mock_rpc_client;

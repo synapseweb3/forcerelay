@@ -70,7 +70,6 @@ impl TryFrom<RawMsgConnectionOpenTry> for MsgConnectionOpenTry {
             .map(|v| FromStr::from_str(v.as_str()))
             .transpose()
             .map_err(Error::invalid_identifier)?;
-
         let consensus_height = msg
             .consensus_height
             .and_then(|raw_height| raw_height.try_into().ok())

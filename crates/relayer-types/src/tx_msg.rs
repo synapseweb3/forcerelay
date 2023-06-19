@@ -42,7 +42,7 @@ pub trait Msg: Clone {
         raw_msg.try_into().map_err(|_| {
             DecodeError::new(format!(
                 "fail to convert Any to Msg for type_url {}",
-                any.type_url
+                any.type_url,
             ))
         })
     }

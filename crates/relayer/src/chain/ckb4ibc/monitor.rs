@@ -1,11 +1,13 @@
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use ckb_ics_axon::handler::{IbcPacket, PacketStatus};
 use ckb_ics_axon::object::State as CkbState;
-use ckb_ics_axon::ChannelArgs;
+use ckb_ics_axon::{ChannelArgs, ConnectionArgs};
 use ckb_jsonrpc_types::{Status, TransactionView};
 use ckb_sdk::rpc::ckb_indexer::SearchKey;
+use ckb_types::core::ScriptHashType;
 use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
@@ -71,6 +73,7 @@ impl Ckb4IbcEventMonitor {
     pub fn run(mut self) {
         let rt = self.rt.clone();
         loop {
+            std::thread::sleep(Duration::from_secs(5));
             let result = rt.block_on(self.run_once());
             match result {
                 Next::Continue => continue,
@@ -105,9 +108,18 @@ impl Ckb4IbcEventMonitor {
     }
 
     async fn fetch_connection_events(&self) -> Result<EventBatch> {
+        let connection_code_hash = get_script_hash(&self.config.connection_type_args);
         let script = Script::new_builder()
-            .code_hash(get_script_hash(self.config.connection_type_args.clone()))
-            .args(self.config.client_id.to_vec().pack())
+            .code_hash(connection_code_hash)
+            .hash_type(ScriptHashType::Type.into())
+            .args(
+                ConnectionArgs {
+                    client_id: self.config.client_type_args.clone().into(),
+                }
+                .client_id
+                .as_slice()
+                .pack(),
+            )
             .build();
         let key = get_search_key(script);
         let (ibc_connection_cell, tx_hash) = self
@@ -143,7 +155,7 @@ impl Ckb4IbcEventMonitor {
                     let attrs = Attributes {
                         connection_id: Some(ConnectionId::from_str(&idx.to_string()).unwrap()), // todo connection id here is invalid
                         client_id: ClientId::from_str(
-                            &String::from_utf8(self.config.client_id.to_vec()).unwrap(),
+                            &String::from_utf8(self.config.client_id().to_vec()).unwrap(),
                         )
                         .unwrap(),
                         counterparty_connection_id: None,
@@ -163,7 +175,7 @@ impl Ckb4IbcEventMonitor {
                     let attrs = Attributes {
                         connection_id: Some(ConnectionId::from_str(&idx.to_string()).unwrap()), // todo connection id here is invalid
                         client_id: ClientId::from_str(
-                            &String::from_utf8(self.config.client_id.to_vec()).unwrap(),
+                            &String::from_utf8(self.config.client_id().to_vec()).unwrap(),
                         )
                         .unwrap(),
                         counterparty_connection_id: None,
@@ -192,10 +204,10 @@ impl Ckb4IbcEventMonitor {
 
     async fn fetch_channel_events(&self) -> Result<EventBatch> {
         let script = Script::new_builder()
-            .code_hash(get_script_hash(self.config.channel_type_args.clone()))
+            .code_hash(get_script_hash(&self.config.channel_type_args))
             .args(
                 ChannelArgs {
-                    client_id: self.config.client_id,
+                    client_id: self.config.client_id(),
                     open: false,
                     channel_id: Default::default(),
                     port_id: Default::default(),
@@ -263,7 +275,7 @@ impl Ckb4IbcEventMonitor {
 
     async fn fetch_packet_events(&self) -> Result<EventBatch> {
         let script = Script::new_builder()
-            .code_hash(get_script_hash(self.config.packet_type_args.clone()))
+            .code_hash(get_script_hash(&self.config.packet_type_args))
             .args("".pack())
             .build();
         let key = get_search_key(script);

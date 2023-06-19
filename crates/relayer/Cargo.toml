@@ -89,7 +89,7 @@ ckb-jsonrpc-types = "0.106.0"
 jsonrpc-core = "18.0"
 strum = { version = "0.24.1", features = ["derive"] }
 
-ckb-ics-axon = {git = "https://github.com/synapseweb3/ckb-ics.git", rev = "de03f20"}
+ckb-ics-axon = {git = "https://github.com/synapseweb3/ckb-ics.git", rev = "e57a669"}
 cstr_core = "0.2.6"
 rlp = "0.5.2"
 

@@ -148,7 +148,7 @@ fn encode_address(account_prefix: &str, address: &[u8]) -> Result<String, Error>
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(try_from = "VersionedKeyPair")]
 pub struct Secp256k1KeyPair {
-    private_key: SecretKey,
+    pub private_key: SecretKey,
     pub public_key: PublicKey,
     address: [u8; 20],
     address_type: Secp256k1AddressType,

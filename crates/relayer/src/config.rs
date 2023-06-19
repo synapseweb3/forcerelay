@@ -255,6 +255,14 @@ impl ChainConfig {
         }
     }
 
+    pub fn ckb4ibc(&self) -> &Ckb4IbcChainConfig {
+        if let ChainConfig::Ckb4Ibc(c) = self {
+            c
+        } else {
+            panic!("Not a cosmos chain")
+        }
+    }
+
     pub fn eth(&self) -> &EthChainConfig {
         if let ChainConfig::Eth(e) = self {
             e
@@ -279,7 +287,7 @@ impl ChainConfig {
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
             ChainConfig::Axon(_) => todo!(),
-            ChainConfig::Ckb4Ibc(_) => todo!(),
+            ChainConfig::Ckb4Ibc(_) => Duration::from_secs(90),
         }
     }
 }
@@ -390,7 +398,21 @@ impl TryFrom<ChainConfig> for Ckb4IbcChainConfig {
             Ok(value)
         } else {
             Err(RelayerError::config(ConfigError::encode(
-                toml::ser::Error::Custom("not Ckb config".to_owned()),
+                toml::ser::Error::Custom("not Ckb4ibc config".to_owned()),
+            )))
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ChainConfig> for &'a Ckb4IbcChainConfig {
+    type Error = RelayerError;
+
+    fn try_from(value: &'a ChainConfig) -> Result<Self, Self::Error> {
+        if let ChainConfig::Ckb4Ibc(value) = value {
+            Ok(value)
+        } else {
+            Err(RelayerError::config(ConfigError::encode(
+                toml::ser::Error::Custom("not Ckb4ibc config".to_owned()),
             )))
         }
     }

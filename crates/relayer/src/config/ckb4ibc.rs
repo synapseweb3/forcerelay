@@ -6,6 +6,7 @@ use tendermint_rpc::Url;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainConfig {
     pub id: ChainId,
+    pub counter_chain: ChainId,
     pub ckb_rpc: Url,
     pub ckb_indexer_rpc: Url,
     pub key_name: String,
@@ -14,6 +15,10 @@ pub struct ChainConfig {
     pub connection_type_args: H256,
     pub channel_type_args: H256,
     pub packet_type_args: H256,
+}
 
-    pub client_id: [u8; 32],
+impl ChainConfig {
+    pub fn client_id(&self) -> [u8; 32] {
+        self.client_type_args.clone().into()
+    }
 }

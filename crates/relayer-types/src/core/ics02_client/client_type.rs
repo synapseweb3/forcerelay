@@ -11,6 +11,7 @@ pub enum ClientType {
     Eth = 2,
     Ckb = 3,
     Axon = 4,
+    Ckb4Ibc = 5,
 
     #[cfg(any(test, feature = "mocks"))]
     Mock = 9999,
@@ -20,6 +21,7 @@ impl ClientType {
     const TENDERMINT_STR: &'static str = "07-tendermint";
     const ETH_STR: &'static str = "07-ethereum";
     const CKB_STR: &'static str = "07-ckb0";
+    const CKB4IBC_STR: &'static str = "07-ckb4ibc";
     const AXON_STR: &'static str = "07-axon0";
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -32,6 +34,7 @@ impl ClientType {
             Self::Eth => Self::ETH_STR,
             Self::Ckb => Self::CKB_STR,
             Self::Axon => Self::AXON_STR,
+            Self::Ckb4Ibc => Self::CKB4IBC_STR,
 
             #[cfg(any(test, feature = "mocks"))]
             Self::Mock => Self::MOCK_STR,

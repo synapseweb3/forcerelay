@@ -5,23 +5,29 @@ use crate::{
 use ibc_proto::google::protobuf::Any;
 use ibc_proto::protobuf::Protobuf;
 use serde::{Deserialize, Serialize};
+use tendermint::Time;
 
 use crate::core::ics02_client::error::Error as Ics02Error;
 
+pub const CKB_CONSENSUS_STATE_TYPE_URL: &str = "/ibc.lightclients.ckb.v1.ConsensusState";
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConsensusState {}
+pub struct ConsensusState {
+    pub timestamp: Time,
+    pub commitment_root: CommitmentRoot,
+}
 
 impl crate::core::ics02_client::consensus_state::ConsensusState for ConsensusState {
     fn client_type(&self) -> ClientType {
-        todo!()
+        ClientType::Ckb4Ibc
     }
 
     fn root(&self) -> &CommitmentRoot {
-        todo!()
+        &self.commitment_root
     }
 
     fn timestamp(&self) -> Timestamp {
-        todo!()
+        self.timestamp.into()
     }
 }
 

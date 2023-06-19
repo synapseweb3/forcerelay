@@ -950,7 +950,7 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=de03f20#de03f20d68f0a202d9398775861cf8256326ab11"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=e57a669#e57a669663a4de283d92ce2f538c5cb001035f44"
 dependencies = [
  "bytes",
  "ethereum-types",
@@ -1218,6 +1218,27 @@ name = "ckb-vm-definitions"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5445b62604e7ab2bf5abb37bf6cca7ac26b2e4a76fddb27ceb61850f24864d58"
+
+[[package]]
+name = "ckb4ibc-test"
+version = "0.1.0"
+dependencies = [
+ "ckb-hash",
+ "ckb-ics-axon",
+ "ckb-jsonrpc-types",
+ "ckb-sdk",
+ "ckb-types",
+ "futures",
+ "hex",
+ "ibc-relayer",
+ "jsonrpc-core",
+ "reqwest",
+ "rlp",
+ "secp256k1",
+ "serde_json",
+ "tendermint-rpc",
+ "tokio",
+]
 
 [[package]]
 name = "clang-sys"

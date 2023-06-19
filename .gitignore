@@ -30,3 +30,5 @@ mc.log
 
 # Ignore native MMR storage
 ckb_mmr_storage*/
+
+**/ckb-dev*
