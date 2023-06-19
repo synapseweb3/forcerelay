@@ -1,6 +1,5 @@
 import requests
 import json
-import time
 
 checkpoint_slot = 6681760
 checkpoint = '0x51cd6fb4ee0efd15c8ec91e50226ee8aeca2d5bc31422cd69a8a9acf9660318e'

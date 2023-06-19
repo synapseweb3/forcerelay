@@ -40,12 +40,11 @@ mod tests {
         let ckb_path = "ckb-dev";
         let mut working_dir = std::env::current_dir().unwrap();
         working_dir.push(ckb_path);
-        dbg!(&working_dir);
 
         let _ = std::fs::remove_dir_all(ckb_path);
         std::fs::create_dir(ckb_path).unwrap();
 
-        let mut build_relayer_res = Command::new("cargo")
+        let build_relayer_res = Command::new("cargo")
             .arg("build")
             .arg("-p")
             .arg("ibc-relayer-cli")
@@ -100,6 +99,7 @@ mod tests {
             //     deploy apply-txs \
             //     --migration-dir ./migrations \
             //     --info-file deploy-contracts-info.json
+
             // Deploy multi-client and always-success contracts
             println!("Deploy multi-client and always-success contracts");
             std::fs::create_dir(working_dir.join("migrations")).unwrap();
@@ -128,8 +128,6 @@ mod tests {
 
         // Waiting for the finality of the ckb contracts
         sleep(10);
-        // let ten_secs = time::Duration::from_secs(10);
-        // thread::sleep(ten_secs);
 
         // RUST_LOG=info ./forcerelay --config ../config.toml eth-ckb --ethereum-chain-id ibc-eth-0 --ckb-chain-id ibc-ckb-0
         println!("run relayer");
@@ -155,15 +153,17 @@ mod tests {
 
         println!("get type id");
         let type_id = {
+            // Some log are printed to stderr, some are printed to stdout.
+            // For type_id, it is printed to stderr.
             let stderr = running_relayer.stderr.take().unwrap();
             let reader = std::io::BufReader::new(stderr);
-            // let stdout = running_relayer.stdout.take().unwrap();
-            // let mut reader = std::io::BufReader::new(stdout);
+
+            // Only take the first 50 lines to avoid waiting indefinitely.
             let mut lines = reader.lines().take(50);
             let type_id = lines
                 .find_map(|line| {
                     let line = line.expect("read line failed");
-                    dbg!(&line);
+                    println!("{}", line);
                     let begin_str = "worker.forcerelay: new type_id: ";
                     if let Some(pos) = line.find(begin_str) {
                         let type_id = line[pos + begin_str.len()..].trim();
