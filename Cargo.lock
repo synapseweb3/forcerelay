@@ -3181,9 +3181,9 @@ dependencies = [
 
 [[package]]
 name = "hdpath"
-version = "0.6.1"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dafb09e5d85df264339ad786a147d9de1da13687a3697c52244297e5e7c32d9c"
+checksum = "dfa5bc9db2c17d2660f53ce217b778d06d68de13d1cd01c0f4e5de4b7918935f"
 dependencies = [
  "byteorder",
 ]
