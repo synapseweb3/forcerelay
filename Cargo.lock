@@ -3500,7 +3500,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "time",
- "toml 0.5.11",
+ "toml 0.7.3",
  "tonic",
 ]
 
@@ -3596,7 +3596,7 @@ dependencies = [
  "tiny-bip39",
  "tiny-keccak",
  "tokio",
- "toml 0.5.11",
+ "toml 0.7.3",
  "tonic",
  "tracing",
  "tracing-subscriber",
@@ -3656,7 +3656,7 @@ dependencies = [
  "rouille",
  "serde",
  "serde_json",
- "toml 0.5.11",
+ "toml 0.7.3",
  "tracing",
  "ureq",
 ]
@@ -3756,7 +3756,7 @@ dependencies = [
  "subtle-encoding",
  "tendermint-rpc",
  "tokio",
- "toml 0.5.11",
+ "toml 0.7.3",
  "tonic",
  "tracing",
  "tracing-subscriber",
