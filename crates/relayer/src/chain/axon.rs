@@ -84,7 +84,7 @@ use ibc_relayer_types::{
         ics24_host::identifier::{self, ChainId, ChannelId, ClientId, ConnectionId, PortId},
     },
     events::IbcEvent,
-    proofs::Proofs,
+    proofs::{ConsensusProof, Proofs},
     signer::Signer,
     timestamp::Timestamp,
     tx_msg::Msg,
@@ -958,8 +958,17 @@ impl AxonChain {
             .as_raw()
             .to_owned();
         let height = Height::new(u64::MAX, u64::MAX).unwrap();
-        let proofs =
-            Proofs::new(object_proof.try_into().unwrap(), None, None, None, height).unwrap();
+        let consensus_proof =
+            ConsensusProof::new(vec![1u8].try_into().unwrap(), Height::new(1, 1).unwrap()).unwrap();
+        let client_proof = vec![1u8].try_into().unwrap();
+        let proofs = Proofs::new(
+            object_proof.try_into().unwrap(),
+            Some(client_proof),
+            Some(consensus_proof),
+            None,
+            height,
+        )
+        .unwrap();
 
         // check the validation of Axon block
         axon_tools::verify_proof(block, state_root, &mut validators, proof)

@@ -40,6 +40,8 @@ use crate::light_client::AnyHeader;
 use crate::misbehaviour::MisbehaviourEvidence;
 use crate::telemetry;
 
+use super::CacheTxHashStatus;
+
 /// A chain handle with support for caching.
 /// To be used for the passive relaying mode (i.e., `start` CLI).
 #[derive(Debug, Clone)]
