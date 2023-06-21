@@ -206,9 +206,9 @@ impl ClientState for AnyClientState {
     fn chain_id(&self) -> ChainId {
         match self {
             AnyClientState::Tendermint(tm_state) => tm_state.chain_id(),
-            AnyClientState::Eth(_) => todo!(),
-            AnyClientState::Ckb(ckb_state) => ckb_state.chain_id(),
-            AnyClientState::Axon(_) => todo!(),
+            AnyClientState::Eth(state) => state.chain_id(),
+            AnyClientState::Ckb(state) => state.chain_id(),
+            AnyClientState::Axon(state) => state.chain_id(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.chain_id(),
