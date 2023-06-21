@@ -21,7 +21,7 @@ clear_on_start = true
 tx_confirmation = true
 
 [[chains]]
-id = 'ckb4ibc-0'
+id = "ckb4ibc-0"
 ckb_rpc = "http://127.0.0.1:8114"
 ckb_indexer_rpc = "http://127.0.0.1:8114"
 key_name = "relayer_ckb_wallet"
@@ -33,7 +33,7 @@ packet_type_args = "0xad8bca6ff76ad676bb7eb35882faf259cb6ff50be8ce9c0b9d6f51728e
 client_type_args = "0x29866e133f707f070459b905065294ab1a7b70bea200952a080f849319ae6202"
 
 [[chains]]
-id = 'ckb4ibc-1'
+id = "ckb4ibc-1"
 ckb_rpc = "http://127.0.0.1:8214"
 ckb_indexer_rpc = "http://127.0.0.1:8214"
 key_name = "relayer_ckb_wallet"

@@ -300,6 +300,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "axon-types"
+version = "0.1.0"
+source = "git+https://github.com/axonweb3/axon-contract?rev=8c2338a#8c2338ad5a3b32f260b5da234536f2681bf7712b"
+dependencies = [
+ "molecule",
+ "molecule2",
+]
+
+[[package]]
 name = "axum"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1223,6 +1232,7 @@ checksum = "5445b62604e7ab2bf5abb37bf6cca7ac26b2e4a76fddb27ceb61850f24864d58"
 name = "ckb4ibc-test"
 version = "0.1.0"
 dependencies = [
+ "axon-types",
  "ckb-hash",
  "ckb-ics-axon",
  "ckb-jsonrpc-types",
@@ -1237,6 +1247,7 @@ dependencies = [
  "secp256k1",
  "serde_json",
  "tendermint-rpc",
+ "tiny-keccak",
  "tokio",
 ]
 
@@ -4430,6 +4441,11 @@ dependencies = [
  "cfg-if 1.0.0",
  "faster-hex",
 ]
+
+[[package]]
+name = "molecule2"
+version = "0.1.0"
+source = "git+https://github.com/axonweb3/axon-contract?rev=8c2338a#8c2338ad5a3b32f260b5da234536f2681bf7712b"
 
 [[package]]
 name = "multipart"

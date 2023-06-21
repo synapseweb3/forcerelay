@@ -590,6 +590,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 input_capacity,
                 envelope,
             ) {
+                let last_input_idx = tx.inputs().len() - 1;
                 let secret_key = self
                     .keybase
                     .get_key(&self.config.key_name)
@@ -605,7 +606,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                         &ScriptGroup {
                             script: Script::from(&self.tx_assembler_address()?),
                             group_type: ScriptGroupType::Lock,
-                            input_indices: vec![1],
+                            input_indices: vec![last_input_idx],
                             output_indices: vec![],
                         },
                     )
