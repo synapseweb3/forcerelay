@@ -62,8 +62,10 @@ impl LightClient {
                     // axon validators would refresh in case of the change of epoch
                     if block.header.number % epoch_len == 0 {
                         rt.block_on(emiters.read()).iter().for_each(|emiter| {
-                            rt.block_on(emiter.send(block.header.clone().into()))
-                                .expect("send axon header");
+                            let header = Header {
+                                axon_header: block.header.clone(),
+                            };
+                            rt.block_on(emiter.send(header)).expect("send axon header");
                         });
                     }
                     futures::future::ready(())

@@ -8,10 +8,7 @@ use std::{
     thread,
 };
 
-use axon_tools::{
-    ckb_light_client::CellBlockUpdate,
-    types::{AxonBlock, Proof as AxonProof, Validator},
-};
+use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
 use bytes::Bytes;
 use eth2_types::Hash256;
 use tracing::warn;

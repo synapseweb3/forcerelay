@@ -284,15 +284,15 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "axon-tools"
-version = "0.0.10"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4743b240d15489552e5723df36de15905ebb28afabb42d93a0438dc61ad8cc70"
+checksum = "0b7c3133374af33d8b9182c9e7972b7cb0798a2ed4c2643819274123c5c4763e"
 dependencies = [
  "bit-vec",
  "blst",
  "bytes",
  "ethereum-types",
- "ethers",
+ "faster-hex",
  "rlp",
  "rlp-derive",
  "serde",
