@@ -45,7 +45,7 @@ impl AnyConsensusState {
             Self::Tendermint(cs_state) => cs_state.timestamp.into(),
             Self::Eth(_) => todo!(),
             Self::Ckb(ckb_state) => ckb_state.timestamp(),
-            Self::Axon(_) => todo!(),
+            Self::Axon(_) => Default::default(),
 
             #[cfg(test)]
             Self::Mock(mock_state) => mock_state.timestamp(),

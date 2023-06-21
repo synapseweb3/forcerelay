@@ -957,7 +957,7 @@ impl AxonChain {
             .append(&proof)
             .as_raw()
             .to_owned();
-        let height = Height::new(u64::MAX, u64::MAX).unwrap();
+        let height = Height::new(1, 1).unwrap();
         let consensus_proof =
             ConsensusProof::new(vec![1u8].try_into().unwrap(), Height::new(1, 1).unwrap()).unwrap();
         let client_proof = vec![1u8].try_into().unwrap();
