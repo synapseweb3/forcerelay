@@ -67,7 +67,10 @@ impl LightClient {
                 );
                 // axon validators would refresh in case of the change of epoch
                 if block.header.number % epoch_len == 0 {
-                    info!("axon: new epoch starting with block {}", block.header.number);
+                    info!(
+                        "axon: new epoch starting with block {}",
+                        block.header.number
+                    );
                     for emitter in emitters.read().await.iter() {
                         let header = Header {
                             axon_header: block.header.clone(),

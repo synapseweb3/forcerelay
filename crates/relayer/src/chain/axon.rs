@@ -52,7 +52,8 @@ use ibc_relayer_types::{
     clients::{
         ics07_axon::{
             client_state::ClientState as AxonClientState,
-            consensus_state::ConsensusState as AxonConsensusState, header::Header as AxonHeader,
+            consensus_state::ConsensusState as AxonConsensusState,
+            header::{Header as AxonHeader, AXON_HEADER_TYPE_URL},
         },
         ics07_ckb::client_state,
     },
@@ -162,7 +163,7 @@ impl ChainEndpoint for AxonChain {
             .map_err(Error::key_base)?;
 
         let url = config.websocket_addr.clone();
-        let rpc_client = rpc::AxonRpcClient::new(&config.rpc_addr.clone().into());
+        let rpc_client = rpc::AxonRpcClient::new(&config.rpc_addr);
         let client = rt
             .block_on(Provider::<Ws>::connect(url.to_string()))
             .map_err(|_| Error::web_socket(url.into()))?;
@@ -1026,9 +1027,7 @@ impl AxonChain {
                 let bytes = msg.header.value.as_slice();
                 let type_url = msg.header.type_url;
                 let to = match type_url.as_str() {
-                    ics07_axon::header::AXON_HEADER_TYPE_URL => {
-                        self.config.ckb_light_client_contract_address
-                    }
+                    AXON_HEADER_TYPE_URL => self.config.ckb_light_client_contract_address,
                     "CELL_TYPE_URL" => self.config.image_cell_contract_address,
                     type_url => {
                         return Err(Error::other_error(format!("unknown type_url {}", type_url)))
