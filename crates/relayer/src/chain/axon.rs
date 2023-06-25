@@ -444,11 +444,6 @@ impl ChainEndpoint for AxonChain {
         request: QueryConnectionRequest,
         include_proof: IncludeProof,
     ) -> Result<(ConnectionEnd, Option<MerkleProof>), Error> {
-        if matches!(request.height, QueryHeight::Specific(_)) {
-            return Err(Error::other_error(
-                "not support connection query in specific height".to_string(),
-            ));
-        }
         let (connection_end, _) = self
             .rt
             .block_on(
@@ -773,7 +768,12 @@ impl ChainEndpoint for AxonChain {
         target_height: Height,
         client_state: &AnyClientState,
     ) -> Result<(Self::Header, Vec<Self::Header>), Error> {
-        todo!()
+        // NOTE: Temporarily skip unimplementation
+        let header = self
+            .rt
+            .block_on(self.rpc_client.get_block_by_id(1.into()))?
+            .header;
+        Ok((header.into(), vec![]))
     }
 
     fn maybe_register_counterparty_payee(
@@ -1026,7 +1026,9 @@ impl AxonChain {
                 let bytes = msg.header.value.as_slice();
                 let type_url = msg.header.type_url;
                 let to = match type_url.as_str() {
-                    "HEADER_TYPE_URL" => self.config.ckb_light_client_contract_address,
+                    ics07_axon::header::AXON_HEADER_TYPE_URL => {
+                        self.config.ckb_light_client_contract_address
+                    }
                     "CELL_TYPE_URL" => self.config.image_cell_contract_address,
                     type_url => {
                         return Err(Error::other_error(format!("unknown type_url {}", type_url)))
@@ -1206,7 +1208,12 @@ impl AxonChain {
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
             match type_url.as_str() {
-                update_client::TYPE_URL => Some(Ok(UpdateClientFilter(Default::default()))),
+                update_client::TYPE_URL => {
+                    Some(Ok(UpdateClientFilter(contract::UpdateClientFilter {
+                        client_id: "default-0".to_string(),
+                        client_message: "0x12345678".parse().unwrap(),
+                    })))
+                }
                 conn_open_init::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(OpenInitConnectionFilter(_))))
                 }
