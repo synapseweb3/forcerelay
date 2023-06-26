@@ -20,6 +20,6 @@ serde_json = { version = "1" }
 ckb-ics-axon = {git = "https://github.com/synapseweb3/ckb-ics.git", rev = "e57a669"}
 rlp = "0.5.2"
 secp256k1 = "0.24"
-ckb-hash = "0.106"
+ckb-hash = "0.110"
 tiny-keccak = { version = "2.0.2", features = ["keccak"], default-features = false }
 axon-types = {git = "https://github.com/axonweb3/axon-contract", rev = "8c2338a"}
