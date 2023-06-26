@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
-use ethers::prelude::{Provider, Ws};
 use futures::TryFutureExt;
 use ibc_relayer_types::clients::ics07_axon::header::Header;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::RwLock;
+use tracing::info;
 
 use crate::chain::axon::{AxonChain, AxonRpc};
 use crate::chain::endpoint::ChainEndpoint;
@@ -49,26 +49,37 @@ impl LightClient {
         epoch_len: u64,
     ) -> Result<(), Error> {
         let rt = self.rt.clone();
-        let emiters = self.header_updaters.clone();
+        let emitters = self.header_updaters.clone();
         self.rt.spawn(async move {
-            provider
+            info!("axon: start watching new block from axon chain");
+            let mut stream = provider
                 .watch_blocks()
                 .await
-                .expect("unsupported ws client")
-                .for_each(|block_hash| {
-                    let block = rt
-                        .block_on(rpc.get_block_by_id(block_hash.into()))
-                        .expect("watch axon block failed");
-                    // axon validators would refresh in case of the change of epoch
-                    if block.header.number % epoch_len == 0 {
-                        rt.block_on(emiters.read()).iter().for_each(|emiter| {
-                            rt.block_on(emiter.send(block.header.clone().into()))
-                                .expect("send axon header");
-                        });
+                .expect("unsupported ws client");
+            while let Some(block_hash) = stream.next().await {
+                let block = rpc
+                    .get_block_by_id(block_hash.into())
+                    .await
+                    .expect("watch axon block failed");
+                info!(
+                    "axon: new block {} with hash {:?}",
+                    block.header.number, block_hash
+                );
+                // axon validators would refresh in case of the change of epoch
+                if block.header.number % epoch_len == 0 {
+                    info!(
+                        "axon: new epoch starting with block {}",
+                        block.header.number
+                    );
+                    for emitter in emitters.read().await.iter() {
+                        let header = Header {
+                            axon_header: block.header.clone(),
+                        };
+                        emitter.send(header).await.expect("send axon header");
                     }
-                    futures::future::ready(())
-                })
-                .await;
+                }
+            }
+            info!("axon: end watching new block from axon chain");
         });
         Ok(())
     }

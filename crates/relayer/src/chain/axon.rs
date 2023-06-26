@@ -8,10 +8,7 @@ use std::{
     thread,
 };
 
-use axon_tools::{
-    ckb_light_client::CellBlockUpdate,
-    types::{AxonBlock, Proof as AxonProof, Validator},
-};
+use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
 use bytes::Bytes;
 use eth2_types::Hash256;
 use tracing::warn;
@@ -55,7 +52,8 @@ use ibc_relayer_types::{
     clients::{
         ics07_axon::{
             client_state::ClientState as AxonClientState,
-            consensus_state::ConsensusState as AxonConsensusState, header::Header as AxonHeader,
+            consensus_state::ConsensusState as AxonConsensusState,
+            header::{Header as AxonHeader, AXON_HEADER_TYPE_URL},
         },
         ics07_ckb::client_state,
     },
@@ -87,7 +85,7 @@ use ibc_relayer_types::{
         ics24_host::identifier::{self, ChainId, ChannelId, ClientId, ConnectionId, PortId},
     },
     events::IbcEvent,
-    proofs::Proofs,
+    proofs::{ConsensusProof, Proofs},
     signer::Signer,
     timestamp::Timestamp,
     tx_msg::Msg,
@@ -165,7 +163,7 @@ impl ChainEndpoint for AxonChain {
             .map_err(Error::key_base)?;
 
         let url = config.websocket_addr.clone();
-        let rpc_client = rpc::AxonRpcClient::new(&url.clone().into());
+        let rpc_client = rpc::AxonRpcClient::new(&config.rpc_addr);
         let client = rt
             .block_on(Provider::<Ws>::connect(url.to_string()))
             .map_err(|_| Error::web_socket(url.into()))?;
@@ -447,11 +445,6 @@ impl ChainEndpoint for AxonChain {
         request: QueryConnectionRequest,
         include_proof: IncludeProof,
     ) -> Result<(ConnectionEnd, Option<MerkleProof>), Error> {
-        if matches!(request.height, QueryHeight::Specific(_)) {
-            return Err(Error::other_error(
-                "not support connection query in specific height".to_string(),
-            ));
-        }
         let (connection_end, _) = self
             .rt
             .block_on(
@@ -776,7 +769,12 @@ impl ChainEndpoint for AxonChain {
         target_height: Height,
         client_state: &AnyClientState,
     ) -> Result<(Self::Header, Vec<Self::Header>), Error> {
-        todo!()
+        // NOTE: Temporarily skip unimplementation
+        let header = self
+            .rt
+            .block_on(self.rpc_client.get_block_by_id(1.into()))?
+            .header;
+        Ok((header.into(), vec![]))
     }
 
     fn maybe_register_counterparty_payee(
@@ -960,9 +958,18 @@ impl AxonChain {
             .append(&proof)
             .as_raw()
             .to_owned();
-        let height = Height::new(u64::MAX, u64::MAX).unwrap();
-        let proofs =
-            Proofs::new(object_proof.try_into().unwrap(), None, None, None, height).unwrap();
+        let height = Height::new(1, 1).unwrap();
+        let consensus_proof =
+            ConsensusProof::new(vec![1u8].try_into().unwrap(), Height::new(1, 1).unwrap()).unwrap();
+        let client_proof = vec![1u8].try_into().unwrap();
+        let proofs = Proofs::new(
+            object_proof.try_into().unwrap(),
+            Some(client_proof),
+            Some(consensus_proof),
+            None,
+            height,
+        )
+        .unwrap();
 
         // check the validation of Axon block
         axon_tools::verify_proof(block, state_root, &mut validators, proof)
@@ -1020,7 +1027,7 @@ impl AxonChain {
                 let bytes = msg.header.value.as_slice();
                 let type_url = msg.header.type_url;
                 let to = match type_url.as_str() {
-                    "HEADER_TYPE_URL" => self.config.ckb_light_client_contract_address,
+                    AXON_HEADER_TYPE_URL => self.config.ckb_light_client_contract_address,
                     "CELL_TYPE_URL" => self.config.image_cell_contract_address,
                     type_url => {
                         return Err(Error::other_error(format!("unknown type_url {}", type_url)))
@@ -1200,7 +1207,12 @@ impl AxonChain {
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
             match type_url.as_str() {
-                update_client::TYPE_URL => Some(Ok(UpdateClientFilter(Default::default()))),
+                update_client::TYPE_URL => {
+                    Some(Ok(UpdateClientFilter(contract::UpdateClientFilter {
+                        client_id: "default-0".to_string(),
+                        client_message: "0x12345678".parse().unwrap(),
+                    })))
+                }
                 conn_open_init::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(OpenInitConnectionFilter(_))))
                 }

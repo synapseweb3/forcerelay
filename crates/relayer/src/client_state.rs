@@ -100,7 +100,7 @@ impl AnyClientState {
             AnyClientState::Tendermint(state) => Some(state.trust_threshold),
             AnyClientState::Eth(_) => None,
             AnyClientState::Ckb(_) => None,
-            AnyClientState::Axon(_) => None,
+            AnyClientState::Axon(_) => TrustThreshold::new(1, 2).ok(),
 
             #[cfg(test)]
             AnyClientState::Mock(_) => None,
@@ -206,9 +206,9 @@ impl ClientState for AnyClientState {
     fn chain_id(&self) -> ChainId {
         match self {
             AnyClientState::Tendermint(tm_state) => tm_state.chain_id(),
-            AnyClientState::Eth(_) => todo!(),
-            AnyClientState::Ckb(ckb_state) => ckb_state.chain_id(),
-            AnyClientState::Axon(_) => todo!(),
+            AnyClientState::Eth(state) => state.chain_id(),
+            AnyClientState::Ckb(state) => state.chain_id(),
+            AnyClientState::Axon(state) => state.chain_id(),
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.chain_id(),
@@ -259,7 +259,7 @@ impl ClientState for AnyClientState {
             AnyClientState::Tendermint(tm_state) => tm_state.expired(elapsed_since_latest),
             AnyClientState::Eth(_) => todo!(),
             AnyClientState::Ckb(_) => false,
-            AnyClientState::Axon(_) => todo!(),
+            AnyClientState::Axon(_) => false,
 
             #[cfg(test)]
             AnyClientState::Mock(mock_state) => mock_state.expired(elapsed_since_latest),

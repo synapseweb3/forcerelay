@@ -9,7 +9,6 @@ use crate::{
     prelude::*,
     Height,
 };
-use axon_tools::types::{AxonBlock, Validator};
 use core::convert::TryFrom;
 use ibc_proto::google::protobuf::Any;
 use ibc_proto::protobuf::Protobuf;
@@ -20,8 +19,7 @@ pub const AXON_CLIENT_STATE_TYPE_URL: &str = "/axon.client.v1.state";
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ClientState {
     pub chain_id: ChainId,
-    pub axon_block: AxonBlock,
-    pub validator_list: Vec<Validator>,
+    pub latest_height: Height,
 }
 
 impl Ics02ClientState for ClientState {
@@ -34,7 +32,7 @@ impl Ics02ClientState for ClientState {
     }
 
     fn latest_height(&self) -> Height {
-        Height::new(u64::MAX, self.axon_block.header.number).expect("bad axon block")
+        self.latest_height
     }
 
     fn frozen_height(&self) -> Option<Height> {
