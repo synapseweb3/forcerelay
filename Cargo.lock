@@ -1297,15 +1297,6 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "3.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f7a2e0a962c45ce25afce14220bc24f9dade0a1787f185cecf96bfba7847cd8"
-dependencies = [
- "clap 3.2.23",
-]
-
-[[package]]
-name = "clap_complete"
 version = "4.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "501ff0a401473ea1d4c3b125ff95506b62c5bc5768d818634195fbb7c4ad5ff4"
@@ -3625,7 +3616,7 @@ dependencies = [
  "abscissa_core",
  "atty",
  "clap 3.2.23",
- "clap_complete 3.2.5",
+ "clap_complete",
  "color-eyre",
  "console 0.15.5",
  "crossbeam-channel 0.5.7",
@@ -4267,7 +4258,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap 4.1.8",
- "clap_complete 4.1.4",
+ "clap_complete",
  "elasticlunr-rs",
  "env_logger 0.10.0",
  "futures-util",
