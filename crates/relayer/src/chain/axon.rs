@@ -927,11 +927,32 @@ impl AxonChain {
             ))
         })?;
 
-        let receipts: Receipts = self
+        let block = self
             .rt
-            .block_on(self.client.get_block_receipts(block_number))
+            .block_on(self.client.get_block(block_number))
             .map_err(|e| Error::rpc_response(e.to_string()))?
-            .into();
+            .ok_or_else(|| {
+                Error::other_error(format!("can't find block with number {}", block_number))
+            })?;
+
+        let tx_receipts = block
+            .transactions
+            .into_iter()
+            .map(|tx_hash| {
+                let receipt = self
+                    .rt
+                    .block_on(self.client.get_transaction_receipt(tx_hash));
+                match receipt {
+                    Ok(Some(receipt)) => Ok(receipt),
+                    Ok(None) => Err(Error::other_error(format!(
+                        "can't find transaction receipt with hash {}",
+                        hex::encode(tx_hash)
+                    ))),
+                    Err(e) => Err(Error::rpc_response(e.to_string())),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let receipts: Receipts = tx_receipts.into();
         let receipt_proof = receipts.generate_proof(receipt.transaction_index.as_usize());
 
         let (block, state_root, proof, mut validators) = self
