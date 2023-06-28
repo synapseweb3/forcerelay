@@ -1035,6 +1035,61 @@ impl AxonChain {
 
         Ok((block, state_root, proof, validators))
     }
+
+    fn cache_ics_tx_hash_with_event<T: Into<[u8; 32]>>(
+        &mut self,
+        event: IbcEvent,
+        tx_hash: T,
+    ) -> Result<(), Error> {
+        let tx_hash_status = match event {
+            IbcEvent::OpenInitConnection(event) => Some(CacheTxHashStatus::new_with_conn(
+                event.0.connection_id.unwrap(),
+            )),
+            IbcEvent::OpenTryConnection(event) => Some(CacheTxHashStatus::new_with_conn(
+                event.0.connection_id.unwrap(),
+            )),
+            IbcEvent::OpenAckConnection(event) => Some(CacheTxHashStatus::new_with_conn(
+                event.0.connection_id.unwrap(),
+            )),
+            IbcEvent::OpenConfirmConnection(event) => Some(CacheTxHashStatus::new_with_conn(
+                event.0.connection_id.unwrap(),
+            )),
+            IbcEvent::OpenInitChannel(event) => Some(CacheTxHashStatus::new_with_chan(
+                event.channel_id.unwrap(),
+                event.port_id,
+            )),
+            IbcEvent::OpenTryChannel(event) => Some(CacheTxHashStatus::new_with_chan(
+                event.channel_id.unwrap(),
+                event.port_id,
+            )),
+            IbcEvent::OpenAckChannel(event) => Some(CacheTxHashStatus::new_with_chan(
+                event.channel_id.unwrap(),
+                event.port_id,
+            )),
+            IbcEvent::OpenConfirmChannel(event) => Some(CacheTxHashStatus::new_with_chan(
+                event.channel_id.unwrap(),
+                event.port_id,
+            )),
+            IbcEvent::SendPacket(event) => Some(CacheTxHashStatus::new_with_packet(
+                event.packet.source_channel,
+                event.packet.source_port,
+                event.packet.sequence.into(),
+            )),
+            IbcEvent::ReceivePacket(event) => Some(CacheTxHashStatus::new_with_packet(
+                event.packet.destination_channel,
+                event.packet.destination_port,
+                event.packet.sequence.into(),
+            )),
+            _ => None,
+        };
+        match tx_hash_status {
+            Some(tx_hash_status) => {
+                self.cache_ics_tx_hash(tx_hash_status, tx_hash)?;
+            }
+            None => {}
+        }
+        Ok(())
+    }
 }
 
 impl AxonChain {
@@ -1220,7 +1275,7 @@ impl AxonChain {
             }
         };
         let tx_receipt = tx_receipt.ok_or(Error::send_tx(String::from("fail to send tx")))?;
-        let event = {
+        let event: IbcEvent = {
             use contract::OwnableIBCHandlerEvents::*;
             let mut events = tx_receipt
                 .logs
@@ -1295,6 +1350,7 @@ impl AxonChain {
             })?;
             Height::new(u64::MAX, block_height.as_u64()).unwrap()
         };
+        let _ = self.cache_ics_tx_hash_with_event(event.clone(), tx_hash)?;
         Ok(IbcEventWithHeight {
             event,
             height,
