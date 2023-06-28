@@ -295,7 +295,7 @@ impl ChainConfig {
             ChainConfig::Cosmos(c) => c.max_block_time,
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
-            ChainConfig::Axon(_) => todo!(),
+            ChainConfig::Axon(_) => Duration::from_secs(90),
             ChainConfig::Ckb4Ibc(_) => Duration::from_secs(90),
         }
     }
