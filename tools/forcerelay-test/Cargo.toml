@@ -5,7 +5,7 @@ edition = "2021"
 
 [dev-dependencies]
 ckb-sdk = "=2.4.0"
-ckb-jsonrpc-types = "0.106.0"
+ckb-jsonrpc-types = "0.110.0"
 ckb-types = "0.106.0"
 hex = "0.4"
 
