@@ -1,12 +1,13 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::account::Balance;
 use crate::chain::ckb::prelude::{CellSearcher, CkbReader, CkbWriter, TxCompleter};
 use crate::chain::ckb4ibc::extractor::extract_channel_end_from_tx;
-use crate::chain::ckb4ibc::utils::{get_connection_idx, get_connection_search_key};
+use crate::chain::ckb4ibc::utils::{get_connection_index_by_id, get_connection_search_key};
 use crate::chain::endpoint::ChainEndpoint;
 use crate::client_state::{AnyClientState, IdentifiedAnyClientState};
 use crate::config::ckb4ibc::ChainConfig as Ckb4IbcChainConfig;
@@ -34,6 +35,7 @@ use ckb_types::core::TransactionView as CoreTransactionView;
 use ckb_types::molecule::prelude::Entity;
 use ckb_types::packed::{CellInput, OutPoint, Script, WitnessArgs};
 use ckb_types::prelude::{Builder, Pack, Unpack};
+use ckb_types::H256;
 use futures::TryFutureExt;
 use ibc_proto::ibc::apps::fee::v1::{
     QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse,
@@ -44,7 +46,8 @@ use ibc_relayer_types::clients::ics07_ckb::{
     consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
     light_block::LightBlock as CkbLightBlock,
 };
-use ibc_relayer_types::core::ics02_client::events::UpdateClient;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
+use ibc_relayer_types::core::ics02_client::events::{Attributes, CreateClient, UpdateClient};
 use ibc_relayer_types::core::ics03_connection::connection::{
     ConnectionEnd, IdentifiedConnectionEnd,
 };
@@ -55,6 +58,7 @@ use ibc_relayer_types::core::ics23_commitment::merkle::MerkleProof;
 use ibc_relayer_types::core::ics24_host::identifier::{
     ChainId, ChannelId, ClientId, ConnectionId, PortId,
 };
+use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::proofs::Proofs;
 use ibc_relayer_types::signer::Signer;
 use ibc_relayer_types::timestamp::Timestamp;
@@ -84,14 +88,14 @@ use super::requests::{
     QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientStateRequest,
     QueryClientStatesRequest, QueryConnectionChannelsRequest, QueryConnectionRequest,
     QueryConnectionsRequest, QueryConsensusStateHeightsRequest, QueryConsensusStateRequest,
-    QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
+    QueryHeight, QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
     QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
     QueryPacketCommitmentRequest, QueryPacketCommitmentsRequest, QueryPacketEventDataRequest,
     QueryPacketReceiptRequest, QueryTxRequest, QueryUnreceivedAcksRequest,
     QueryUnreceivedPacketsRequest, QueryUpgradedClientStateRequest,
     QueryUpgradedConsensusStateRequest,
 };
-use super::tracking::TrackedMsgs;
+use super::tracking::{TrackedMsgs, TrackingId};
 use tokio::runtime::Runtime as TokioRuntime;
 
 mod cache_set;
@@ -561,6 +565,21 @@ impl ChainEndpoint for Ckb4IbcChain {
         &mut self,
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        // specificly manage Ckb4Ibc endpoint, because Axon's light client on Ckb is its metadata cell
+        if let TrackingId::Static("create client") = tracked_msgs.tracking_id() {
+            let client_id = format!("{:x}", H256::from(self.config.client_id()));
+            let create_client_event = IbcEventWithHeight {
+                event: IbcEvent::CreateClient(CreateClient(Attributes {
+                    client_id: ClientId::from_str(&client_id).unwrap(),
+                    client_type: ClientType::Ckb4Ibc,
+                    consensus_height: Height::default(),
+                })),
+                height: Height::default(),
+                tx_hash: [0; 32],
+            };
+            return Ok(vec![create_client_event]);
+        }
+
         let mut txs = Vec::new();
         let mut tx_hashes = Vec::new();
         let mut events = Vec::new();
@@ -736,12 +755,17 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn query_client_state(
         &self,
-        _request: QueryClientStateRequest,
+        request: QueryClientStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
+        let height = match request.height {
+            QueryHeight::Latest => self.query_application_status()?.height,
+            QueryHeight::Specific(height) => height,
+        };
         Ok((
             AnyClientState::Ckb(CkbClientState {
                 chain_id: self.config.counter_chain.clone(),
+                latest_height: height,
             }),
             None,
         ))
@@ -752,10 +776,11 @@ impl ChainEndpoint for Ckb4IbcChain {
         _request: QueryConsensusStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error> {
+        let status = self.query_application_status()?;
         Ok((
             AnyConsensusState::Ckb(CkbConsensusState {
-                timestamp: Time::now(),
-                commitment_root: CommitmentRoot::from_bytes(&[]),
+                timestamp: status.timestamp.into_tm_time().expect("timestamp to time"),
+                commitment_root: CommitmentRoot::from(vec![]),
             }),
             None,
         ))
@@ -765,7 +790,8 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryConsensusStateHeightsRequest,
     ) -> Result<Vec<Height>, Error> {
-        Ok(vec![])
+        // fill with one default element to pass through the runtime check in Hermes framework
+        Ok(vec![Height::default()])
     }
 
     fn query_upgraded_client_state(
@@ -804,14 +830,14 @@ impl ChainEndpoint for Ckb4IbcChain {
         _include_proof: IncludeProof,
     ) -> Result<(ConnectionEnd, Option<MerkleProof>), Error> {
         let (connections, _, _) = self.query_connection_and_cache()?;
-        let idx = get_connection_idx(&request.connection_id)? as usize;
-        let connection_end = connections
+        let index = get_connection_index_by_id(&request.connection_id)? as usize;
+        let result = connections
             .into_iter()
-            .nth(idx)
+            .nth(index)
             .ok_or(Error::ckb_conn_id_invalid(
                 request.connection_id.as_str().to_string(),
             ))?;
-        Ok((connection_end.connection_end, None))
+        Ok((result.connection_end, None))
     }
 
     fn query_connection_channels(
@@ -1055,12 +1081,16 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn build_client_state(
         &self,
-        _height: Height,
-        _settings: ClientSettings,
+        height: Height,
+        settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
-        Ok(CkbClientState {
-            chain_id: self.config.counter_chain.clone(),
-        })
+        match settings {
+            ClientSettings::AxonCkb | ClientSettings::Other => Ok(CkbClientState {
+                chain_id: self.config.counter_chain.clone(),
+                latest_height: height,
+            }),
+            _ => Err(Error::build_client_state_failure()),
+        }
     }
 
     fn build_consensus_state(
@@ -1119,6 +1149,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok((
             Some(AnyClientState::Ckb(CkbClientState {
                 chain_id: self.id(),
+                latest_height: height,
             })),
             get_dummy_merkle_proof(height),
         ))

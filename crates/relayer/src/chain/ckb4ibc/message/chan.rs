@@ -3,8 +3,8 @@ use std::str::FromStr;
 use super::{CkbTxInfo, MsgToTxConverter};
 use crate::chain::ckb4ibc::utils::{
     convert_port_id_to_array, convert_proof, get_channel_capacity, get_channel_idx,
-    get_connection_capacity, get_connection_id, get_connection_idx, get_connection_lock_script,
-    get_encoded_object, get_packet_capacity,
+    get_connection_capacity, get_connection_id, get_connection_index_by_id,
+    get_connection_lock_script, get_encoded_object, get_packet_capacity,
 };
 use crate::error::Error;
 use ckb_ics_axon::consts::{CHANNEL_CELL_CAPACITY, CONNECTION_CELL_CAPACITY, PACKET_CELL_CAPACITY};
@@ -655,7 +655,7 @@ pub fn convert_channel_end(
     let connection_hops = channel_end
         .connection_hops
         .into_iter()
-        .flat_map(|c| match get_connection_idx(&c) {
+        .flat_map(|c| match get_connection_index_by_id(&c) {
             Ok(s) => Ok(s as usize),
             Err(e) => Err(e),
         })

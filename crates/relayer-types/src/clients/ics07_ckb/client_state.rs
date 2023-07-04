@@ -20,6 +20,7 @@ pub const CLIENT_STATE_TYPE_URL: &str = "/ibc.lightclients.ckb.v1.ClientState";
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClientState {
     pub chain_id: ChainId,
+    pub latest_height: Height,
 }
 
 impl Ics02ClientState for ClientState {
@@ -32,7 +33,7 @@ impl Ics02ClientState for ClientState {
     }
 
     fn latest_height(&self) -> Height {
-        Height::new(1, 1).unwrap()
+        self.latest_height
     }
 
     fn frozen_height(&self) -> Option<Height> {

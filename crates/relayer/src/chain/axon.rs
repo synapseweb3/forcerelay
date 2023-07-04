@@ -1082,11 +1082,8 @@ impl AxonChain {
             )),
             _ => None,
         };
-        match tx_hash_status {
-            Some(tx_hash_status) => {
-                self.cache_ics_tx_hash(tx_hash_status, tx_hash)?;
-            }
-            None => {}
+        if let Some(tx_hash_status) = tx_hash_status {
+            self.cache_ics_tx_hash(tx_hash_status, tx_hash)?;
         }
         Ok(())
     }
@@ -1350,7 +1347,7 @@ impl AxonChain {
             })?;
             Height::new(u64::MAX, block_height.as_u64()).unwrap()
         };
-        let _ = self.cache_ics_tx_hash_with_event(event.clone(), tx_hash)?;
+        self.cache_ics_tx_hash_with_event(event.clone(), tx_hash)?;
         Ok(IbcEventWithHeight {
             event,
             height,

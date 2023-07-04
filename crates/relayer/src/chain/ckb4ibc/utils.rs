@@ -87,7 +87,7 @@ pub fn get_connection_id(idx: u16) -> ConnectionId {
     ConnectionId::from_str(&format!("{CONNECTION_ID_PREFIX}{idx}")).unwrap()
 }
 
-pub fn get_connection_idx(id: &ConnectionId) -> Result<u16, Error> {
+pub fn get_connection_index_by_id(id: &ConnectionId) -> Result<u16, Error> {
     let s = id.as_str();
     let result = s
         .strip_prefix(CONNECTION_ID_PREFIX)

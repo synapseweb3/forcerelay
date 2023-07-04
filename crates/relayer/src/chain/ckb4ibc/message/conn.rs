@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
     chain::ckb4ibc::utils::{
-        convert_proof, get_connection_capacity, get_connection_id, get_connection_idx,
+        convert_proof, get_connection_capacity, get_connection_id, get_connection_index_by_id,
         get_connection_lock_script, get_encoded_object,
     },
     error::Error,
@@ -204,7 +204,7 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
     let old_ibc_connection_cell = converter.get_ibc_connections();
     let mut new_ibc_connection_cell = old_ibc_connection_cell.clone();
 
-    let idx = get_connection_idx(&msg.connection_id)? as usize;
+    let idx = get_connection_index_by_id(&msg.connection_id)? as usize;
     let mut connection_end = new_ibc_connection_cell.connections.get_mut(idx).unwrap();
     connection_end.state = State::Open;
     connection_end.counterparty.connection_id =
@@ -273,7 +273,7 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
     let old_ibc_connection_cell = converter.get_ibc_connections();
     let mut new_ibc_connection_cell = old_ibc_connection_cell.clone();
 
-    let idx = get_connection_idx(&msg.connection_id)? as usize;
+    let idx = get_connection_index_by_id(&msg.connection_id)? as usize;
     let mut connection_end = new_ibc_connection_cell.connections.get_mut(idx).unwrap();
     connection_end.state = State::Open;
 

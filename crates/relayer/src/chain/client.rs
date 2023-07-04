@@ -12,6 +12,7 @@ use super::ChainType;
 #[derive(Clone, Debug)]
 pub enum ClientSettings {
     Tendermint(cosmos::client::Settings),
+    AxonCkb,
     Other,
 }
 
@@ -34,6 +35,9 @@ impl ClientSettings {
                     src_chain_config,
                     dst_chain_config,
                 ))
+            }
+            (ChainType::Axon, ChainType::Ckb4Ibc) | (ChainType::Ckb4Ibc, ChainType::Axon) => {
+                ClientSettings::AxonCkb
             }
             _ => ClientSettings::Other,
         }
