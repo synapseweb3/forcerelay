@@ -8,7 +8,9 @@ use ibc_proto::protobuf::Protobuf;
 use serde::{Deserialize, Serialize};
 
 use ibc_proto::google::protobuf::Any;
-use ibc_relayer_types::clients::ics07_axon::client_state::ClientState as AxonClientState;
+use ibc_relayer_types::clients::ics07_axon::client_state::{
+    ClientState as AxonClientState, CLIENT_STATE_TYPE_URL as AXON_CLIENT_STATE_TYPE_URL,
+};
 use ibc_relayer_types::clients::ics07_ckb::client_state::{
     ClientState as CkbClientState, CLIENT_STATE_TYPE_URL as CKB_CLIENT_STATE_TYPE_URL,
 };
@@ -178,20 +180,26 @@ impl From<AnyClientState> for Any {
                     .expect("encoding to `Any` from `AnyClientState::Tendermint`"),
             },
             AnyClientState::Eth(value) => {
-                let json = serde_json::to_string(&value).expect("jsonify clientstate");
+                let json = serde_json::to_string(&value).expect("jsonify eth clientstate");
                 Any {
                     type_url: ETH_CLIENT_STATE_TYPE_URL.to_owned(),
                     value: json.into_bytes(),
                 }
             }
             AnyClientState::Ckb(value) => {
-                let json = serde_json::to_string(&value).expect("jsonify clientstate");
+                let json = serde_json::to_string(&value).expect("jsonify ckb clientstate");
                 Any {
                     type_url: CKB_CLIENT_STATE_TYPE_URL.to_owned(),
                     value: json.into_bytes(),
                 }
             }
-            AnyClientState::Axon(_) => todo!(),
+            AnyClientState::Axon(value) => {
+                let json = serde_json::to_string(&value).expect("jsonify axon clientstate");
+                Any {
+                    type_url: AXON_CLIENT_STATE_TYPE_URL.to_owned(),
+                    value: json.into_bytes(),
+                }
+            }
             #[cfg(test)]
             AnyClientState::Mock(value) => Any {
                 type_url: MOCK_CLIENT_STATE_TYPE_URL.to_string(),

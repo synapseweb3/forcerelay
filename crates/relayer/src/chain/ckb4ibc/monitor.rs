@@ -155,7 +155,7 @@ impl Ckb4IbcEventMonitor {
                     let attrs = Attributes {
                         connection_id: Some(ConnectionId::from_str(&idx.to_string()).unwrap()), // todo connection id here is invalid
                         client_id: ClientId::from_str(
-                            &String::from_utf8(self.config.client_id().to_vec()).unwrap(),
+                            &String::from_utf8(self.config.client_id_bytes().to_vec()).unwrap(),
                         )
                         .unwrap(),
                         counterparty_connection_id: None,
@@ -174,10 +174,7 @@ impl Ckb4IbcEventMonitor {
                 CkbState::OpenTry => {
                     let attrs = Attributes {
                         connection_id: Some(ConnectionId::from_str(&idx.to_string()).unwrap()), // todo connection id here is invalid
-                        client_id: ClientId::from_str(
-                            &String::from_utf8(self.config.client_id().to_vec()).unwrap(),
-                        )
-                        .unwrap(),
+                        client_id: self.config.client_id(),
                         counterparty_connection_id: None,
                         counterparty_client_id: ClientId::from_str(
                             &connection_end.counterparty.client_id,
@@ -207,7 +204,7 @@ impl Ckb4IbcEventMonitor {
             .code_hash(get_script_hash(&self.config.channel_type_args))
             .args(
                 ChannelArgs {
-                    client_id: self.config.client_id(),
+                    client_id: self.config.client_id_bytes(),
                     open: false,
                     channel_id: Default::default(),
                     port_id: Default::default(),

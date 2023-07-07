@@ -152,7 +152,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     }
 
     fn get_client_id(&self) -> [u8; 32] {
-        self.config.client_id()
+        self.config.client_id_bytes()
     }
 
     fn get_packet_cell_input(

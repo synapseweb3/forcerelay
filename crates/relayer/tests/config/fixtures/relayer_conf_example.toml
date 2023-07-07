@@ -78,10 +78,22 @@ bellatrix = { epoch = 144896, fork_version = "0x02000000" }
 capella = { epoch = 194048, fork_version = "0x03000000" }
 
 [[chains]]
-id = 'ibc-ckb-0'
+id = 'ckb-multi-client-4-1'
 ckb_rpc = "https://testnet.ckbapp.dev"
 ckb_indexer_rpc = "https://testnet.ckbapp.dev"
-lightclient_contract_typeargs = "0xb7fcfa4ad253ddd60481bdd35331a634ff985fdb3b3fab4e1066cf97faf40315"
-lightclient_lock_typeargs = "0xd6eb3b34c445a1fe914f4e22c13380cf3b6102d9c2b949a8544d1a2f72a8b6c7"
+lightclient_contract_typeargs = "0x75ca34f9f1c28cf16d160fc485d5ed4a2a8f34424ec5854a7579ca82e72b7671"
+lightclient_lock_typeargs = "0x8d5300c03081b19a28a30d2e8202a467ab19fafa5285c86896db035e783186d5"
+client_type_args = { cells_count = 4, type_id = "0x673e557da4c8381638fc808956aa27e384cf66d9a63899a6e4e932c2395f7a40" }
+minimal_updates_count = 1
 key_name = "relayer_ckb_wallet"
-data_dir = "./ckb_mmr_storage"
+data_dir = "./ckb_mmr_storage_multi_client_4_1"
+
+[[chains]]
+id = 'axon-0'
+websocket_addr = "ws://127.0.0.1:8010"
+rpc_addr = "http://127.0.0.1:8000/"
+contract_address = "0x15Ff10fCc8A1a50bFbE07847A22664801eA79E0f"
+key_name = "relayer_axon_wallet"
+store_prefix = "axon_store_prefix"
+ckb_light_client_contract_address = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"
+image_cell_contract_address = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"

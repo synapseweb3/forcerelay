@@ -1,5 +1,7 @@
+use std::str::FromStr;
+
 use ckb_types::H256;
-use ibc_relayer_types::core::ics24_host::identifier::ChainId;
+use ibc_relayer_types::core::ics24_host::identifier::{ChainId, ClientId};
 use serde_derive::{Deserialize, Serialize};
 use tendermint_rpc::Url;
 
@@ -18,7 +20,12 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub fn client_id(&self) -> [u8; 32] {
+    pub fn client_id(&self) -> ClientId {
+        let value = format!("{:x}", self.client_type_args);
+        ClientId::from_str(&value).unwrap()
+    }
+
+    pub fn client_id_bytes(&self) -> [u8; 32] {
         self.client_type_args.clone().into()
     }
 }

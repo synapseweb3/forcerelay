@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,7 +34,6 @@ use ckb_types::core::TransactionView as CoreTransactionView;
 use ckb_types::molecule::prelude::Entity;
 use ckb_types::packed::{CellInput, OutPoint, Script, WitnessArgs};
 use ckb_types::prelude::{Builder, Pack, Unpack};
-use ckb_types::H256;
 use futures::TryFutureExt;
 use ibc_proto::ibc::apps::fee::v1::{
     QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse,
@@ -275,7 +273,7 @@ impl Ckb4IbcChain {
             .code_hash(channel_code_hash)
             .args(
                 ChannelArgs {
-                    client_id: self.config.client_id(),
+                    client_id: self.config.client_id_bytes(),
                     open: is_open,
                     channel_id: get_channel_idx(&channel_id)?,
                     port_id: convert_port_id_to_array(&port_id)?,
@@ -567,10 +565,9 @@ impl ChainEndpoint for Ckb4IbcChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         // specificly manage Ckb4Ibc endpoint, because Axon's light client on Ckb is its metadata cell
         if let TrackingId::Static("create client") = tracked_msgs.tracking_id() {
-            let client_id = format!("{:x}", H256::from(self.config.client_id()));
             let create_client_event = IbcEventWithHeight {
                 event: IbcEvent::CreateClient(CreateClient(Attributes {
-                    client_id: ClientId::from_str(&client_id).unwrap(),
+                    client_id: self.config.client_id(),
                     client_type: ClientType::Ckb4Ibc,
                     consensus_height: Height::default(),
                 })),
@@ -750,7 +747,16 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
-        Ok(vec![])
+        let latest_height = self.query_application_status()?.height;
+        let identified_client_state = IdentifiedAnyClientState {
+            client_id: self.config.client_id(),
+            client_state: CkbClientState {
+                chain_id: self.id(),
+                latest_height,
+            }
+            .into(),
+        };
+        Ok(vec![identified_client_state])
     }
 
     fn query_client_state(
