@@ -14,7 +14,7 @@ use ibc_proto::google::protobuf::Any;
 use ibc_proto::protobuf::Protobuf;
 use serde::{Deserialize, Serialize};
 
-pub const AXON_CLIENT_STATE_TYPE_URL: &str = "/axon.client.v1.state";
+pub const CLIENT_STATE_TYPE_URL: &str = "/axon.client.v1.state";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ClientState {
@@ -59,7 +59,7 @@ impl TryFrom<Any> for ClientState {
     type Error = Ics02Error;
 
     fn try_from(any: Any) -> Result<Self, Self::Error> {
-        if any.type_url != AXON_CLIENT_STATE_TYPE_URL {
+        if any.type_url != CLIENT_STATE_TYPE_URL {
             return Err(Ics02Error::unknown_client_type("axon".to_owned()));
         }
         let client: ClientState = serde_json::from_slice(&any.value)
@@ -72,7 +72,7 @@ impl From<ClientState> for Any {
     fn from(client: ClientState) -> Self {
         let json = serde_json::to_string(&client).expect("jsonify axon client");
         Any {
-            type_url: AXON_CLIENT_STATE_TYPE_URL.to_owned(),
+            type_url: CLIENT_STATE_TYPE_URL.to_owned(),
             value: json.into_bytes(),
         }
     }

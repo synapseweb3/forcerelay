@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::ics02_client::error::Error as Ics02Error;
 
+pub const AXON_CONSENSUS_STATE_TYPE_URL: &str = "/ibc.lightclients.axon.v1.ConsensusState";
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConsensusState {}
 

@@ -5,7 +5,9 @@ use std::sync::Arc;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
 use futures::TryFutureExt;
-use ibc_relayer_types::clients::ics07_axon::header::Header;
+use ibc_relayer_types::clients::ics07_axon::{
+    header::Header, light_block::LightBlock as AxonLightBlock,
+};
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -101,8 +103,11 @@ impl super::LightClient<AxonChain> for LightClient {
         trusted: ibc_relayer_types::Height,
         target: ibc_relayer_types::Height,
         client_state: &AnyClientState,
-    ) -> Result<Verified<<AxonChain as ChainEndpoint>::LightBlock>, Error> {
-        todo!()
+    ) -> Result<Verified<AxonLightBlock>, Error> {
+        Ok(Verified {
+            target: AxonLightBlock::default(),
+            supporting: vec![],
+        })
     }
 
     fn check_misbehaviour(
@@ -110,13 +115,10 @@ impl super::LightClient<AxonChain> for LightClient {
         update: &ibc_relayer_types::core::ics02_client::events::UpdateClient,
         client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
-        todo!()
+        Ok(None)
     }
 
-    fn fetch(
-        &mut self,
-        height: ibc_relayer_types::Height,
-    ) -> Result<<AxonChain as ChainEndpoint>::LightBlock, Error> {
+    fn fetch(&mut self, height: ibc_relayer_types::Height) -> Result<AxonLightBlock, Error> {
         todo!()
     }
 }

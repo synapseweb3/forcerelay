@@ -32,13 +32,12 @@ use crate::{
     util::collate::collate,
 };
 use eth_light_client_in_ckb_prover::Receipts;
-use eth_light_client_in_ckb_verification::trie;
 use ethers::{
     abi::{AbiDecode, AbiEncode},
     contract::ContractError,
     prelude::{k256::ecdsa::SigningKey, EthLogDecode, SignerMiddleware},
     providers::{Middleware, Provider, Ws},
-    signers::Wallet,
+    signers::{Signer as _, Wallet},
     types::{
         Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TransactionRequest, TxHash,
         H160, U64,
@@ -54,14 +53,16 @@ use ibc_relayer_types::{
             client_state::ClientState as AxonClientState,
             consensus_state::ConsensusState as AxonConsensusState,
             header::{Header as AxonHeader, AXON_HEADER_TYPE_URL},
+            light_block::LightBlock as AxonLightBlock,
         },
         ics07_ckb::client_state,
     },
     core::{
         ics02_client::{
+            client_type::ClientType,
             error::Error as ClientError,
-            events::{NewBlock, UpdateClient},
-            msgs::update_client,
+            events::{Attributes, CreateClient, NewBlock, UpdateClient},
+            msgs::{create_client, update_client},
         },
         ics03_connection::{
             self,
@@ -120,7 +121,7 @@ use super::{
         QueryTxRequest, QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest,
         QueryUpgradedClientStateRequest, QueryUpgradedConsensusStateRequest,
     },
-    tracking::TrackedMsgs,
+    tracking::{TrackedMsgs, TrackingId},
 };
 use tokio::runtime::{self, Runtime as TokioRuntime};
 
@@ -147,7 +148,7 @@ pub struct AxonChain {
 
 // Allow temporarily for development. Should remove when work is done.
 impl ChainEndpoint for AxonChain {
-    type LightBlock = ChainId;
+    type LightBlock = AxonLightBlock;
     type Header = AxonHeader;
     type ConsensusState = AxonConsensusState;
     type ClientState = AxonClientState;
@@ -167,8 +168,13 @@ impl ChainEndpoint for AxonChain {
         let client = rt
             .block_on(Provider::<Ws>::connect(url.to_string()))
             .map_err(|_| Error::web_socket(url.into()))?;
+        let axon_chain_id = rt
+            .block_on(client.get_chainid())
+            .map_err(|e| Error::other_error(e.to_string()))?;
         let key_entry = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
-        let wallet = key_entry.into_ether_wallet();
+        let wallet = key_entry
+            .into_ether_wallet()
+            .with_chain_id(axon_chain_id.as_u64());
         let client = Arc::new(SignerMiddleware::new(client, wallet));
 
         let contract = Contract::new(config.contract_address, Arc::clone(&client));
@@ -241,9 +247,18 @@ impl ChainEndpoint for AxonChain {
         &mut self,
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        // every skipped request will be set empty, e.g. udpate_client
-        if tracked_msgs.msgs.is_empty() {
-            return Ok(vec![]);
+        // light client on Axon is already created with id "AxonClient-0", which is set only for Ckb now
+        if let TrackingId::Static("create client") = tracked_msgs.tracking_id() {
+            let create_client_event = IbcEventWithHeight {
+                event: IbcEvent::CreateClient(CreateClient(Attributes {
+                    client_id: ClientId::from_str("AxonClient-0").unwrap(),
+                    client_type: ClientType::Axon,
+                    consensus_height: Height::default(),
+                })),
+                height: Height::default(),
+                tx_hash: [0; 32],
+            };
+            return Ok(vec![create_client_event]);
         }
         tracked_msgs
             .msgs
@@ -317,13 +332,15 @@ impl ChainEndpoint for AxonChain {
         &self,
         request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
+        let chain_id = self.id();
+        let transfer = |client_state| to_identified_any_client_state(&chain_id, client_state);
         let client_states: Vec<_> = self
             .rt
             .block_on(self.contract.get_client_states().call())
             .map_err(convert_err)?;
         let client_states = client_states
             .iter()
-            .map(to_identified_any_client_state)
+            .map(transfer)
             .collect::<Result<Vec<IdentifiedAnyClientState>, Error>>()?;
         Ok(client_states)
     }
@@ -347,7 +364,7 @@ impl ChainEndpoint for AxonChain {
             )
             .map_err(convert_err)?;
 
-        let client_state = to_any_client_state(&client_state)?;
+        let client_state = to_any_client_state(&self.config.id, &client_state)?;
         Ok((client_state, None))
     }
 
@@ -532,7 +549,7 @@ impl ChainEndpoint for AxonChain {
         if !found {
             Ok(None)
         } else {
-            let client_state = to_identified_any_client_state(&client_state)?;
+            let client_state = to_identified_any_client_state(&self.config.id, &client_state)?;
             Ok(Some(client_state))
         }
     }
@@ -753,14 +770,20 @@ impl ChainEndpoint for AxonChain {
         height: Height,
         settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
-        todo!()
+        match settings {
+            ClientSettings::AxonCkb | ClientSettings::Other => Ok(AxonClientState {
+                chain_id: self.config.id.clone(),
+                latest_height: height,
+            }),
+            _ => Err(Error::build_client_state_failure()),
+        }
     }
 
     fn build_consensus_state(
         &self,
         light_block: Self::LightBlock,
     ) -> Result<Self::ConsensusState, Error> {
-        todo!()
+        Ok(AxonConsensusState {})
     }
 
     fn build_header(
@@ -955,28 +978,21 @@ impl AxonChain {
         let receipts: Receipts = tx_receipts.into();
         let receipt_proof = receipts.generate_proof(receipt.transaction_index.as_usize());
 
-        let (block, state_root, proof, mut validators) = self
+        let (block, state_root, block_proof, mut validators) = self
             .rt
             .block_on(self.get_proofs_ingredients(block_number))?;
 
         // check the validation of receipts mpt proof
         let key = rlp::encode(&receipt.transaction_index.as_u64());
-        let verify_mpt = trie::verify_proof(
-            &receipt_proof,
-            block.header.receipts_root.as_bytes(),
-            &key,
-            &receipt.rlp_bytes(),
-        );
-        if !verify_mpt {
-            return Err(Error::rpc_response("unverified receipts mpt".to_owned()));
-        }
+        // axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
+        //     .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
 
         let object_proof = rlp::RlpStream::new()
             .append(&receipt)
             .append_list::<Vec<_>, Vec<_>>(&receipt_proof)
             .append(&block)
             .append(&state_root)
-            .append(&proof)
+            .append(&block_proof)
             .as_raw()
             .to_owned();
         let height = Height::new(1, 1).unwrap();
@@ -993,7 +1009,7 @@ impl AxonChain {
         .unwrap();
 
         // check the validation of Axon block
-        axon_tools::verify_proof(block, state_root, &mut validators, proof)
+        axon_tools::verify_proof(block, state_root, &mut validators, block_proof)
             .map_err(|_| Error::rpc_response("unverified axon block".to_owned()))?;
 
         Ok(proofs)
@@ -1361,17 +1377,28 @@ fn convert_err<T: ToString>(err: T) -> Error {
 }
 
 fn to_identified_any_client_state(
+    chain_id: &ChainId,
     client_state: &ethers::core::types::Bytes,
 ) -> Result<IdentifiedAnyClientState, Error> {
-    todo!("Type conversion. How to get specific consensus state from bytes?")
+    Ok(IdentifiedAnyClientState {
+        client_id: ClientId::from_str("AxonClient-0").unwrap(),
+        client_state: to_any_client_state(chain_id, client_state)?,
+    })
 }
 
-fn to_any_client_state(client_state: &ethers::core::types::Bytes) -> Result<AnyClientState, Error> {
-    todo!("Type conversion. How to get specific consensus state from bytes?");
+fn to_any_client_state(
+    chain_id: &ChainId,
+    client_state: &ethers::core::types::Bytes,
+) -> Result<AnyClientState, Error> {
+    Ok(AxonClientState {
+        chain_id: chain_id.clone(),
+        latest_height: Height::default(),
+    }
+    .into())
 }
 
 fn to_any_consensus_state(
     consensus_state: &ethers::core::types::Bytes,
 ) -> Result<AnyConsensusState, Error> {
-    todo!("Type conversion.");
+    Ok(AxonConsensusState {}.into())
 }

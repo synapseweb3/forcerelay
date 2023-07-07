@@ -58,7 +58,7 @@ macro_rules! jsonrpc {
         let resp = c
             .send()
             .await
-            .map_err(|_| Error::rpc(url.clone(), TmError::invalid_url(url)))?;
+            .map_err(|e| Error::rpc_response(format!("url: {}, error: {}", url, e)))?;
         let output = resp
             .json::<jsonrpc_core::response::Output>()
             .await
