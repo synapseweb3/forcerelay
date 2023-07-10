@@ -792,12 +792,7 @@ impl ChainEndpoint for AxonChain {
         target_height: Height,
         client_state: &AnyClientState,
     ) -> Result<(Self::Header, Vec<Self::Header>), Error> {
-        // NOTE: Temporarily skip unimplementation
-        let header = self
-            .rt
-            .block_on(self.rpc_client.get_block_by_id(1.into()))?
-            .header;
-        Ok((header.into(), vec![]))
+        Ok((AxonHeader {}, vec![]))
     }
 
     fn maybe_register_counterparty_payee(
@@ -837,7 +832,7 @@ impl ChainEndpoint for AxonChain {
                 connection_id.clone(),
                 format!("missing connection tx_hash, state {state:?}"),
             ))?;
-        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+        let proofs = self.get_proofs(tx_hash, height).map_err(|e| {
             Error::conn_proof(
                 connection_id.clone(),
                 format!("{}, state {state:?}", e.detail()),
@@ -860,7 +855,7 @@ impl ChainEndpoint for AxonChain {
                 channel_id.clone(),
                 "missing channel tx_hash".to_owned(),
             ))?;
-        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+        let proofs = self.get_proofs(tx_hash, height).map_err(|e| {
             Error::chan_proof(port_id.clone(), channel_id.clone(), e.detail().to_string())
         })?;
         Ok(proofs)
@@ -883,7 +878,7 @@ impl ChainEndpoint for AxonChain {
                 sequence.into(),
                 format!("missing packet tx_hash, type {packet_type:?}"),
             ))?;
-        let proofs = self.get_proofs(tx_hash).map_err(|e| {
+        let proofs = self.get_proofs(tx_hash, height).map_err(|e| {
             Error::chan_proof(
                 port_id.clone(),
                 channel_id.clone(),
@@ -931,7 +926,7 @@ impl AxonChain {
         Ok(monitor_tx)
     }
 
-    fn get_proofs(&self, tx_hash: &TxHash) -> Result<Proofs, Error> {
+    fn get_proofs(&self, tx_hash: &TxHash, height: Height) -> Result<Proofs, Error> {
         let receipt = self
             .rt
             .block_on(self.client.get_transaction_receipt(*tx_hash))
@@ -995,9 +990,11 @@ impl AxonChain {
             .append(&block_proof)
             .as_raw()
             .to_owned();
-        let height = Height::new(1, 1).unwrap();
-        let consensus_proof =
-            ConsensusProof::new(vec![1u8].try_into().unwrap(), Height::new(1, 1).unwrap()).unwrap();
+        let consensus_proof = ConsensusProof::new(
+            vec![1u8].try_into().unwrap(),
+            Height::new(1, u64::MAX).unwrap(),
+        )
+        .unwrap();
         let client_proof = vec![1u8].try_into().unwrap();
         let proofs = Proofs::new(
             object_proof.try_into().unwrap(),

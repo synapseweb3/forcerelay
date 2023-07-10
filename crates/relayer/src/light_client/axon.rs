@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use axon_tools::types::AxonHeader;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
 use futures::TryFutureExt;
@@ -26,7 +27,7 @@ use super::Verified;
 pub struct LightClient {
     rt: Arc<TokioRuntime>,
     chain_id: ChainId,
-    header_updaters: Arc<RwLock<Vec<Sender<Header>>>>,
+    header_updaters: Arc<RwLock<Vec<Sender<AxonHeader>>>>,
 }
 
 impl LightClient {
@@ -38,7 +39,7 @@ impl LightClient {
         })
     }
 
-    pub fn subscribe(&mut self) -> Receiver<Header> {
+    pub fn subscribe(&mut self) -> Receiver<AxonHeader> {
         let (tx, rx) = channel(1);
         self.rt.block_on(self.header_updaters.write()).push(tx);
         rx
@@ -74,10 +75,10 @@ impl LightClient {
                         block.header.number
                     );
                     for emitter in emitters.read().await.iter() {
-                        let header = Header {
-                            axon_header: block.header.clone(),
-                        };
-                        emitter.send(header).await.expect("send axon header");
+                        emitter
+                            .send(block.header.clone())
+                            .await
+                            .expect("send axon header");
                     }
                 }
             }

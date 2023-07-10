@@ -2,7 +2,6 @@ use crate::core::ics02_client::{self, error::Error as Ics02Error};
 use crate::prelude::*;
 use crate::timestamp::Timestamp;
 use crate::Height;
-use axon_tools::types::AxonHeader;
 use ibc_proto::google::protobuf::Any;
 use ibc_proto::protobuf::{Error as ProtoError, Protobuf};
 use serde::{Deserialize, Serialize};
@@ -10,17 +9,7 @@ use serde::{Deserialize, Serialize};
 pub const AXON_HEADER_TYPE_URL: &str = "/axon.v1.header";
 
 #[derive(Clone, PartialEq, Eq, Deserialize, Serialize, Debug)]
-pub struct Header {
-    pub axon_header: AxonHeader,
-}
-
-impl From<AxonHeader> for Header {
-    fn from(header: AxonHeader) -> Self {
-        Self {
-            axon_header: header,
-        }
-    }
-}
+pub struct Header {}
 
 impl ics02_client::header::Header for Header {
     fn client_type(&self) -> ics02_client::client_type::ClientType {
@@ -28,12 +17,11 @@ impl ics02_client::header::Header for Header {
     }
 
     fn height(&self) -> Height {
-        Height::new(u64::MAX, self.axon_header.number).expect("bad axon block number")
+        Height::new(1u64, u64::MAX).expect("bad axon block number")
     }
 
     fn timestamp(&self) -> Timestamp {
-        Timestamp::from_nanoseconds(self.axon_header.timestamp * 100000)
-            .expect("bad axon block timestamp")
+        Timestamp::none()
     }
 }
 

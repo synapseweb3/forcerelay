@@ -5,6 +5,7 @@ use super::contract::*;
 use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
 use crate::light_client::AnyHeader;
+use axon_tools::types::AxonHeader;
 use crossbeam_channel as channel;
 use ethers::contract::stream::EventStreamMeta;
 use ethers::contract::EthEvent;
@@ -12,7 +13,6 @@ use ethers::contract::LogMeta;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
 use ethers::types::Address;
-use ibc_relayer_types::clients::ics07_axon::header::Header as AxonHeader;
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::events::{self, Attributes};
 use ibc_relayer_types::core::ics02_client::header::Header;
@@ -133,7 +133,7 @@ impl AxonEventMonitor {
                         if let Next::Abort = self.update_subscribe() {
                             return Next::Abort;
                         }
-                        let height = header.height();
+                        let height = Height::new(0u64, header.number).expect("axon header height");
                         let event = IbcEventWithHeight::new(
                             events::NewBlock::new(height).into(),
                             height,
