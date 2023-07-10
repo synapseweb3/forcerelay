@@ -34,7 +34,7 @@ impl crate::core::ics02_client::header::Header for Header {
     }
 
     fn height(&self) -> Height {
-        Height::new(1, u64::MAX).unwrap()
+        Height::max()
     }
 
     fn timestamp(&self) -> Timestamp {

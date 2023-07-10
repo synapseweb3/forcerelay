@@ -12,13 +12,39 @@ use ibc_proto::ibc::core::client::v1::Height as RawHeight;
 
 use crate::core::ics02_client::error::Error;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Height {
     /// Previously known as "epoch"
     revision_number: u64,
 
     /// The height of a block
     revision_height: u64,
+}
+
+impl Height {
+    pub fn max() -> Self {
+        Self {
+            revision_number: u64::MAX,
+            // use `u64::MAX` to skip some check code in Hermes which cannot be bypassed
+            revision_height: u64::MAX,
+        }
+    }
+
+    pub fn one() -> Self {
+        Self {
+            revision_number: 1,
+            // use `1` for some contract check
+            revision_height: 1,
+        }
+    }
+
+    pub fn min() -> Self {
+        Self {
+            revision_number: 0,
+            // use `0` to skip some check code in Hermes which cannot be bypassed
+            revision_height: 0,
+        }
+    }
 }
 
 impl Height {

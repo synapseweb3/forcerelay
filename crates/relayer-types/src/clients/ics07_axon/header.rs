@@ -17,7 +17,7 @@ impl ics02_client::header::Header for Header {
     }
 
     fn height(&self) -> Height {
-        Height::new(1u64, u64::MAX).expect("bad axon block number")
+        Height::max()
     }
 
     fn timestamp(&self) -> Timestamp {

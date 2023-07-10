@@ -12,10 +12,10 @@ pub struct ChainConfig {
     pub ckb_indexer_rpc: Url,
     pub lightclient_contract_typeargs: H256,
     pub lightclient_lock_typeargs: H256,
-    pub client_type_args: ClientTypeArgs,
     pub minimal_updates_count: u8,
     pub key_name: String,
     pub data_dir: PathBuf,
+    pub client_type_args: ClientTypeArgs,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

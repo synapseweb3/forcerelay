@@ -150,11 +150,8 @@ pub fn get_packet_capacity() -> Capacity {
 
 pub fn get_dummy_merkle_proof(height: Height) -> Proofs {
     let encoded = rlp::encode(&ObjectProof::default()).to_vec();
-    let consensus_proof = ConsensusProof::new(
-        vec![0u8].try_into().unwrap(),
-        Height::new(1, u64::MAX).unwrap(),
-    )
-    .unwrap();
+    let consensus_proof =
+        ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::max()).unwrap();
     Proofs::new(
         encoded.try_into().unwrap(),
         Some(vec![0u8].try_into().unwrap()),

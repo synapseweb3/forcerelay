@@ -569,9 +569,9 @@ impl ChainEndpoint for Ckb4IbcChain {
                 event: IbcEvent::CreateClient(CreateClient(Attributes {
                     client_id: self.config.client_id(),
                     client_type: ClientType::Ckb4Ibc,
-                    consensus_height: Height::default(),
+                    consensus_height: Height::min(),
                 })),
-                height: Height::default(),
+                height: Height::min(),
                 tx_hash: [0; 32],
             };
             return Ok(vec![create_client_event]);
@@ -593,7 +593,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 if let Some(e) = event {
                     let ibc_event = IbcEventWithHeight {
                         event: e,
-                        height: Height::new(1, 1).unwrap(),
+                        height: Height::one(),
                         tx_hash: [0; 32],
                     };
                     result_events.push(ibc_event);
@@ -654,7 +654,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                         let tx_hash: [u8; 32] = tx_hashes.get(i).unwrap().clone().into();
                         let ibc_event_with_height = IbcEventWithHeight {
                             event,
-                            height: Height::new(1, 1).unwrap(),
+                            height: Height::one(),
                             tx_hash,
                         };
                         result_events.push(ibc_event_with_height);
@@ -797,7 +797,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _request: QueryConsensusStateHeightsRequest,
     ) -> Result<Vec<Height>, Error> {
         // fill with one default element to pass through the runtime check in Hermes framework
-        Ok(vec![Height::default()])
+        Ok(vec![Height::min()])
     }
 
     fn query_upgraded_client_state(
@@ -1035,7 +1035,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .filter(|(packet, _)| packet.status == PacketStatus::InboxAck)
             .map(|(p, _)| Sequence::from(p.packet.sequence as u64))
             .collect::<Vec<_>>();
-        Ok((result, Height::new(u64::MAX, u64::MAX).unwrap()))
+        Ok((result, Height::max()))
     }
 
     fn query_unreceived_acknowledgements(

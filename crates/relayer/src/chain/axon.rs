@@ -132,6 +132,8 @@ mod rpc;
 
 pub use rpc::AxonRpc;
 
+const DEFAULT_AXON_CLIENT: &str = "AxonClient-0";
+
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
     config: AxonChainConfig,
@@ -251,11 +253,11 @@ impl ChainEndpoint for AxonChain {
         if let TrackingId::Static("create client") = tracked_msgs.tracking_id() {
             let create_client_event = IbcEventWithHeight {
                 event: IbcEvent::CreateClient(CreateClient(Attributes {
-                    client_id: ClientId::from_str("AxonClient-0").unwrap(),
+                    client_id: ClientId::from_str(DEFAULT_AXON_CLIENT).unwrap(),
                     client_type: ClientType::Axon,
-                    consensus_height: Height::default(),
+                    consensus_height: Height::min(),
                 })),
-                height: Height::default(),
+                height: Height::min(),
                 tx_hash: [0; 32],
             };
             return Ok(vec![create_client_event]);
@@ -594,7 +596,7 @@ impl ChainEndpoint for AxonChain {
             .iter()
             .map(|seq| (*seq).into())
             .collect();
-        let height = Height::new(u64::MAX, u64::MAX).unwrap();
+        let height = Height::max();
         Ok((commitment_sequences, height))
     }
 
@@ -690,7 +692,7 @@ impl ChainEndpoint for AxonChain {
                 sequences.push(seq);
             }
         }
-        let height = Height::new(u64::MAX, u64::MAX).unwrap();
+        let height = Height::max();
         Ok((sequences, height))
     }
 
@@ -990,11 +992,8 @@ impl AxonChain {
             .append(&block_proof)
             .as_raw()
             .to_owned();
-        let consensus_proof = ConsensusProof::new(
-            vec![1u8].try_into().unwrap(),
-            Height::new(1, u64::MAX).unwrap(),
-        )
-        .unwrap();
+        let consensus_proof =
+            ConsensusProof::new(vec![1u8].try_into().unwrap(), Height::max()).unwrap();
         let client_proof = vec![1u8].try_into().unwrap();
         let proofs = Proofs::new(
             object_proof.try_into().unwrap(),
@@ -1378,7 +1377,7 @@ fn to_identified_any_client_state(
     client_state: &ethers::core::types::Bytes,
 ) -> Result<IdentifiedAnyClientState, Error> {
     Ok(IdentifiedAnyClientState {
-        client_id: ClientId::from_str("AxonClient-0").unwrap(),
+        client_id: ClientId::from_str(DEFAULT_AXON_CLIENT).unwrap(),
         client_state: to_any_client_state(chain_id, client_state)?,
     })
 }
@@ -1389,7 +1388,7 @@ fn to_any_client_state(
 ) -> Result<AnyClientState, Error> {
     Ok(AxonClientState {
         chain_id: chain_id.clone(),
-        latest_height: Height::default(),
+        latest_height: Height::min(),
     }
     .into())
 }
