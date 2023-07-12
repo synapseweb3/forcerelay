@@ -12,7 +12,7 @@ use crate::Height;
 
 pub const CKB_HEADER_TYPE_URL: &str = "/ibc.lightclients.ckb.v1.Header";
 
-/// Tendermint consensus header
+// FIXME: useless Ckb header which cannot be ignored by Hermes runtime
 #[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Header {}
 
@@ -34,7 +34,7 @@ impl crate::core::ics02_client::header::Header for Header {
     }
 
     fn height(&self) -> Height {
-        Height::max()
+        Height::default()
     }
 
     fn timestamp(&self) -> Timestamp {

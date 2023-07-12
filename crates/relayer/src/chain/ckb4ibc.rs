@@ -565,15 +565,12 @@ impl ChainEndpoint for Ckb4IbcChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         // specificly manage Ckb4Ibc endpoint, because Axon's light client on Ckb is its metadata cell
         if let TrackingId::Static("create client") = tracked_msgs.tracking_id() {
-            let create_client_event = IbcEventWithHeight {
-                event: IbcEvent::CreateClient(CreateClient(Attributes {
-                    client_id: self.config.client_id(),
-                    client_type: ClientType::Ckb4Ibc,
-                    consensus_height: Height::min(),
-                })),
-                height: Height::min(),
-                tx_hash: [0; 32],
-            };
+            let event = IbcEvent::CreateClient(CreateClient(Attributes {
+                client_id: self.config.client_id(),
+                client_type: ClientType::Ckb4Ibc,
+                consensus_height: Height::default(),
+            }));
+            let create_client_event = IbcEventWithHeight::new(event, Height::default());
             return Ok(vec![create_client_event]);
         }
 
@@ -591,11 +588,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             } = convert_msg_to_ckb_tx(msg, &converter)?;
             if unsigned_tx.is_none() {
                 if let Some(e) = event {
-                    let ibc_event = IbcEventWithHeight {
-                        event: e,
-                        height: Height::one(),
-                        tx_hash: [0; 32],
-                    };
+                    let ibc_event = IbcEventWithHeight::new(e, Height::default());
                     result_events.push(ibc_event);
                 }
                 continue;
@@ -649,12 +642,12 @@ impl ChainEndpoint for Ckb4IbcChain {
         let resps = self.rt.block_on(futures::future::join_all(resps));
         for (i, res) in resps.iter().enumerate() {
             match res {
-                Ok(_) => {
+                Ok(height) => {
                     if let Some(event) = events.get(i).unwrap().clone() {
                         let tx_hash: [u8; 32] = tx_hashes.get(i).unwrap().clone().into();
                         let ibc_event_with_height = IbcEventWithHeight {
                             event,
-                            height: Height::one(),
+                            height: Height::new(1u64, *height).unwrap(),
                             tx_hash,
                         };
                         result_events.push(ibc_event_with_height);
@@ -684,6 +677,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _target: Height,
         _client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
+        // use default is ok
         Ok(CkbLightBlock {})
     }
 
@@ -692,6 +686,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _update: &UpdateClient,
         _client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
+        // Ckb4Ibc doesn't have to check the misbehaviour on Axon's metadata cell
         Ok(None)
     }
 
@@ -732,12 +727,13 @@ impl ChainEndpoint for Ckb4IbcChain {
     }
 
     fn query_commitment_prefix(&self) -> Result<CommitmentPrefix, Error> {
+        // filled with one zero byte to prevent the casting issue of from Any to Msg
         Ok(vec![0u8].try_into().unwrap())
     }
 
     fn query_application_status(&self) -> Result<ChainStatus, Error> {
         let header = self.rt.block_on(self.rpc_client.get_tip_header())?;
-        let height = Height::new(1, header.inner.number.value()).unwrap();
+        let height = Height::from_noncosmos_height(header.inner.number.value());
         let ts_milisec = header.inner.timestamp.value();
         let timestamp = Timestamp::from_nanoseconds(ts_milisec * 1_000_000).unwrap();
         Ok(ChainStatus { height, timestamp })
@@ -786,6 +782,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok((
             AnyConsensusState::Ckb(CkbConsensusState {
                 timestamp: status.timestamp.into_tm_time().expect("timestamp to time"),
+                // no commitment root for Ckb chain
                 commitment_root: CommitmentRoot::from(vec![]),
             }),
             None,
@@ -796,8 +793,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryConsensusStateHeightsRequest,
     ) -> Result<Vec<Height>, Error> {
-        // fill with one default element to pass through the runtime check in Hermes framework
-        Ok(vec![Height::min()])
+        todo!()
     }
 
     fn query_upgraded_client_state(
@@ -1035,7 +1031,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .filter(|(packet, _)| packet.status == PacketStatus::InboxAck)
             .map(|(p, _)| Sequence::from(p.packet.sequence as u64))
             .collect::<Vec<_>>();
-        Ok((result, Height::max()))
+        Ok((result, Height::default()))
     }
 
     fn query_unreceived_acknowledgements(

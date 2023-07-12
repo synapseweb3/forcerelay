@@ -83,7 +83,7 @@ pub fn get_channel_idx(id: &ChannelId) -> Result<u16, Error> {
         .map_err(|_| Error::ckb_chan_id_invalid(s.to_string()))
 }
 
-pub fn get_connection_id(idx: u16) -> ConnectionId {
+pub fn generate_connection_id(idx: u16) -> ConnectionId {
     ConnectionId::from_str(&format!("{CONNECTION_ID_PREFIX}{idx}")).unwrap()
 }
 
@@ -150,12 +150,13 @@ pub fn get_packet_capacity() -> Capacity {
 
 pub fn get_dummy_merkle_proof(height: Height) -> Proofs {
     let encoded = rlp::encode(&ObjectProof::default()).to_vec();
-    let consensus_proof =
-        ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::max()).unwrap();
+    let useless_client_proof = vec![0u8].try_into().unwrap();
+    let useless_consensus_proof =
+        ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
     Proofs::new(
         encoded.try_into().unwrap(),
-        Some(vec![0u8].try_into().unwrap()),
-        Some(consensus_proof),
+        Some(useless_client_proof),
+        Some(useless_consensus_proof),
         None,
         height,
     )

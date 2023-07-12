@@ -27,7 +27,7 @@ use ibc_relayer_types::core::ics04_channel::channel::{
 use ibc_relayer_types::core::ics04_channel::version::Version as ChanVersion;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
 
-use super::utils::get_connection_id;
+use super::utils::generate_connection_id;
 
 pub fn extract_channel_end_from_tx(
     tx: TransactionView,
@@ -113,7 +113,7 @@ fn convert_connection_end(
     connection: CkbConnectionEnd,
     idx: usize,
 ) -> Result<IdentifiedConnectionEnd, Error> {
-    let connection_id = get_connection_id(idx as u16);
+    let connection_id = generate_connection_id(idx as u16);
     let state = match connection.state {
         CkbState::Unknown => ConnectionState::Uninitialized,
         CkbState::Init => ConnectionState::Init,
@@ -183,7 +183,7 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
         ckb_channel_end
             .connection_hops
             .into_iter()
-            .map(|c| get_connection_id(c as u16))
+            .map(|c| generate_connection_id(c as u16))
             .collect::<Vec<_>>()
     };
     let channel_end = ChannelEnd {

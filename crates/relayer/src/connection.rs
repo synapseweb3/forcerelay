@@ -25,6 +25,7 @@ use crate::chain::requests::{
     IncludeProof, PageRequest, QueryConnectionRequest, QueryConnectionsRequest, QueryHeight,
 };
 use crate::chain::tracking::TrackedMsgs;
+use crate::config::ChainConfig;
 use crate::foreign_client::{ForeignClient, HasExpiredOrFrozenError};
 use crate::object::Connection as WorkerConnectionObject;
 use crate::util::pretty::{PrettyDuration, PrettyOption};
@@ -930,9 +931,12 @@ impl<ChainA: ChainHandle, ChainB: ChainHandle> Connection<ChainA, ChainB> {
         &self,
         consensus_height: Height,
     ) -> Result<(), ConnectionError> {
-        // skip if we do not check the consensus proof height
-        if consensus_height.revision_height() == u64::MAX {
-            return Ok(());
+        // FIXME: no need to check proof height for now
+        match self.src_chain().config() {
+            Ok(ChainConfig::Axon(_)) | Ok(ChainConfig::Ckb4Ibc(_)) => {
+                return Ok(());
+            }
+            _ => {}
         }
 
         let dst_application_latest_height = || {

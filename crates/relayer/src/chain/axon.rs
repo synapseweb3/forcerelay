@@ -184,7 +184,9 @@ impl ChainEndpoint for AxonChain {
         let light_client = AxonLightClient::from_config(&config, rt.clone())?;
         let metadata = rt.block_on(rpc_client.get_current_metadata())?;
         let epoch_len = metadata.version.end - metadata.version.start + 1;
-        light_client.bootstrap(client.clone(), rpc_client.clone(), epoch_len)?;
+        // TODO: since Ckb endpoint uses Axon metadata cell as its light client, Axon
+        //       endpoint has no need to monitor the update of its metadata
+        // light_client.bootstrap(client.clone(), rpc_client.clone(), epoch_len)?;
 
         Ok(Self {
             rt,
@@ -251,15 +253,12 @@ impl ChainEndpoint for AxonChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         // light client on Axon is already created with id "AxonClient-0", which is set only for Ckb now
         if let TrackingId::Static("create client") = tracked_msgs.tracking_id() {
-            let create_client_event = IbcEventWithHeight {
-                event: IbcEvent::CreateClient(CreateClient(Attributes {
-                    client_id: ClientId::from_str(DEFAULT_AXON_CLIENT).unwrap(),
-                    client_type: ClientType::Axon,
-                    consensus_height: Height::min(),
-                })),
-                height: Height::min(),
-                tx_hash: [0; 32],
-            };
+            let event = IbcEvent::CreateClient(CreateClient(Attributes {
+                client_id: ClientId::from_str(DEFAULT_AXON_CLIENT).unwrap(),
+                client_type: ClientType::Axon,
+                consensus_height: Height::default(),
+            }));
+            let create_client_event = IbcEventWithHeight::new(event, Height::default());
             return Ok(vec![create_client_event]);
         }
         tracked_msgs
@@ -596,8 +595,7 @@ impl ChainEndpoint for AxonChain {
             .iter()
             .map(|seq| (*seq).into())
             .collect();
-        let height = Height::max();
-        Ok((commitment_sequences, height))
+        Ok((commitment_sequences, Height::default()))
     }
 
     fn query_packet_receipt(
@@ -692,8 +690,7 @@ impl ChainEndpoint for AxonChain {
                 sequences.push(seq);
             }
         }
-        let height = Height::max();
-        Ok((sequences, height))
+        Ok((sequences, Height::default()))
     }
 
     fn query_unreceived_acknowledgements(
@@ -981,6 +978,7 @@ impl AxonChain {
 
         // check the validation of receipts mpt proof
         let key = rlp::encode(&receipt.transaction_index.as_u64());
+        // FIXME: keep it commentted until Axon team fixed this verify issue
         // axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
         //     .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
 
@@ -992,13 +990,14 @@ impl AxonChain {
             .append(&block_proof)
             .as_raw()
             .to_owned();
-        let consensus_proof =
-            ConsensusProof::new(vec![1u8].try_into().unwrap(), Height::max()).unwrap();
-        let client_proof = vec![1u8].try_into().unwrap();
+
+        let useless_client_proof = vec![0u8].try_into().unwrap();
+        let useless_consensus_proof =
+            ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
         let proofs = Proofs::new(
             object_proof.try_into().unwrap(),
-            Some(client_proof),
-            Some(consensus_proof),
+            Some(useless_client_proof),
+            Some(useless_consensus_proof),
             None,
             height,
         )
@@ -1388,7 +1387,7 @@ fn to_any_client_state(
 ) -> Result<AnyClientState, Error> {
     Ok(AxonClientState {
         chain_id: chain_id.clone(),
-        latest_height: Height::min(),
+        latest_height: Height::default(),
     }
     .into())
 }

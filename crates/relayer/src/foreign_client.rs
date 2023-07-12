@@ -34,6 +34,7 @@ use crate::chain::handle::ChainHandle;
 use crate::chain::requests::*;
 use crate::chain::tracking::TrackedMsgs;
 use crate::client_state::AnyClientState;
+use crate::config::ChainConfig;
 use crate::consensus_state::AnyConsensusState;
 use crate::error::Error as RelayerError;
 use crate::event::IbcEventWithHeight;
@@ -1051,9 +1052,12 @@ impl<DstChain: ChainHandle, SrcChain: ChainHandle> ForeignClient<DstChain, SrcCh
         target_height: Height,
         trusted_height: Option<Height>,
     ) -> Result<Vec<Any>, ForeignClientError> {
-        // skip building update client msg if we don't have check on light client
-        if target_height.revision_height() == u64::MAX || target_height.revision_height() == 0u64 {
-            return Ok(vec![]);
+        // skip building update client msg if we don't have a check on light client
+        match self.src_chain().config() {
+            Ok(ChainConfig::Ckb4Ibc(_)) | Ok(ChainConfig::Axon(_)) => {
+                return Ok(vec![]);
+            }
+            _ => {}
         }
 
         let src_application_latest_height = || {

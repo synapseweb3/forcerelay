@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
     chain::ckb4ibc::utils::{
-        convert_proof, get_connection_capacity, get_connection_id, get_connection_index_by_id,
+        convert_proof, generate_connection_id, get_connection_capacity, get_connection_index_by_id,
         get_connection_lock_script, get_encoded_object,
     },
     error::Error,
@@ -57,7 +57,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         delay_period: msg.delay_period.as_secs(),
     };
     let old_ibc_connection_cell = converter.get_ibc_connections();
-    let this_conn_idx = old_ibc_connection_cell.next_channel_number;
+    let this_conn_idx = old_ibc_connection_cell.next_connection_number;
     let mut new_ibc_connection_cell = old_ibc_connection_cell.clone();
     new_ibc_connection_cell.connections.push(connection_end);
     new_ibc_connection_cell.next_connection_number += 1;
@@ -101,7 +101,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         )
         .build();
     let event = IbcEvent::OpenInitConnection(OpenInit(Attributes {
-        connection_id: Some(get_connection_id(this_conn_idx)),
+        connection_id: Some(generate_connection_id(this_conn_idx)),
         client_id: msg.client_id.clone(),
         counterparty_connection_id: None,
         counterparty_client_id: msg.counterparty.client_id().clone(),
@@ -137,7 +137,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
         delay_period: msg.delay_period.as_secs(),
     };
     let old_ibc_connection_cell = converter.get_ibc_connections();
-    let this_conn_idx = old_ibc_connection_cell.next_channel_number;
+    let this_conn_idx = old_ibc_connection_cell.next_connection_number;
     let mut new_ibc_connection_cell = old_ibc_connection_cell.clone();
     new_ibc_connection_cell.connections.push(connection_end);
     new_ibc_connection_cell.next_connection_number += 1;
@@ -184,7 +184,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
         )
         .build();
     let event = IbcEvent::OpenTryConnection(OpenTry(Attributes {
-        connection_id: Some(get_connection_id(this_conn_idx)),
+        connection_id: Some(generate_connection_id(this_conn_idx)),
         client_id: msg.client_id,
         counterparty_connection_id: msg.counterparty.connection_id.clone(),
         counterparty_client_id: msg.counterparty.client_id().clone(),

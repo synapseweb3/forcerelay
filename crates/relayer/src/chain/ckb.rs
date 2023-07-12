@@ -652,7 +652,7 @@ impl ChainEndpoint for CkbChain {
                 client_id: Default::default(),
                 client_state: AnyClientState::Ckb(CkbClientState {
                     chain_id: self.id(),
-                    latest_height: Height::min(),
+                    latest_height: Height::default(),
                 }),
             };
             clients.push(client_state);

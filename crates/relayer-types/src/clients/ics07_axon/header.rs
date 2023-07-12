@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 pub const AXON_HEADER_TYPE_URL: &str = "/axon.v1.header";
 
+// FIXME: useless header which cannot be ignored by Hermes runtime
 #[derive(Clone, PartialEq, Eq, Deserialize, Serialize, Debug)]
 pub struct Header {}
 
@@ -17,7 +18,7 @@ impl ics02_client::header::Header for Header {
     }
 
     fn height(&self) -> Height {
-        Height::max()
+        Height::default()
     }
 
     fn timestamp(&self) -> Timestamp {

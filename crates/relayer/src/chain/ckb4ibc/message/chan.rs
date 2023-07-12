@@ -2,8 +2,8 @@ use std::str::FromStr;
 
 use super::{CkbTxInfo, MsgToTxConverter};
 use crate::chain::ckb4ibc::utils::{
-    convert_port_id_to_array, convert_proof, get_channel_capacity, get_channel_idx,
-    get_connection_capacity, get_connection_id, get_connection_index_by_id,
+    convert_port_id_to_array, convert_proof, generate_connection_id, get_channel_capacity,
+    get_channel_idx, get_connection_capacity, get_connection_index_by_id,
     get_connection_lock_script, get_encoded_object, get_packet_capacity,
 };
 use crate::error::Error;
@@ -241,7 +241,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
 ) -> Result<CkbTxInfo, Error> {
     let channel_idx = get_channel_idx(&msg.channel_id)?;
     let old_channel = converter.get_ibc_channel(&msg.channel_id);
-    let connection_id = get_connection_id(old_channel.connection_hops[0] as u16);
+    let connection_id = generate_connection_id(old_channel.connection_hops[0] as u16);
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id).unwrap();
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
@@ -330,7 +330,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
 
-    let connection_id = get_connection_id(old_channel.connection_hops[0] as u16);
+    let connection_id = generate_connection_id(old_channel.connection_hops[0] as u16);
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id)
         .map_err(|_| Error::ckb_port_id_invalid(old_channel.counterparty.port_id.clone()))?;
     let counterparty_channel_id =
