@@ -11,7 +11,7 @@ mod tests {
     use ckb_ics_axon::handler::{IbcChannel, IbcConnections};
     use ckb_ics_axon::object::State;
     use ckb_ics_axon::ChannelArgs;
-    // use ckb_sdk::constants::TYPE_ID_CODE_HASH;
+    use ckb_jsonrpc_types::Status;
     use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
     use ckb_types::core::ScriptHashType;
     use ckb_types::packed::Script;
@@ -35,6 +35,7 @@ mod tests {
         h256!("0x9ea73e5003f580eb4f380944b1de0711c6b5a4bb96c6f9bf8186203b7c684606");
     const CLIENT_TYPE_ARGS: H256 =
         h256!("0x29866e133f707f070459b905065294ab1a7b70bea200952a080f849319ae6202");
+
     #[test]
     fn test_config() {
         use relayer::config::load;
@@ -48,8 +49,6 @@ mod tests {
     fn integration_test() {
         prepare_ckb_chain("ckb-dev-a", 8114);
         prepare_ckb_chain("ckb-dev-b", 8214);
-
-        thread::sleep(time::Duration::from_secs(10));
 
         Command::new("cargo")
             .arg("run")
@@ -134,17 +133,16 @@ mod tests {
         connection.state == State::Open
     }
 
-    fn send_tx(req: &str, port: u32) {
-        Command::new("curl")
+    fn send_tx(req: &str, port: u32) -> String {
+        let output = Command::new("curl")
             .arg("-H")
             .arg("content-type: application/json")
             .arg("-d")
             .arg(format!("@{}", req))
             .arg(format!("http://localhost:{}", port))
-            .spawn()
-            .unwrap()
-            .wait()
+            .output()
             .unwrap();
+        String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
     fn prepare_ckb_chain(ckb_path: &str, port: u32) -> (Child, Child) {
@@ -160,9 +158,9 @@ mod tests {
             .arg("dev")
             .current_dir(&working_dir)
             .spawn()
+            .unwrap()
+            .wait()
             .unwrap();
-
-        thread::sleep(Duration::from_secs(2));
 
         std::fs::copy(
             "../forcerelay-test/ckb/ckb.toml",
@@ -188,6 +186,8 @@ mod tests {
                 .arg("ckb.toml")
                 .current_dir(&working_dir)
                 .spawn()
+                .unwrap()
+                .wait()
                 .unwrap();
             Command::new("sed")
                 .arg("-i")
@@ -198,6 +198,8 @@ mod tests {
                 .arg("ckb-miner.toml")
                 .current_dir(&working_dir)
                 .spawn()
+                .unwrap()
+                .wait()
                 .unwrap();
         }
 
@@ -209,7 +211,7 @@ mod tests {
             .spawn()
             .unwrap();
 
-        thread::sleep(Duration::from_secs(4));
+        thread::sleep(Duration::from_secs(3));
 
         let ckb_miner = Command::new("ckb")
             .arg("miner")
@@ -219,27 +221,60 @@ mod tests {
             .spawn()
             .unwrap();
 
-        thread::sleep(Duration::from_secs(4));
+        // check transaction in genesis
+        check_and_wait_ckb_transacton(
+            h256!("0x227de871ce6ab120a67960f831b04148bf79b4e56349dde7a8001f93191736ed"),
+            port,
+        );
 
-        let prelude1 = "txs/deploy_conn_chan.json";
-        println!("deploying conn and channel");
-        send_tx(prelude1, port);
+        let output = send_tx("txs/deploy_conn_chan.json", port);
+        print!("deploying conn and channel: {output}");
 
-        thread::sleep(time::Duration::from_secs(3));
+        // check `txs/deploy_conn_chan.json`
+        check_and_wait_ckb_transacton(
+            h256!("0x72f01b65674d61cd99bdb5638ab625168b12ca8ae70cadff9f695bf5c575efcd"),
+            port,
+        );
 
-        let prelude2 = "txs/deploy_packet_metadata.json";
-        println!("deploying packet and metadata");
-        send_tx(prelude2, port);
+        let output = send_tx("txs/deploy_packet_metadata.json", port);
+        print!("deploying packet and metadata: {output}");
 
-        thread::sleep(time::Duration::from_secs(3));
+        // check `txs/deploy_packet_metadata.json`
+        check_and_wait_ckb_transacton(
+            h256!("0xd613b89cabb942dde517c865c01c7f08a0a899bfa6b6a6ef5215b99a9fc0e455"),
+            port,
+        );
 
-        let create_connection_tx = "txs/create_connection.json";
-        println!("deploying create connection");
-        send_tx(create_connection_tx, port);
+        let output = send_tx("txs/create_connection.json", port);
+        print!("deploying create connection: {output}");
 
-        thread::sleep(time::Duration::from_secs(3));
+        // check `txs/create_connection.json`
+        check_and_wait_ckb_transacton(
+            h256!("0x383fa94fa78ffed62b740773804380ed9bea078e854ce19d87bf886eda1cc174"),
+            port,
+        );
 
         (ckb_run, ckb_miner)
+    }
+
+    fn check_and_wait_ckb_transacton(hash: H256, port: u32) {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let url = Url::from_str(&format!("http://127.0.0.1:{}", port)).unwrap();
+        let client = RpcClient::new(&url, &url);
+        let mut loop_count = 0;
+        loop {
+            let result = rt.block_on(client.get_transaction(&hash)).unwrap();
+            if let Some(tx) = result {
+                if Status::Committed == tx.tx_status.status {
+                    return;
+                }
+            }
+            if loop_count > 10 {
+                panic!("cannot find tx_hash {hash} on port {port}");
+            }
+            loop_count += 1;
+            thread::sleep(time::Duration::from_secs(1));
+        }
     }
 
     fn fetch_ibc_connections(port: u32) -> IbcConnections {
