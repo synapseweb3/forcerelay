@@ -73,7 +73,7 @@ Warn: relayer is still under rapid development and the configuration example and
 
 ## Using Forcerelay/Axon (WIP)
 
-Run `Cargo test -p ckb4ibc-test --lib --all-features -- tests::integration_test --exact --nocapture --ignored` to check Ckb endpoint, which tests connection and channel layers between two Ckb chains
+Run `cargo test -p ckb4ibc-test --lib --all-features -- tests::integration_test --exact --nocapture --ignored` to check Ckb endpoint, which tests connection and channel layers between two Ckb chains
 
 Run `Forcerelay create connection --a-chain axon-0 --b-chain axon-1` and `Forcerelay create channel --a-chain axon-0 --a-connection connection-0 --a-port mock-port-0 --b-port mock-port-0` to create connection and channel between two Axon chains
 
