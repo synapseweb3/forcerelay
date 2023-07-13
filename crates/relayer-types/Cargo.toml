@@ -53,6 +53,7 @@ thiserror = "1.0"
 ethereum-types = "0.14.1"
 hex = "0.4"
 axon-tools = { version = "0.1.1", features = ["impl-serde", "proof"] }
+strum = { version = "0.24.1", features = ["derive"] }
 
 [dependencies.tendermint]
 version = "0.30.0"

@@ -15,15 +15,15 @@ use crate::core::ics02_client::{
 };
 use ibc_proto::protobuf::Protobuf;
 
-pub const CLIENT_STATE_TYPE_URL: &str = "/eth.client.v1.state";
+pub const ETH_CLIENT_STATE_TYPE_URL: &str = "/eth.client.v1.state";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ClientState {
+pub struct EthClientState {
     pub chain_id: ChainId,
     pub lightclient_update: Update,
 }
 
-impl Ics02ClientState for ClientState {
+impl Ics02ClientState for EthClientState {
     fn chain_id(&self) -> ChainId {
         self.chain_id.clone()
     }
@@ -55,26 +55,26 @@ impl Ics02ClientState for ClientState {
     }
 }
 
-impl Protobuf<Any> for ClientState {}
+impl Protobuf<Any> for EthClientState {}
 
-impl TryFrom<Any> for ClientState {
+impl TryFrom<Any> for EthClientState {
     type Error = Ics02Error;
 
     fn try_from(any: Any) -> Result<Self, Self::Error> {
-        if any.type_url != CLIENT_STATE_TYPE_URL {
+        if any.type_url != ETH_CLIENT_STATE_TYPE_URL {
             return Err(Ics02Error::unknown_client_type("ethereum 2.0".to_owned()));
         }
-        let client: ClientState = serde_json::from_slice(&any.value)
+        let client: EthClientState = serde_json::from_slice(&any.value)
             .map_err(|e| Ics02Error::unknown_client_state_type(e.to_string()))?;
         Ok(client)
     }
 }
 
-impl From<ClientState> for Any {
-    fn from(client: ClientState) -> Self {
+impl From<EthClientState> for Any {
+    fn from(client: EthClientState) -> Self {
         let json = serde_json::to_string(&client).expect("jsonify clientstate");
         Any {
-            type_url: CLIENT_STATE_TYPE_URL.to_owned(),
+            type_url: ETH_CLIENT_STATE_TYPE_URL.to_owned(),
             value: json.into_bytes(),
         }
     }
@@ -86,11 +86,11 @@ mod tests {
 
     #[test]
     fn test_eth_client_state_serde() {
-        let client_state = ClientState {
+        let client_state = EthClientState {
             chain_id: ChainId::new("eth".to_owned(), 0),
             lightclient_update: Default::default(),
         };
         let any: Any = client_state.into();
-        let _: ClientState = any.try_into().expect("serde error");
+        let _: EthClientState = any.try_into().expect("serde error");
     }
 }

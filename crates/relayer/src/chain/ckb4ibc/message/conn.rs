@@ -7,7 +7,7 @@ use crate::{
     },
     error::Error,
 };
-use ckb_ics_axon::{consts::CONNECTION_CELL_CAPACITY, convert_client_id_to_string};
+use ckb_ics_axon::consts::CONNECTION_CELL_CAPACITY;
 use ckb_ics_axon::{
     message::{
         Envelope, MsgConnectionOpenAck as CkbMsgConnectionOpenAck,
@@ -102,7 +102,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         .build();
     let event = IbcEvent::OpenInitConnection(OpenInit(Attributes {
         connection_id: Some(generate_connection_id(this_conn_idx)),
-        client_id: msg.client_id.clone(),
+        client_id: msg.client_id,
         counterparty_connection_id: None,
         counterparty_client_id: msg.counterparty.client_id().clone(),
     }));
@@ -251,12 +251,11 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
                 .pack(),
         )
         .build();
-    let client_id = convert_client_id_to_string(converter.get_client_id());
     let event = IbcEvent::OpenAckConnection(OpenAck(Attributes {
         connection_id: Some(msg.connection_id),
-        client_id: ClientId::from_str(&client_id).unwrap(),
+        client_id: converter.get_client_id(),
         counterparty_connection_id: Some(msg.counterparty_connection_id),
-        counterparty_client_id: ClientId::from_str("counterpartyclient-dummy").unwrap(),
+        counterparty_client_id: ClientId::from_str("counterpartyclient-dummy").unwrap(), // FIXME
     }));
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
@@ -318,12 +317,11 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
                 .pack(),
         )
         .build();
-    let client_id = convert_client_id_to_string(converter.get_client_id());
     let event = IbcEvent::OpenConfirmConnection(OpenConfirm(Attributes {
         connection_id: Some(msg.connection_id),
-        client_id: ClientId::from_str(&client_id).unwrap(),
+        client_id: converter.get_client_id(),
         counterparty_connection_id: None,
-        counterparty_client_id: ClientId::from_str("counterpartyclient-dummy").unwrap(),
+        counterparty_client_id: ClientId::from_str("counterpartyclient-dummy").unwrap(), // FIXME
     }));
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),

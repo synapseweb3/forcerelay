@@ -5,7 +5,19 @@ use serde_derive::{Deserialize, Serialize};
 use super::error::Error;
 
 /// Type of the client, depending on the specific consensus algorithm.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::EnumIter,
+)]
 pub enum ClientType {
     Tendermint = 1,
     Eth = 2,
@@ -22,7 +34,7 @@ impl ClientType {
     const ETH_STR: &'static str = "07-ethereum";
     const CKB_STR: &'static str = "07-ckb0";
     const CKB4IBC_STR: &'static str = "07-ckb4ibc";
-    const AXON_STR: &'static str = "07-axon0";
+    const AXON_STR: &'static str = "07-axon";
 
     #[cfg_attr(not(test), allow(dead_code))]
     const MOCK_STR: &'static str = "9999-mock";
@@ -50,6 +62,7 @@ impl TryFrom<u64> for ClientType {
             2 => Ok(Self::Eth),
             3 => Ok(Self::Ckb),
             4 => Ok(Self::Axon),
+            5 => Ok(Self::Ckb4Ibc),
 
             #[cfg(any(test, feature = "mocks"))]
             9999 => Ok(Self::Mock),
@@ -70,6 +83,10 @@ impl core::str::FromStr for ClientType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             Self::TENDERMINT_STR => Ok(Self::Tendermint),
+            Self::ETH_STR => Ok(Self::Eth),
+            Self::CKB_STR => Ok(Self::Ckb),
+            Self::AXON_STR => Ok(Self::Axon),
+            Self::CKB4IBC_STR => Ok(Self::Ckb4Ibc),
 
             #[cfg(any(test, feature = "mocks"))]
             Self::MOCK_STR => Ok(Self::Mock),

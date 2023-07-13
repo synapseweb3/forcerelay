@@ -3708,6 +3708,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "strum",
  "subtle-encoding",
  "tendermint",
  "tendermint-light-client-verifier",

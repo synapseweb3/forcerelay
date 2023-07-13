@@ -6,7 +6,7 @@ use ethers::types::{BlockId, BlockNumber};
 use reqwest::Client;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tendermint_rpc::{Error as TmError, Url};
+use tendermint_rpc::Url;
 
 pub type Response<T> = Result<T, Error>;
 

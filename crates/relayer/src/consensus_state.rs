@@ -5,10 +5,10 @@ use ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState as RawConsensus
 use ibc_proto::ibc::mock::ConsensusState as RawMockConsensusState;
 use ibc_proto::protobuf::Protobuf;
 use ibc_relayer_types::clients::ics07_axon::consensus_state::{
-    ConsensusState as AxonConsensusState, AXON_CONSENSUS_STATE_TYPE_URL,
+    AxonConsensusState, AXON_CONSENSUS_STATE_TYPE_URL,
 };
 use ibc_relayer_types::clients::ics07_ckb::consensus_state::{
-    ConsensusState as CkbConsensusState, CKB_CONSENSUS_STATE_TYPE_URL,
+    CkbConsensusState, CKB_CONSENSUS_STATE_TYPE_URL,
 };
 use ibc_relayer_types::clients::ics07_eth::consensus_state::ConsensusState as EthConsensusState;
 use ibc_relayer_types::clients::ics07_tendermint::consensus_state::{

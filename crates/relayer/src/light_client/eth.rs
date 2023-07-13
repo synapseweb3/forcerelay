@@ -13,7 +13,7 @@ use tracing::{error, warn};
 use async_trait::async_trait;
 use eyre::eyre;
 use eyre::Result;
-use ibc_relayer_types::clients::ics07_eth::client_state::ClientState as EthClientState;
+use ibc_relayer_types::clients::ics07_eth::client_state::EthClientState;
 use ibc_relayer_types::clients::ics07_eth::types::{
     BitVector, Bootstrap, ConsensusError, FinalityUpdate, GenericUpdate, PublicKey, SignatureBytes,
     SyncCommittee, TreeHash, Update, H256, U512,

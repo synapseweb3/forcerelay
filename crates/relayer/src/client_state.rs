@@ -9,13 +9,13 @@ use serde::{Deserialize, Serialize};
 
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::clients::ics07_axon::client_state::{
-    ClientState as AxonClientState, CLIENT_STATE_TYPE_URL as AXON_CLIENT_STATE_TYPE_URL,
+    AxonClientState, AXON_CLIENT_STATE_TYPE_URL,
 };
 use ibc_relayer_types::clients::ics07_ckb::client_state::{
-    ClientState as CkbClientState, CLIENT_STATE_TYPE_URL as CKB_CLIENT_STATE_TYPE_URL,
+    CkbClientState, CKB_CLIENT_STATE_TYPE_URL,
 };
 use ibc_relayer_types::clients::ics07_eth::client_state::{
-    ClientState as EthClientState, CLIENT_STATE_TYPE_URL as ETH_CLIENT_STATE_TYPE_URL,
+    EthClientState, ETH_CLIENT_STATE_TYPE_URL,
 };
 use ibc_relayer_types::clients::ics07_tendermint::client_state::{
     ClientState as TmClientState, UpgradeOptions as TmUpgradeOptions,

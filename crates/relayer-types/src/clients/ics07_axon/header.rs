@@ -10,9 +10,9 @@ pub const AXON_HEADER_TYPE_URL: &str = "/axon.v1.header";
 
 // FIXME: useless header which cannot be ignored by Hermes runtime
 #[derive(Clone, PartialEq, Eq, Deserialize, Serialize, Debug)]
-pub struct Header {}
+pub struct AxonHeader {}
 
-impl ics02_client::header::Header for Header {
+impl ics02_client::header::Header for AxonHeader {
     fn client_type(&self) -> ics02_client::client_type::ClientType {
         ics02_client::client_type::ClientType::Axon
     }
@@ -26,24 +26,24 @@ impl ics02_client::header::Header for Header {
     }
 }
 
-impl Protobuf<Any> for Header {}
+impl Protobuf<Any> for AxonHeader {}
 
-impl TryFrom<Any> for Header {
+impl TryFrom<Any> for AxonHeader {
     type Error = Ics02Error;
 
     fn try_from(any: Any) -> Result<Self, Self::Error> {
         if any.type_url != AXON_HEADER_TYPE_URL {
             return Err(Ics02Error::unknown_header_type("axon".to_owned()));
         }
-        let header: Header = serde_json::from_slice(&any.value).map_err(|e| {
+        let header: AxonHeader = serde_json::from_slice(&any.value).map_err(|e| {
             Ics02Error::invalid_raw_header(ProtoError::try_from_protobuf(e.to_string()))
         })?;
         Ok(header)
     }
 }
 
-impl From<Header> for Any {
-    fn from(header: Header) -> Self {
+impl From<AxonHeader> for Any {
+    fn from(header: AxonHeader) -> Self {
         let json = serde_json::to_string(&header).expect("jsonify axon header");
         Any {
             type_url: AXON_HEADER_TYPE_URL.to_owned(),

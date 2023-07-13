@@ -2,13 +2,11 @@
 
 use std::sync::Arc;
 
-use axon_tools::types::AxonHeader;
+use axon_tools::types::AxonHeader as AxonChainHeader;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
 use futures::TryFutureExt;
-use ibc_relayer_types::clients::ics07_axon::{
-    header::Header, light_block::LightBlock as AxonLightBlock,
-};
+use ibc_relayer_types::clients::ics07_axon::{header::AxonHeader, light_block::AxonLightBlock};
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -27,7 +25,7 @@ use super::Verified;
 pub struct LightClient {
     rt: Arc<TokioRuntime>,
     chain_id: ChainId,
-    header_updaters: Arc<RwLock<Vec<Sender<AxonHeader>>>>,
+    header_updaters: Arc<RwLock<Vec<Sender<AxonChainHeader>>>>,
 }
 
 impl LightClient {
@@ -39,7 +37,7 @@ impl LightClient {
         })
     }
 
-    pub fn subscribe(&mut self) -> Receiver<AxonHeader> {
+    pub fn subscribe(&mut self) -> Receiver<AxonChainHeader> {
         let (tx, rx) = channel(1);
         self.rt.block_on(self.header_updaters.write()).push(tx);
         rx
@@ -95,7 +93,7 @@ impl super::LightClient<AxonChain> for LightClient {
         trusted: ibc_relayer_types::Height,
         target: ibc_relayer_types::Height,
         client_state: &AnyClientState,
-    ) -> Result<Verified<Header>, Error> {
+    ) -> Result<Verified<AxonHeader>, Error> {
         todo!()
     }
 

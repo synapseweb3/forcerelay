@@ -61,7 +61,7 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
         content: rlp::encode(&CkbMsgChannelOpenInit {}).to_vec(),
     };
     let channel_args = ChannelArgs {
-        client_id: converter.get_client_id(),
+        client_id: converter.get_client_id_bytes(),
         open: false,
         channel_id: next_channel_num,
         port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -188,7 +188,7 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
                         .code_hash(converter.get_channel_code_hash())
                         .args(
                             ChannelArgs {
-                                client_id: converter.get_client_id(),
+                                client_id: converter.get_client_id_bytes(),
                                 open: false,
                                 channel_id: next_channel_num,
                                 port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -256,7 +256,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     };
 
     let lock_args = ChannelArgs {
-        client_id: converter.get_client_id(),
+        client_id: converter.get_client_id_bytes(),
         open: true,
         channel_id: channel_idx,
         port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -345,7 +345,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     };
 
     let lock_args = ChannelArgs {
-        client_id: converter.get_client_id(),
+        client_id: converter.get_client_id_bytes(),
         open: true,
         channel_id: get_channel_idx(&msg.channel_id)?,
         port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -468,7 +468,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
                         .hash_type(ScriptHashType::Type.into())
                         .args(
                             ChannelArgs {
-                                client_id: converter.get_client_id(),
+                                client_id: converter.get_client_id_bytes(),
                                 open: true,
                                 channel_id: channel_idx,
                                 port_id: port_id_in_args,
@@ -575,7 +575,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
                         .hash_type(ScriptHashType::Type.into())
                         .args(
                             ChannelArgs {
-                                client_id: converter.get_client_id(),
+                                client_id: converter.get_client_id_bytes(),
                                 open: true,
                                 channel_id: channel_idx,
                                 port_id: port_id_in_args,

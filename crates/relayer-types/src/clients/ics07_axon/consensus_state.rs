@@ -11,9 +11,9 @@ use crate::core::ics02_client::error::Error as Ics02Error;
 pub const AXON_CONSENSUS_STATE_TYPE_URL: &str = "/ibc.lightclients.axon.v1.ConsensusState";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConsensusState {}
+pub struct AxonConsensusState {}
 
-impl crate::core::ics02_client::consensus_state::ConsensusState for ConsensusState {
+impl crate::core::ics02_client::consensus_state::ConsensusState for AxonConsensusState {
     fn client_type(&self) -> ClientType {
         todo!()
     }
@@ -27,9 +27,9 @@ impl crate::core::ics02_client::consensus_state::ConsensusState for ConsensusSta
     }
 }
 
-impl Protobuf<Any> for ConsensusState {}
+impl Protobuf<Any> for AxonConsensusState {}
 
-impl TryFrom<Any> for ConsensusState {
+impl TryFrom<Any> for AxonConsensusState {
     type Error = Ics02Error;
 
     fn try_from(_value: Any) -> Result<Self, Self::Error> {
@@ -37,8 +37,8 @@ impl TryFrom<Any> for ConsensusState {
     }
 }
 
-impl From<ConsensusState> for Any {
-    fn from(_value: ConsensusState) -> Self {
+impl From<AxonConsensusState> for Any {
+    fn from(_value: AxonConsensusState) -> Self {
         todo!()
     }
 }

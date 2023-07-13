@@ -14,21 +14,21 @@ pub const CKB_HEADER_TYPE_URL: &str = "/ibc.lightclients.ckb.v1.Header";
 
 // FIXME: useless Ckb header which cannot be ignored by Hermes runtime
 #[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Header {}
+pub struct CkbHeader {}
 
-impl core::fmt::Debug for Header {
+impl core::fmt::Debug for CkbHeader {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         write!(f, " Header {{...}}")
     }
 }
 
-impl Display for Header {
+impl Display for CkbHeader {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         write!(f, "Header {{}}")
     }
 }
 
-impl crate::core::ics02_client::header::Header for Header {
+impl crate::core::ics02_client::header::Header for CkbHeader {
     fn client_type(&self) -> ClientType {
         ClientType::Ckb
     }
@@ -42,22 +42,22 @@ impl crate::core::ics02_client::header::Header for Header {
     }
 }
 
-impl Protobuf<Any> for Header {}
+impl Protobuf<Any> for CkbHeader {}
 
-impl TryFrom<Any> for Header {
+impl TryFrom<Any> for CkbHeader {
     type Error = Ics02Error;
 
     fn try_from(raw: Any) -> Result<Self, Ics02Error> {
         let value = match raw.type_url.as_str() {
-            CKB_HEADER_TYPE_URL => Ok(serde_json::from_slice::<Header>(&raw.value).unwrap()),
+            CKB_HEADER_TYPE_URL => Ok(serde_json::from_slice::<CkbHeader>(&raw.value).unwrap()),
             _ => Err(Ics02Error::unknown_header_type(raw.type_url)),
         }?;
         Ok(value)
     }
 }
 
-impl From<Header> for Any {
-    fn from(header: Header) -> Self {
+impl From<CkbHeader> for Any {
+    fn from(header: CkbHeader) -> Self {
         Any {
             type_url: CKB_HEADER_TYPE_URL.to_string(),
             value: serde_json::to_vec(&header).unwrap(),

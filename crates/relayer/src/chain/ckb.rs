@@ -16,14 +16,15 @@ use ibc_relayer_storage::prelude::{StorageAsMMRStore as _, StorageReader as _};
 use ibc_relayer_storage::{Slot, Storage};
 use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_ckb::{
-    client_state::ClientState as CkbClientState,
-    consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
-    light_block::LightBlock as CkbLightBlock,
+    client_state::CkbClientState, consensus_state::CkbConsensusState, header::CkbHeader,
+    light_block::CkbLightBlock,
 };
 use ibc_relayer_types::clients::ics07_eth::{
-    client_state::ClientState as EthClientState, types::Update as EthUpdate,
+    client_state::EthClientState, types::Update as EthUpdate,
 };
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::height::Height;
+use ibc_relayer_types::core::ics24_host::identifier::ClientId;
 use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
@@ -653,6 +654,7 @@ impl ChainEndpoint for CkbChain {
                 client_state: AnyClientState::Ckb(CkbClientState {
                     chain_id: self.id(),
                     latest_height: Height::default(),
+                    default_client_id: ClientId::new(ClientType::Ckb, 0).unwrap(),
                 }),
             };
             clients.push(client_state);

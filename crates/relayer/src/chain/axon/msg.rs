@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use ethers::types::Bytes;
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::{
@@ -43,7 +41,7 @@ use ibc_relayer_types::{
 };
 
 use super::contract;
-use crate::{error::Error, object};
+use crate::error::Error;
 
 fn into_ethers_client_id(value: Option<ClientId>) -> String {
     match value {
@@ -132,7 +130,6 @@ impl From<contract::HeightData> for Height {
 
 impl From<connection::Counterparty> for contract::CounterpartyData {
     fn from(value: connection::Counterparty) -> Self {
-        let client_id: String = value.client_id().as_str().into();
         Self {
             client_id: value.client_id().as_str().into(),
             connection_id: match value.connection_id() {
@@ -746,7 +743,7 @@ impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
                 };
                 IbcEvent::AcknowledgePacket(event)
             }
-            WriteAcknowledgementFilter(event) => todo!(),
+            WriteAcknowledgementFilter(_) => todo!(),
             CreateClientFilter(_) => todo!(),
             UpdateClientFilter(event) => {
                 let event = client_events::UpdateClient {

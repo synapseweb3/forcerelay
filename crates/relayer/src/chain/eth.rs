@@ -3,8 +3,8 @@ use ibc_proto::ibc::apps::fee::v1::{
 };
 use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_eth::{
-    client_state::ClientState as EthClientState,
-    consensus_state::ConsensusState as EthConsensusState, header::Header as EthHeader,
+    client_state::EthClientState, consensus_state::ConsensusState as EthConsensusState,
+    header::Header as EthHeader,
 };
 use ibc_relayer_types::clients::ics07_tendermint::error as ics07_error;
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;

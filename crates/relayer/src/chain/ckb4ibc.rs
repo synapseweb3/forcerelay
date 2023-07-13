@@ -9,7 +9,7 @@ use crate::chain::ckb4ibc::extractor::extract_channel_end_from_tx;
 use crate::chain::ckb4ibc::utils::{get_connection_index_by_id, get_connection_search_key};
 use crate::chain::endpoint::ChainEndpoint;
 use crate::client_state::{AnyClientState, IdentifiedAnyClientState};
-use crate::config::ckb4ibc::ChainConfig as Ckb4IbcChainConfig;
+use crate::config::ckb4ibc::{ChainConfig as Ckb4IbcChainConfig, LightClientItem};
 use crate::config::ChainConfig;
 use crate::connection::ConnectionMsgType;
 use crate::consensus_state::AnyConsensusState;
@@ -40,30 +40,27 @@ use ibc_proto::ibc::apps::fee::v1::{
 };
 use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_ckb::{
-    client_state::ClientState as CkbClientState,
-    consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
-    light_block::LightBlock as CkbLightBlock,
+    client_state::CkbClientState, consensus_state::CkbConsensusState, header::CkbHeader,
+    light_block::CkbLightBlock,
 };
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
-use ibc_relayer_types::core::ics02_client::events::{Attributes, CreateClient, UpdateClient};
+use ibc_relayer_types::core::ics02_client::events::UpdateClient;
 use ibc_relayer_types::core::ics03_connection::connection::{
     ConnectionEnd, IdentifiedConnectionEnd,
 };
 use ibc_relayer_types::core::ics04_channel::channel::{ChannelEnd, IdentifiedChannelEnd};
 use ibc_relayer_types::core::ics04_channel::packet::{PacketMsgType, Sequence};
-use ibc_relayer_types::core::ics23_commitment::commitment::{CommitmentPrefix, CommitmentRoot};
+use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics23_commitment::merkle::MerkleProof;
 use ibc_relayer_types::core::ics24_host::identifier::{
     ChainId, ChannelId, ClientId, ConnectionId, PortId,
 };
-use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::proofs::Proofs;
 use ibc_relayer_types::signer::Signer;
 use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
 use semver::Version;
 use std::sync::RwLock;
-use tendermint::Time;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime;
 
@@ -86,14 +83,14 @@ use super::requests::{
     QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientStateRequest,
     QueryClientStatesRequest, QueryConnectionChannelsRequest, QueryConnectionRequest,
     QueryConnectionsRequest, QueryConsensusStateHeightsRequest, QueryConsensusStateRequest,
-    QueryHeight, QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
+    QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
     QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
     QueryPacketCommitmentRequest, QueryPacketCommitmentsRequest, QueryPacketEventDataRequest,
     QueryPacketReceiptRequest, QueryTxRequest, QueryUnreceivedAcksRequest,
     QueryUnreceivedPacketsRequest, QueryUpgradedClientStateRequest,
     QueryUpgradedConsensusStateRequest,
 };
-use super::tracking::{TrackedMsgs, TrackingId};
+use super::tracking::TrackedMsgs;
 use tokio::runtime::Runtime as TokioRuntime;
 
 mod cache_set;
@@ -113,7 +110,7 @@ pub struct Ckb4IbcChain {
 
     tx_monitor_cmd: Option<TxMonitorCmd>,
 
-    client_outpoint: OutPoint,
+    client_outpoints: HashMap<ClientType, OutPoint>,
     connection_outpoint: OutPoint,
     channel_outpoint: OutPoint,
     packet_outpoint: OutPoint,
@@ -177,16 +174,22 @@ impl Ckb4IbcChain {
         Ok(address)
     }
 
-    pub fn get_converter(&self) -> Converter {
+    pub fn get_converter(&self, client_type: ClientType) -> Converter {
         if self.connection_cache.borrow().is_none() {
             let _ = self.query_connection_and_cache().unwrap();
         }
+        let client_outpoint = self
+            .client_outpoints
+            .get(&client_type)
+            .expect("invalid client_type");
         Converter {
             channel_input_data: self.channel_input_data.borrow(),
             channel_cache: self.channel_cache.borrow(),
             config: &self.config,
             connection_cache: self.connection_cache.borrow(),
-            client_outpoint: &self.client_outpoint,
+            client_id_bytes: self.config.lc_client_id_bytes(client_type).unwrap(),
+            client_id: self.config.lc_client_id(client_type).unwrap(),
+            client_outpoint,
             packet_input_data: self.packet_input_data.borrow(),
             packet_owner: Default::default(),
             chan_contract_outpoint: &self.channel_outpoint,
@@ -212,7 +215,10 @@ impl Ckb4IbcChain {
         sequence: Sequence,
     ) -> Result<(IbcPacket, CellInput), Error> {
         let script = Script::new_builder()
-            .code_hash(self.get_converter().get_packet_code_hash())
+            .code_hash(
+                self.get_converter(ClientType::Ckb4Ibc)
+                    .get_packet_code_hash(),
+            )
             .hash_type(ScriptHashType::Type.into())
             .args(
                 PacketArgs {
@@ -268,12 +274,14 @@ impl Ckb4IbcChain {
         port_id: PortId,
         is_open: bool,
     ) -> Result<ChannelEnd, Error> {
-        let channel_code_hash = self.get_converter().get_channel_code_hash();
+        let channel_code_hash = self
+            .get_converter(ClientType::Ckb4Ibc)
+            .get_channel_code_hash();
         let script = Script::new_builder()
             .code_hash(channel_code_hash)
             .args(
                 ChannelArgs {
-                    client_id: self.config.client_id_bytes(),
+                    client_id: self.config.lc_client_id_bytes(ClientType::Ckb4Ibc).unwrap(),
                     open: is_open,
                     channel_id: get_channel_idx(&channel_id)?,
                     port_id: convert_port_id_to_array(&port_id)?,
@@ -429,13 +437,9 @@ impl Ckb4IbcChain {
 
 impl ChainEndpoint for Ckb4IbcChain {
     type LightBlock = CkbLightBlock;
-
     type Header = CkbHeader;
-
     type ConsensusState = CkbConsensusState;
-
     type ClientState = CkbClientState;
-
     type SigningKeyPair = Secp256k1KeyPair;
 
     fn config(&self) -> ChainConfig {
@@ -452,14 +456,25 @@ impl ChainEndpoint for Ckb4IbcChain {
             rt.block_on(init_sighash_celldep(rpc_client.as_ref()))?;
         }
 
-        let client_cell = rt.block_on(rpc_client.search_cell_by_typescript(
-            &TYPE_ID_CODE_HASH.pack(),
-            &config.client_type_args.as_bytes().to_owned(),
-        ))?;
-        if client_cell.is_none() {
-            return Err(Error::other_error(
-                "invalid `client type args not found` option".to_owned(),
-            ));
+        let mut client_outpoints = HashMap::new();
+        for (
+            client_type,
+            LightClientItem {
+                chain_id,
+                client_type_args,
+            },
+        ) in &config.onchain_light_clients
+        {
+            let client_cell = rt.block_on(rpc_client.search_cell_by_typescript(
+                &TYPE_ID_CODE_HASH.pack(),
+                &client_type_args.as_bytes().to_owned(),
+            ))?;
+            let Some(cell) = client_cell else {
+                return Err(Error::other_error(format!(
+                    "client cell not found on ({chain_id}, {client_type})"
+                )));
+            };
+            client_outpoints.insert(*client_type, cell.out_point);
         }
 
         let conn_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
@@ -467,9 +482,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             &config.connection_type_args.as_bytes().to_owned(),
         ))?;
         if conn_contract_cell.is_none() {
-            return Err(Error::other_error(
-                "invalid `connection type args not found` option".to_owned(),
-            ));
+            return Err(Error::other_error("connection cell not found".to_owned()));
         }
 
         let chan_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
@@ -477,9 +490,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             &config.channel_type_args.as_bytes().to_owned(),
         ))?;
         if chan_contract_cell.is_none() {
-            return Err(Error::other_error(
-                "invalid `channel type args not found` option".to_owned(),
-            ));
+            return Err(Error::other_error("channel contract not found".to_owned()));
         }
 
         let packet_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
@@ -487,9 +498,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             &config.packet_type_args.as_bytes().to_owned(),
         ))?;
         if packet_contract_cell.is_none() {
-            return Err(Error::other_error(
-                "invalid `packet type args not found` option".to_owned(),
-            ));
+            return Err(Error::other_error("packet contract not found".to_owned()));
         }
         let keybase =
             KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
@@ -500,7 +509,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             keybase,
             cached_network: RwLock::new(None),
             tx_monitor_cmd: None,
-            client_outpoint: client_cell.unwrap().out_point,
+            client_outpoints,
             connection_outpoint: conn_contract_cell.unwrap().out_point,
             channel_outpoint: chan_contract_cell.unwrap().out_point,
             packet_outpoint: packet_contract_cell.unwrap().out_point,
@@ -563,21 +572,10 @@ impl ChainEndpoint for Ckb4IbcChain {
         &mut self,
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        // specificly manage Ckb4Ibc endpoint, because Axon's light client on Ckb is its metadata cell
-        if let TrackingId::Static("create client") = tracked_msgs.tracking_id() {
-            let event = IbcEvent::CreateClient(CreateClient(Attributes {
-                client_id: self.config.client_id(),
-                client_type: ClientType::Ckb4Ibc,
-                consensus_height: Height::default(),
-            }));
-            let create_client_event = IbcEventWithHeight::new(event, Height::default());
-            return Ok(vec![create_client_event]);
-        }
-
         let mut txs = Vec::new();
         let mut tx_hashes = Vec::new();
         let mut events = Vec::new();
-        let converter = self.get_converter();
+        let converter = self.get_converter(ClientType::Ckb4Ibc);
         let mut result_events = Vec::new();
         for msg in tracked_msgs.msgs {
             let CkbTxInfo {
@@ -743,16 +741,23 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
-        let latest_height = self.query_application_status()?.height;
-        let identified_client_state = IdentifiedAnyClientState {
-            client_id: self.config.client_id(),
-            client_state: CkbClientState {
-                chain_id: self.id(),
-                latest_height,
-            }
-            .into(),
-        };
-        Ok(vec![identified_client_state])
+        Ok(self
+            .config
+            .onchain_light_clients
+            .keys()
+            .map(|client_type| {
+                let client_id = self.config.lc_client_id(*client_type).unwrap();
+                IdentifiedAnyClientState {
+                    client_id: client_id.clone(),
+                    client_state: CkbClientState {
+                        chain_id: self.id(),
+                        latest_height: Height::default(),
+                        default_client_id: client_id,
+                    }
+                    .into(),
+                }
+            })
+            .collect())
     }
 
     fn query_client_state(
@@ -760,17 +765,16 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryClientStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
-        let height = match request.height {
-            QueryHeight::Latest => self.query_application_status()?.height,
-            QueryHeight::Specific(height) => height,
+        let chain_id = self
+            .config
+            .lc_chain_id(request.client_id.clone())
+            .map_err(Error::config)?;
+        let client_state = CkbClientState {
+            chain_id,
+            latest_height: Height::default(),
+            default_client_id: request.client_id,
         };
-        Ok((
-            AnyClientState::Ckb(CkbClientState {
-                chain_id: self.config.counter_chain.clone(),
-                latest_height: height,
-            }),
-            None,
-        ))
+        Ok((client_state.into(), None))
     }
 
     fn query_consensus_state(
@@ -778,15 +782,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _request: QueryConsensusStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error> {
-        let status = self.query_application_status()?;
-        Ok((
-            AnyConsensusState::Ckb(CkbConsensusState {
-                timestamp: status.timestamp.into_tm_time().expect("timestamp to time"),
-                // no commitment root for Ckb chain
-                commitment_root: CommitmentRoot::from(vec![]),
-            }),
-            None,
-        ))
+        Ok((CkbConsensusState {}.into(), None))
     }
 
     fn query_consensus_state_heights(
@@ -853,7 +849,9 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         request: QueryChannelsRequest,
     ) -> Result<Vec<IdentifiedChannelEnd>, Error> {
-        let channel_code_hash = self.get_converter().get_channel_code_hash();
+        let channel_code_hash = self
+            .get_converter(ClientType::Ckb4Ibc)
+            .get_channel_code_hash();
         let script = Script::new_builder()
             .code_hash(channel_code_hash)
             .args("".pack())
@@ -1088,8 +1086,9 @@ impl ChainEndpoint for Ckb4IbcChain {
     ) -> Result<Self::ClientState, Error> {
         match settings {
             ClientSettings::AxonCkb | ClientSettings::Other => Ok(CkbClientState {
-                chain_id: self.config.counter_chain.clone(),
+                chain_id: self.id(),
                 latest_height: height,
+                default_client_id: self.config.lc_client_id(ClientType::Ckb4Ibc).unwrap(),
             }),
             _ => Err(Error::build_client_state_failure()),
         }
@@ -1099,10 +1098,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _light_block: Self::LightBlock,
     ) -> Result<Self::ConsensusState, Error> {
-        Ok(CkbConsensusState {
-            timestamp: Time::now(),
-            commitment_root: CommitmentRoot::from_bytes(&[]),
-        })
+        Ok(CkbConsensusState {})
     }
 
     fn build_header(
@@ -1152,6 +1148,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             Some(AnyClientState::Ckb(CkbClientState {
                 chain_id: self.id(),
                 latest_height: height,
+                default_client_id: self.config.lc_client_id(ClientType::Ckb4Ibc).unwrap(),
             })),
             get_dummy_merkle_proof(height),
         ))

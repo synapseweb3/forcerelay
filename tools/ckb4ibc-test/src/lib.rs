@@ -1,4 +1,4 @@
-// todo: refactor ckb and ckb4ibc rpc client
+// TODO: refactor ckb and ckb4ibc rpc client
 #[cfg(test)]
 mod generator;
 #[cfg(test)]
@@ -61,12 +61,12 @@ mod tests {
             .arg("connection")
             .arg("--a-chain")
             .arg("ckb4ibc-0")
-            .arg("--b-chain")
-            .arg("ckb4ibc-1")
-            // .arg("--a-client")
-            // .arg(format!("{CLIENT_TYPE_ARGS:x}"))
-            // .arg("--b-client")
-            // .arg(format!("{CLIENT_TYPE_ARGS:x}"))
+            // .arg("--b-chain")
+            // .arg("ckb4ibc-1")
+            .arg("--a-client")
+            .arg(format!("{CLIENT_TYPE_ARGS:x}"))
+            .arg("--b-client")
+            .arg(format!("{CLIENT_TYPE_ARGS:x}"))
             .current_dir("../../")
             .spawn()
             .unwrap()
@@ -287,7 +287,7 @@ mod tests {
                 SearchKey {
                     script: Script::new_builder()
                         .code_hash(CONNECTION_CODE_HASH.pack())
-                        .args("".pack()) // todo
+                        .args("".pack()) // FIXME: use prefix search
                         .hash_type(ScriptHashType::Type.into())
                         .build()
                         .into(),
@@ -317,8 +317,8 @@ mod tests {
                 let (_, ibc_connection) = extract_connections_from_tx(tx).unwrap();
                 return ibc_connection;
             } else {
-                if loop_count > 10 {
-                    panic!("connection cell cannot find on port {port}");
+                if loop_count > 30 {
+                    panic!("connection cell cannot find on port {port} for {loop_count}s");
                 }
                 loop_count += 1;
                 thread::sleep(time::Duration::from_secs(1));
@@ -377,7 +377,7 @@ mod tests {
                 return channel_end;
             } else {
                 if loop_count > 30 {
-                    panic!("channel cell cannot find on port {port}");
+                    panic!("channel cell cannot find on port {port} for {loop_count}s");
                 }
                 loop_count += 1;
                 thread::sleep(time::Duration::from_secs(1));

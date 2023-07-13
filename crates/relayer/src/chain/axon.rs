@@ -1,26 +1,14 @@
-#![allow(dead_code, unused_variables, unused_imports)]
-#![allow(clippy::diverging_sub_expression)]
-
-use std::{
-    collections::HashMap,
-    str::FromStr,
-    sync::{self, Arc},
-    thread,
-};
+use std::{collections::HashMap, str::FromStr, sync::Arc, thread};
 
 use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
-use bytes::Bytes;
 use eth2_types::Hash256;
 use tracing::warn;
 
 use crate::{
     account::Balance,
-    chain::{
-        axon::contract::{HeightData, UpdateClientFilter},
-        requests::QueryHeight,
-    },
+    chain::{axon::contract::HeightData, requests::QueryHeight},
     client_state::{AnyClientState, IdentifiedAnyClientState},
-    config::{axon::AxonChainConfig, filter::port, ChainConfig},
+    config::{axon::AxonChainConfig, ChainConfig},
     connection::ConnectionMsgType,
     consensus_state::AnyConsensusState,
     denom::DenomTrace,
@@ -29,61 +17,51 @@ use crate::{
     keyring::{KeyRing, Secp256k1KeyPair},
     light_client::{axon::LightClient as AxonLightClient, LightClient},
     misbehaviour::MisbehaviourEvidence,
-    util::collate::collate,
 };
 use eth_light_client_in_ckb_prover::Receipts;
 use ethers::{
-    abi::{AbiDecode, AbiEncode},
-    contract::ContractError,
     prelude::{k256::ecdsa::SigningKey, EthLogDecode, SignerMiddleware},
     providers::{Middleware, Provider, Ws},
     signers::{Signer as _, Wallet},
-    types::{
-        Block, BlockId, BlockNumber, Transaction, TransactionReceipt, TransactionRequest, TxHash,
-        H160, U64,
-    },
-    utils::{rlp, rlp::Encodable},
+    types::{TransactionRequest, TxHash, U64},
+    utils::rlp,
 };
-use futures::TryFutureExt;
-use ibc_proto::{google::protobuf::Any, ibc::core::channel::v1::IdentifiedChannel};
+use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::{
     applications::ics31_icq::response::CrossChainQueryResponse,
     clients::{
         ics07_axon::{
-            client_state::ClientState as AxonClientState,
-            consensus_state::ConsensusState as AxonConsensusState,
-            header::{Header as AxonHeader, AXON_HEADER_TYPE_URL},
-            light_block::LightBlock as AxonLightBlock,
+            client_state::{AxonClientState, AXON_CLIENT_STATE_TYPE_URL},
+            consensus_state::AxonConsensusState,
+            header::{AxonHeader, AXON_HEADER_TYPE_URL},
+            light_block::AxonLightBlock,
         },
-        ics07_ckb::client_state,
+        ics07_ckb::{
+            client_state::{CkbClientState, CKB_CLIENT_STATE_TYPE_URL},
+            consensus_state::CkbConsensusState,
+        },
     },
     core::{
         ics02_client::{
             client_type::ClientType,
             error::Error as ClientError,
-            events::{Attributes, CreateClient, NewBlock, UpdateClient},
-            msgs::{create_client, update_client},
+            events::{Attributes, CreateClient, UpdateClient},
+            msgs::{create_client::MsgCreateClient, update_client},
         },
         ics03_connection::{
-            self,
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
             msgs::{conn_open_ack, conn_open_confirm, conn_open_init, conn_open_try},
         },
         ics04_channel::{
-            self,
-            channel::{self, ChannelEnd, IdentifiedChannelEnd},
-            events::OpenInit,
+            channel::{ChannelEnd, IdentifiedChannelEnd},
             msgs::{
                 acknowledgement, chan_close_confirm, chan_close_init, chan_open_ack,
                 chan_open_confirm, chan_open_init, chan_open_try, recv_packet,
             },
             packet::{PacketMsgType, Sequence},
         },
-        ics23_commitment::{
-            commitment::{CommitmentPrefix, CommitmentProofBytes},
-            merkle::MerkleProof,
-        },
-        ics24_host::identifier::{self, ChainId, ChannelId, ClientId, ConnectionId, PortId},
+        ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
+        ics24_host::identifier::{ChainId, ChannelId, ClientId, ConnectionId, PortId},
     },
     events::IbcEvent,
     proofs::{ConsensusProof, Proofs},
@@ -92,17 +70,12 @@ use ibc_relayer_types::{
     tx_msg::Msg,
     Height,
 };
-use itertools::Itertools;
-use tendermint_rpc::{endpoint::broadcast::tx_sync::Response, query};
+use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 
-use self::{
-    contract::{OwnableIBCHandler, OwnableIBCHandlerEvents},
-    monitor::AxonEventMonitor,
-};
+use self::{contract::OwnableIBCHandler, monitor::AxonEventMonitor};
 
 type ContractProvider = SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>;
 type Contract = OwnableIBCHandler<ContractProvider>;
-type ContractEvents = OwnableIBCHandlerEvents;
 
 use super::{
     client::ClientSettings,
@@ -110,20 +83,21 @@ use super::{
     endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
     handle::{CacheTxHashStatus, Subscription},
     requests::{
-        self, CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest,
-        QueryChannelRequest, QueryChannelsRequest, QueryClientConnectionsRequest,
-        QueryClientStateRequest, QueryClientStatesRequest, QueryConnectionChannelsRequest,
-        QueryConnectionRequest, QueryConnectionsRequest, QueryConsensusStateHeightsRequest,
-        QueryConsensusStateRequest, QueryHostConsensusStateRequest,
-        QueryNextSequenceReceiveRequest, QueryPacketAcknowledgementRequest,
-        QueryPacketAcknowledgementsRequest, QueryPacketCommitmentRequest,
-        QueryPacketCommitmentsRequest, QueryPacketEventDataRequest, QueryPacketReceiptRequest,
-        QueryTxRequest, QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest,
-        QueryUpgradedClientStateRequest, QueryUpgradedConsensusStateRequest,
+        CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest, QueryChannelRequest,
+        QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientStateRequest,
+        QueryClientStatesRequest, QueryConnectionChannelsRequest, QueryConnectionRequest,
+        QueryConnectionsRequest, QueryConsensusStateHeightsRequest, QueryConsensusStateRequest,
+        QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
+        QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
+        QueryPacketCommitmentRequest, QueryPacketCommitmentsRequest, QueryPacketEventDataRequest,
+        QueryPacketReceiptRequest, QueryTxRequest, QueryUnreceivedAcksRequest,
+        QueryUnreceivedPacketsRequest, QueryUpgradedClientStateRequest,
+        QueryUpgradedConsensusStateRequest,
     },
-    tracking::{TrackedMsgs, TrackingId},
+    tracking::TrackedMsgs,
 };
-use tokio::runtime::{self, Runtime as TokioRuntime};
+use strum::IntoEnumIterator;
+use tokio::runtime::Runtime as TokioRuntime;
 
 mod contract;
 mod monitor;
@@ -131,8 +105,6 @@ mod msg;
 mod rpc;
 
 pub use rpc::AxonRpc;
-
-const DEFAULT_AXON_CLIENT: &str = "AxonClient-0";
 
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
@@ -178,14 +150,13 @@ impl ChainEndpoint for AxonChain {
             .into_ether_wallet()
             .with_chain_id(axon_chain_id.as_u64());
         let client = Arc::new(SignerMiddleware::new(client, wallet));
-
         let contract = Contract::new(config.contract_address, Arc::clone(&client));
-
         let light_client = AxonLightClient::from_config(&config, rt.clone())?;
-        let metadata = rt.block_on(rpc_client.get_current_metadata())?;
-        let epoch_len = metadata.version.end - metadata.version.start + 1;
+
         // TODO: since Ckb endpoint uses Axon metadata cell as its light client, Axon
         //       endpoint has no need to monitor the update of its metadata
+        // let metadata = rt.block_on(rpc_client.get_current_metadata())?;
+        // let epoch_len = metadata.version.end - metadata.version.start + 1;
         // light_client.bootstrap(client.clone(), rpc_client.clone(), epoch_len)?;
 
         Ok(Self {
@@ -251,16 +222,6 @@ impl ChainEndpoint for AxonChain {
         &mut self,
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        // light client on Axon is already created with id "AxonClient-0", which is set only for Ckb now
-        if let TrackingId::Static("create client") = tracked_msgs.tracking_id() {
-            let event = IbcEvent::CreateClient(CreateClient(Attributes {
-                client_id: ClientId::from_str(DEFAULT_AXON_CLIENT).unwrap(),
-                client_type: ClientType::Axon,
-                consensus_height: Height::default(),
-            }));
-            let create_client_event = IbcEventWithHeight::new(event, Height::default());
-            return Ok(vec![create_client_event]);
-        }
         tracked_msgs
             .msgs
             .into_iter()
@@ -270,7 +231,7 @@ impl ChainEndpoint for AxonChain {
 
     fn send_messages_and_wait_check_tx(
         &mut self,
-        tracked_msgs: TrackedMsgs,
+        _tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<Response>, Error> {
         todo!()
     }
@@ -294,7 +255,11 @@ impl ChainEndpoint for AxonChain {
         self.light_client.check_misbehaviour(update, client_state)
     }
 
-    fn query_balance(&self, key_name: Option<&str>, denom: Option<&str>) -> Result<Balance, Error> {
+    fn query_balance(
+        &self,
+        _key_name: Option<&str>,
+        _denom: Option<&str>,
+    ) -> Result<Balance, Error> {
         warn!("axon query_balance() cannot implement");
         Ok(Balance {
             amount: "".to_owned(),
@@ -302,12 +267,12 @@ impl ChainEndpoint for AxonChain {
         })
     }
 
-    fn query_all_balances(&self, key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
+    fn query_all_balances(&self, _key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
         warn!("axon query_all_balances() cannot implement");
         Ok(vec![])
     }
 
-    fn query_denom_trace(&self, hash: String) -> Result<DenomTrace, Error> {
+    fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {
         warn!("axon query_denom_trace() cannot implement");
         Ok(DenomTrace {
             path: "".to_owned(),
@@ -331,7 +296,7 @@ impl ChainEndpoint for AxonChain {
 
     fn query_clients(
         &self,
-        request: QueryClientStatesRequest,
+        _request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
         let chain_id = self.id();
         let transfer = |client_state| to_identified_any_client_state(&chain_id, client_state);
@@ -349,7 +314,7 @@ impl ChainEndpoint for AxonChain {
     fn query_client_state(
         &self,
         request: QueryClientStateRequest,
-        include_proof: IncludeProof,
+        _include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
         if matches!(request.height, QueryHeight::Specific(_)) {
             return Err(Error::other_error(
@@ -372,7 +337,7 @@ impl ChainEndpoint for AxonChain {
     fn query_consensus_state(
         &self,
         request: QueryConsensusStateRequest,
-        include_proof: IncludeProof,
+        _include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error> {
         let client_id: String = request.client_id.to_string();
         let height = request.consensus_height;
@@ -411,21 +376,21 @@ impl ChainEndpoint for AxonChain {
 
     fn query_upgraded_client_state(
         &self,
-        request: QueryUpgradedClientStateRequest,
+        _request: QueryUpgradedClientStateRequest,
     ) -> Result<(AnyClientState, MerkleProof), Error> {
         unimplemented!("not support")
     }
 
     fn query_upgraded_consensus_state(
         &self,
-        request: QueryUpgradedConsensusStateRequest,
+        _request: QueryUpgradedConsensusStateRequest,
     ) -> Result<(AnyConsensusState, MerkleProof), Error> {
         unimplemented!("not support")
     }
 
     fn query_connections(
         &self,
-        request: QueryConnectionsRequest,
+        _request: QueryConnectionsRequest,
     ) -> Result<Vec<IdentifiedConnectionEnd>, Error> {
         let connections: Vec<_> = self
             .rt
@@ -461,7 +426,7 @@ impl ChainEndpoint for AxonChain {
     fn query_connection(
         &self,
         request: QueryConnectionRequest,
-        include_proof: IncludeProof,
+        _include_proof: IncludeProof,
     ) -> Result<(ConnectionEnd, Option<MerkleProof>), Error> {
         let (connection_end, _) = self
             .rt
@@ -496,7 +461,7 @@ impl ChainEndpoint for AxonChain {
 
     fn query_channels(
         &self,
-        request: QueryChannelsRequest,
+        _request: QueryChannelsRequest,
     ) -> Result<Vec<IdentifiedChannelEnd>, Error> {
         let channels: Vec<_> = self
             .rt
@@ -512,7 +477,7 @@ impl ChainEndpoint for AxonChain {
     fn query_channel(
         &self,
         request: QueryChannelRequest,
-        include_proof: IncludeProof,
+        _include_proof: IncludeProof,
     ) -> Result<(ChannelEnd, Option<MerkleProof>), Error> {
         if matches!(request.height, QueryHeight::Specific(_)) {
             return Err(Error::other_error(
@@ -558,7 +523,7 @@ impl ChainEndpoint for AxonChain {
     fn query_packet_commitment(
         &self,
         request: QueryPacketCommitmentRequest,
-        include_proof: IncludeProof,
+        _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
         let (commitment, _) = self
             .rt
@@ -601,7 +566,7 @@ impl ChainEndpoint for AxonChain {
     fn query_packet_receipt(
         &self,
         request: QueryPacketReceiptRequest,
-        include_proof: IncludeProof,
+        _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
         let has_receipt = self
             .rt
@@ -646,7 +611,7 @@ impl ChainEndpoint for AxonChain {
     fn query_packet_acknowledgement(
         &self,
         request: QueryPacketAcknowledgementRequest,
-        include_proof: IncludeProof,
+        _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
         if matches!(request.height, QueryHeight::Specific(_)) {
             return Err(Error::other_error(
@@ -721,7 +686,7 @@ impl ChainEndpoint for AxonChain {
     fn query_next_sequence_receive(
         &self,
         request: QueryNextSequenceReceiveRequest,
-        include_proof: IncludeProof,
+        _include_proof: IncludeProof,
     ) -> Result<(Sequence, Option<MerkleProof>), Error> {
         let sequence = self
             .rt
@@ -737,14 +702,14 @@ impl ChainEndpoint for AxonChain {
         Ok((sequence.into(), None))
     }
 
-    fn query_txs(&self, request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
+    fn query_txs(&self, _request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
         warn!("axon query_txs() not support");
         Ok(vec![])
     }
 
     fn query_packet_events(
         &self,
-        request: QueryPacketEventDataRequest,
+        _request: QueryPacketEventDataRequest,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         warn!("axon query_packet_events() not support");
         Ok(vec![])
@@ -752,14 +717,14 @@ impl ChainEndpoint for AxonChain {
 
     fn query_host_consensus_state(
         &self,
-        request: QueryHostConsensusStateRequest,
+        _request: QueryHostConsensusStateRequest,
     ) -> Result<Self::ConsensusState, Error> {
         todo!()
     }
 
     fn query_incentivized_packet(
         &self,
-        request: ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketRequest,
+        _request: ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketRequest,
     ) -> Result<ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketResponse, Error> {
         todo!()
     }
@@ -771,8 +736,10 @@ impl ChainEndpoint for AxonChain {
     ) -> Result<Self::ClientState, Error> {
         match settings {
             ClientSettings::AxonCkb | ClientSettings::Other => Ok(AxonClientState {
-                chain_id: self.config.id.clone(),
+                chain_id: self.id(),
                 latest_height: height,
+                // FIXME: we always use one light client for Axon endpoint thus the counter is permanent 0
+                default_client_id: ClientId::new(ClientType::Axon, 0).unwrap(),
             }),
             _ => Err(Error::build_client_state_failure()),
         }
@@ -780,25 +747,25 @@ impl ChainEndpoint for AxonChain {
 
     fn build_consensus_state(
         &self,
-        light_block: Self::LightBlock,
+        _light_block: Self::LightBlock,
     ) -> Result<Self::ConsensusState, Error> {
         Ok(AxonConsensusState {})
     }
 
     fn build_header(
         &mut self,
-        trusted_height: Height,
-        target_height: Height,
-        client_state: &AnyClientState,
+        _trusted_height: Height,
+        _target_height: Height,
+        _client_state: &AnyClientState,
     ) -> Result<(Self::Header, Vec<Self::Header>), Error> {
         Ok((AxonHeader {}, vec![]))
     }
 
     fn maybe_register_counterparty_payee(
         &mut self,
-        channel_id: &ChannelId,
-        port_id: &PortId,
-        counterparty_payee: &Signer,
+        _channel_id: &ChannelId,
+        _port_id: &PortId,
+        _counterparty_payee: &Signer,
     ) -> Result<(), Error> {
         warn!("axon maybe_register_counterparty_payee() not support");
         Ok(())
@@ -806,7 +773,7 @@ impl ChainEndpoint for AxonChain {
 
     fn cross_chain_query(
         &self,
-        requests: Vec<CrossChainQueryRequest>,
+        _requests: Vec<CrossChainQueryRequest>,
     ) -> Result<Vec<CrossChainQueryResponse>, Error> {
         warn!("axon cross_chain_query() not support");
         Ok(vec![])
@@ -816,7 +783,7 @@ impl ChainEndpoint for AxonChain {
         &self,
         message_type: ConnectionMsgType,
         connection_id: &ConnectionId,
-        client_id: &ClientId,
+        _client_id: &ClientId,
         height: Height,
     ) -> Result<(Option<AnyClientState>, Proofs), Error> {
         let state = match message_type {
@@ -976,9 +943,9 @@ impl AxonChain {
             .rt
             .block_on(self.get_proofs_ingredients(block_number))?;
 
-        // check the validation of receipts mpt proof
-        let key = rlp::encode(&receipt.transaction_index.as_u64());
         // FIXME: keep it commentted until Axon team fixed this verify issue
+        // check the validation of receipts mpt proof
+        // let key = rlp::encode(&receipt.transaction_index.as_u64());
         // axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
         //     .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
 
@@ -1100,189 +1067,117 @@ impl AxonChain {
     }
 }
 
+macro_rules! convert {
+    ($self:ident, $msg:ident, $eventy:ty, $method:ident) => {{
+        let msg: $eventy = $msg.try_into()?;
+        $self
+            .rt
+            .block_on(async { Ok($self.contract.$method(msg.clone()).send().await?.await?) })
+    }};
+}
+
 impl AxonChain {
+    fn filter_create_client_message(&self, message: &Any) -> Result<IbcEventWithHeight, Error> {
+        let msg = MsgCreateClient::from_any(message.clone())
+            .map_err(|e| Error::protobuf_decode(message.type_url.clone(), e))?;
+        let create_client_event = match msg.client_state.type_url.as_str() {
+            AXON_CLIENT_STATE_TYPE_URL => {
+                let axon_client_state = AxonClientState::try_from(msg.client_state).unwrap();
+                let event = IbcEvent::CreateClient(CreateClient(Attributes {
+                    client_id: axon_client_state.default_client_id,
+                    client_type: ClientType::Axon,
+                    consensus_height: Height::default(),
+                }));
+                IbcEventWithHeight::new(event, Height::default())
+            }
+            CKB_CLIENT_STATE_TYPE_URL => {
+                let ckb_client_state = CkbClientState::try_from(msg.client_state).unwrap();
+                let event = IbcEvent::CreateClient(CreateClient(Attributes {
+                    client_id: ckb_client_state.default_client_id,
+                    client_type: ClientType::Ckb,
+                    consensus_height: Height::default(),
+                }));
+                IbcEventWithHeight::new(event, Height::default())
+            }
+            url => {
+                return Err(Error::other_error(format!(
+                    "not support message type url: {url}"
+                )))
+            }
+        };
+        Ok(create_client_event)
+    }
+
     fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
-        let type_url = message.type_url.clone();
-        let tx_receipt = match type_url.as_str() {
+        if let Ok(event) = self.filter_create_client_message(&message) {
+            return Ok(event);
+        }
+
+        use contract::*;
+        let msg = message.clone();
+        let tx_receipt: eyre::Result<_> = match msg.type_url.as_str() {
             update_client::TYPE_URL => {
-                let msg = update_client::MsgUpdateClient::from_any(message).map_err(|e| {
-                    Error::other_error(format!("fail to decode MsgUpdateClient {}", e))
-                })?;
+                let msg = update_client::MsgUpdateClient::from_any(msg)
+                    .map_err(|e| Error::send_tx(format!("fail to decode MsgUpdateClient {}", e)))?;
                 let bytes = msg.header.value.as_slice();
                 let type_url = msg.header.type_url;
                 let to = match type_url.as_str() {
                     AXON_HEADER_TYPE_URL => self.config.ckb_light_client_contract_address,
                     "CELL_TYPE_URL" => self.config.image_cell_contract_address,
                     type_url => {
-                        return Err(Error::other_error(format!("unknown type_url {}", type_url)))
+                        return Err(Error::send_tx(format!("unknown type_url {}", type_url)))
                     }
                 };
 
                 let tx = TransactionRequest::new().to(to).data(bytes.to_vec());
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> = self
-                    .rt
-                    .block_on(async { Ok(self.client.send_transaction(tx, None).await?.await?) });
-                tx_receipt.map_err(convert_err)?
+                self.rt
+                    .block_on(async { Ok(self.client.send_transaction(tx, None).await?.await?) })
             }
             conn_open_init::TYPE_URL => {
-                let msg: contract::MsgConnectionOpenInit = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .connection_open_init(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgConnectionOpenInit, connection_open_init)
             }
             conn_open_try::TYPE_URL => {
-                let msg: contract::MsgConnectionOpenTry = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .connection_open_try(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgConnectionOpenTry, connection_open_try)
             }
             conn_open_ack::TYPE_URL => {
-                let msg: contract::MsgConnectionOpenAck = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .connection_open_ack(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgConnectionOpenAck, connection_open_ack)
             }
             conn_open_confirm::TYPE_URL => {
-                let msg: contract::MsgConnectionOpenConfirm = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .connection_open_confirm(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgConnectionOpenConfirm, connection_open_confirm)
             }
             chan_open_init::TYPE_URL => {
-                let msg: contract::MsgChannelOpenInit = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .channel_open_init(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgChannelOpenInit, channel_open_init)
             }
             chan_open_try::TYPE_URL => {
-                let msg: contract::MsgChannelOpenTry = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .channel_open_try(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgChannelOpenTry, channel_open_try)
             }
             chan_open_ack::TYPE_URL => {
-                let msg: contract::MsgChannelOpenAck = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .channel_open_ack(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgChannelOpenAck, channel_open_ack)
             }
             chan_open_confirm::TYPE_URL => {
-                let msg: contract::MsgChannelOpenConfirm = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .channel_open_confirm(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgChannelOpenConfirm, channel_open_confirm)
             }
             chan_close_init::TYPE_URL => {
-                let msg: contract::MsgChannelCloseInit = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .channel_close_init(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgChannelCloseInit, channel_close_init)
             }
             chan_close_confirm::TYPE_URL => {
-                let msg: contract::MsgChannelCloseConfirm = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .channel_close_confirm(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgChannelCloseConfirm, channel_close_confirm)
             }
             recv_packet::TYPE_URL => {
-                let msg: contract::MsgPacketRecv = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self.contract.recv_packet(msg.clone()).send().await?.await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgPacketRecv, recv_packet)
             }
             acknowledgement::TYPE_URL => {
-                let msg: contract::MsgPacketAcknowledgement = message.try_into()?;
-                let tx_receipt: eyre::Result<Option<TransactionReceipt>> =
-                    self.rt.block_on(async {
-                        Ok(self
-                            .contract
-                            .acknowledge_packet(msg.clone())
-                            .send()
-                            .await?
-                            .await?)
-                    });
-                tx_receipt.map_err(convert_err)?
+                convert!(self, msg, MsgPacketAcknowledgement, acknowledge_packet)
             }
             url => {
-                return Err(Error::other_error(format!(
-                    "not support message type url: {}",
-                    url
+                return Err(Error::send_tx(format!(
+                    "not support message type url: {url}"
                 )))
             }
         };
-        let tx_receipt = tx_receipt.ok_or(Error::send_tx(String::from("fail to send tx")))?;
+        let tx_receipt = tx_receipt
+            .map_err(convert_err)?
+            .ok_or(Error::send_tx(String::from("fail to send tx")))?;
         let event: IbcEvent = {
             use contract::OwnableIBCHandlerEvents::*;
             let mut events = tx_receipt
@@ -1290,11 +1185,14 @@ impl AxonChain {
                 .into_iter()
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
-            match type_url.as_str() {
+            match message.type_url.as_str() {
                 update_client::TYPE_URL => {
+                    let msg = update_client::MsgUpdateClient::from_any(message).map_err(|e| {
+                        Error::send_tx(format!("fail to decode MsgUpdateClient {}", e))
+                    })?;
                     Some(Ok(UpdateClientFilter(contract::UpdateClientFilter {
-                        client_id: "default-0".to_string(),
-                        client_message: "0x12345678".parse().unwrap(),
+                        client_id: msg.client_id.to_string(),
+                        client_message: "update client".parse().unwrap(), // FIXME
                     })))
                 }
                 conn_open_init::TYPE_URL => {
@@ -1334,29 +1232,26 @@ impl AxonChain {
                     events.find(|event| matches!(event, Ok(AcknowledgePacketFilter(_))))
                 }
                 url => {
-                    return Err(Error::other_error(format!(
-                        "not support message type url: {}",
-                        url
+                    return Err(Error::send_tx(format!(
+                        "not support message type url: {url}"
                     )))
                 }
             }
         }
         .ok_or_else(|| {
-            Error::other_error(String::from(
-                "not find right event from AXON transaction receipt",
-            ))
+            Error::send_tx("not find right event from Axon transaction receipt".to_owned())
         })?
         .unwrap()
         .into();
         let tx_hash = tx_receipt.transaction_hash.0;
         let height = {
             let block_height = tx_receipt.block_number.ok_or_else(|| {
-                Error::other_error(format!(
+                Error::send_tx(format!(
                     "transaction {} is still pending",
                     hex::encode(tx_hash)
                 ))
             })?;
-            Height::new(u64::MAX, block_height.as_u64()).unwrap()
+            Height::from_noncosmos_height(block_height.as_u64())
         };
         self.cache_ics_tx_hash_with_event(event.clone(), tx_hash)?;
         Ok(IbcEventWithHeight {
@@ -1373,27 +1268,62 @@ fn convert_err<T: ToString>(err: T) -> Error {
 
 fn to_identified_any_client_state(
     chain_id: &ChainId,
-    client_state: &ethers::core::types::Bytes,
+    client_state_from_contract: &ethers::core::types::Bytes,
 ) -> Result<IdentifiedAnyClientState, Error> {
+    let client_id = String::from_utf8_lossy(client_state_from_contract);
     Ok(IdentifiedAnyClientState {
-        client_id: ClientId::from_str(DEFAULT_AXON_CLIENT).unwrap(),
-        client_state: to_any_client_state(chain_id, client_state)?,
+        client_id: ClientId::from_str(&client_id).unwrap(),
+        client_state: to_any_client_state(chain_id, client_state_from_contract)?,
     })
 }
 
 fn to_any_client_state(
     chain_id: &ChainId,
-    client_state: &ethers::core::types::Bytes,
+    client_state_from_contract: &ethers::core::types::Bytes,
 ) -> Result<AnyClientState, Error> {
-    Ok(AxonClientState {
-        chain_id: chain_id.clone(),
-        latest_height: Height::default(),
+    // Axon solidity contract regulate the returned client_state is the string of client id
+    let client_id = String::from_utf8_lossy(client_state_from_contract);
+    let mut client_type = ClientType::Mock;
+    for value in ClientType::iter() {
+        if client_id.starts_with(value.as_str()) {
+            client_type = value;
+        }
     }
-    .into())
+    let any_client_state = match client_type {
+        ClientType::Axon => AxonClientState {
+            chain_id: chain_id.clone(),
+            latest_height: Height::default(),
+            default_client_id: ClientId::from_str(&client_id).unwrap(),
+        }
+        .into(),
+        ClientType::Ckb4Ibc => CkbClientState {
+            chain_id: chain_id.clone(),
+            latest_height: Height::default(),
+            default_client_id: ClientId::from_str(&client_id).unwrap(),
+        }
+        .into(),
+        // currently, only support Axon and Ckb4Ibc
+        _ => unimplemented!(),
+    };
+    Ok(any_client_state)
 }
 
 fn to_any_consensus_state(
-    consensus_state: &ethers::core::types::Bytes,
+    consensus_state_from_contract: &ethers::core::types::Bytes,
 ) -> Result<AnyConsensusState, Error> {
-    Ok(AxonConsensusState {}.into())
+    // Axon solidity contract regulate the returned consensus_state is the string of client id
+    let client_id = String::from_utf8_lossy(consensus_state_from_contract);
+    let mut client_type = ClientType::Mock;
+    for value in ClientType::iter() {
+        if client_id.starts_with(value.as_str()) {
+            client_type = value;
+        }
+    }
+    let any_consensus_state = match client_type {
+        ClientType::Axon => AxonConsensusState {}.into(),
+        ClientType::Ckb4Ibc => CkbConsensusState {}.into(),
+        // currently, only support Axon and Ckb4Ibc
+        _ => unimplemented!(),
+    };
+    Ok(any_consensus_state)
 }

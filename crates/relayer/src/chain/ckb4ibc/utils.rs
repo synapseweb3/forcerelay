@@ -8,13 +8,13 @@ use ckb_ics_axon::consts::{
 };
 use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
-use ckb_ics_axon::ConnectionArgs;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
 use ckb_types::core::{Capacity, ScriptHashType};
 use ckb_types::packed::{Byte32, Bytes, BytesOpt, Script};
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ConnectionId, PortId};
 use ibc_relayer_types::proofs::{ConsensusProof, Proofs};
 use ibc_relayer_types::Height;
@@ -112,12 +112,11 @@ pub fn get_connection_lock_script(config: &ChainConfig) -> Script {
     Script::new_builder()
         .code_hash(get_script_hash(&config.connection_type_args))
         .args(
-            ConnectionArgs {
-                client_id: config.client_type_args.clone().into(),
-            }
-            .client_id
-            .as_slice()
-            .pack(),
+            config
+                .lc_client_id_bytes(ClientType::Ckb4Ibc)
+                .unwrap()
+                .as_slice()
+                .pack(),
         )
         .hash_type(ScriptHashType::Type.into())
         .build()
