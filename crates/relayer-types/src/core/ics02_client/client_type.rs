@@ -32,7 +32,7 @@ pub enum ClientType {
 impl ClientType {
     const TENDERMINT_STR: &'static str = "07-tendermint";
     const ETH_STR: &'static str = "07-ethereum";
-    const CKB_STR: &'static str = "07-ckb0";
+    const CKB_STR: &'static str = "07-ckb4eth";
     const CKB4IBC_STR: &'static str = "07-ckb4ibc";
     const AXON_STR: &'static str = "07-axon";
 
