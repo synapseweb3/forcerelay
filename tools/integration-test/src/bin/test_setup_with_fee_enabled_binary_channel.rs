@@ -45,7 +45,7 @@ impl TestOverrides for Test {
             // Modify the key store type to `Store::Test` so that the wallet
             // keys are stored to ~/.hermes/keys so that we can use them
             // with external relayer commands.
-            let mut chain = chain.cosmos_mut();
+            let chain = chain.cosmos_mut();
             chain.key_store_type = Store::Test;
         }
     }

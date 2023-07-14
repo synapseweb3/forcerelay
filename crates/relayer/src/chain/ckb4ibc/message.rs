@@ -2,7 +2,7 @@ mod chan;
 mod client;
 mod conn;
 
-use std::{borrow::Borrow, cell::Ref, collections::HashMap};
+use std::{cell::Ref, collections::HashMap};
 
 use chan::*;
 use conn::*;
@@ -121,11 +121,11 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     }
 
     fn get_ibc_connections(&self) -> IbcConnections {
-        self.connection_cache.borrow().as_ref().unwrap().0.clone()
+        self.connection_cache.as_ref().unwrap().0.clone()
     }
 
     fn get_ibc_connections_input(&self) -> CellInput {
-        self.connection_cache.borrow().as_ref().unwrap().1.clone()
+        self.connection_cache.as_ref().unwrap().1.clone()
     }
 
     fn get_ibc_channel(&self, channel_id: &ChannelId) -> IbcChannel {

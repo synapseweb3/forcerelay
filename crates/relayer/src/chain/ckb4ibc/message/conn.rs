@@ -205,7 +205,7 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
     let mut new_ibc_connection_cell = old_ibc_connection_cell.clone();
 
     let idx = get_connection_index_by_id(&msg.connection_id)? as usize;
-    let mut connection_end = new_ibc_connection_cell.connections.get_mut(idx).unwrap();
+    let connection_end = new_ibc_connection_cell.connections.get_mut(idx).unwrap();
     connection_end.state = State::Open;
     connection_end.counterparty.connection_id =
         Some(msg.counterparty_connection_id.as_str().to_string());
@@ -273,7 +273,7 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
     let mut new_ibc_connection_cell = old_ibc_connection_cell.clone();
 
     let idx = get_connection_index_by_id(&msg.connection_id)? as usize;
-    let mut connection_end = new_ibc_connection_cell.connections.get_mut(idx).unwrap();
+    let connection_end = new_ibc_connection_cell.connections.get_mut(idx).unwrap();
     connection_end.state = State::Open;
 
     let envelope = Envelope {

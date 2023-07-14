@@ -62,9 +62,7 @@ impl BinaryChainTest for PythonTest {
     }
 }
 
-// in native env, the test case is passed
-//
-// #[test]
-// fn python_end_to_end_tests() -> Result<(), Error> {
-//     run_binary_chain_test(&PythonTest)
-// }
+#[test]
+fn python_end_to_end_tests() -> Result<(), Error> {
+    run_binary_chain_test(&PythonTest)
+}
