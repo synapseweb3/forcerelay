@@ -28,6 +28,8 @@ use ibc_relayer_types::{
         conn_open_try::MsgConnectionOpenTry, conn_open_try::TYPE_URL as CONN_OPEN_TRY_TYPE_URL,
     },
     core::{
+        ics02_client::client_type::ClientType,
+        ics03_connection::connection::IdentifiedConnectionEnd,
         ics04_channel::{
             msgs::{
                 acknowledgement::MsgAcknowledgement,
@@ -46,7 +48,7 @@ use ibc_relayer_types::{
             },
             packet::Sequence,
         },
-        ics24_host::identifier::{ChannelId, ClientId, PortId},
+        ics24_host::identifier::{ChannelId, ConnectionId, PortId},
     },
     events::IbcEvent,
     tx_msg::Msg,
@@ -54,7 +56,7 @@ use ibc_relayer_types::{
 
 use self::client::{convert_create_client, convert_update_client};
 
-use super::utils::get_script_hash;
+use super::utils::{generate_connection_id, get_script_hash};
 
 macro_rules! convert {
     ($msg:ident, $conval:ident, $msgty:ty, $conv:ident) => {{
@@ -67,15 +69,25 @@ macro_rules! convert {
 pub trait MsgToTxConverter {
     fn get_key(&self) -> &Secp256k1KeyPair;
 
-    fn get_ibc_connections(&self) -> IbcConnections;
+    fn get_ibc_connections(&self, client_id: &str) -> Result<IbcConnections, Error>;
 
-    fn get_ibc_connections_input(&self) -> CellInput;
+    fn get_ibc_connections_by_connection_id(
+        &self,
+        connection_id: &ConnectionId,
+    ) -> Result<IbcConnections, Error>;
+
+    fn get_ibc_connections_by_port_id(
+        &self,
+        channel_id: &ChannelId,
+    ) -> Result<IbcConnections, Error>;
+
+    fn get_ibc_connections_input(&self, client_id: &str) -> Result<CellInput, Error>;
 
     fn get_ibc_channel(&self, id: &ChannelId) -> IbcChannel;
 
     fn get_ibc_channel_input(&self, channel_id: &ChannelId, port_id: &PortId) -> CellInput;
 
-    fn get_client_outpoint(&self) -> OutPoint;
+    fn get_client_outpoint(&self, client_id: &str) -> Option<&OutPoint>;
 
     fn get_conn_contract_outpoint(&self) -> OutPoint;
 
@@ -89,10 +101,6 @@ pub trait MsgToTxConverter {
 
     fn get_connection_code_hash(&self) -> Byte32;
 
-    fn get_client_id(&self) -> ClientId;
-
-    fn get_client_id_bytes(&self) -> [u8; 32];
-
     fn get_packet_cell_input(&self, chan: ChannelId, port: PortId, seq: Sequence) -> CellInput;
 
     fn get_packet_owner(&self) -> [u8; 32];
@@ -103,12 +111,12 @@ pub trait MsgToTxConverter {
 pub struct Converter<'a> {
     pub channel_input_data: Ref<'a, HashMap<(ChannelId, PortId), CellInput>>,
     pub channel_cache: Ref<'a, HashMap<ChannelId, IbcChannel>>,
-    pub connection_cache: Ref<'a, Option<(IbcConnections, CellInput)>>,
+    #[allow(clippy::type_complexity)]
+    pub connection_cache:
+        Ref<'a, HashMap<ClientType, (IbcConnections, CellInput, Vec<IdentifiedConnectionEnd>)>>,
     pub packet_input_data: Ref<'a, HashMap<(ChannelId, PortId, Sequence), CellInput>>,
     pub config: &'a ChainConfig,
-    pub client_id: ClientId,
-    pub client_id_bytes: [u8; 32],
-    pub client_outpoint: &'a OutPoint,
+    pub client_outpoints: Ref<'a, HashMap<ClientType, OutPoint>>,
     pub chan_contract_outpoint: &'a OutPoint,
     pub packet_contract_outpoint: &'a OutPoint,
     pub conn_contract_outpoint: &'a OutPoint,
@@ -120,12 +128,58 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         todo!()
     }
 
-    fn get_ibc_connections(&self) -> IbcConnections {
-        self.connection_cache.as_ref().unwrap().0.clone()
+    fn get_ibc_connections(&self, client_id: &str) -> Result<IbcConnections, Error> {
+        let client_type = self.config.lc_client_type(client_id)?;
+        if let Some((connection, _, _)) = self.connection_cache.get(&client_type) {
+            Ok(connection.clone())
+        } else {
+            Err(Error::query(format!(
+                "client_type {client_type} isn't in cache"
+            )))
+        }
     }
 
-    fn get_ibc_connections_input(&self) -> CellInput {
-        self.connection_cache.as_ref().unwrap().1.clone()
+    fn get_ibc_connections_by_connection_id(
+        &self,
+        connection_id: &ConnectionId,
+    ) -> Result<IbcConnections, Error> {
+        let ibc_connections = self.connection_cache.iter().find(|(_, (v, _, _))| {
+            v.connections
+                .iter()
+                .enumerate()
+                .any(|(idx, c)| connection_id == &generate_connection_id(idx as u16, &c.client_id))
+        });
+        if let Some((_, (value, _, _))) = ibc_connections {
+            Ok(value.clone())
+        } else {
+            Err(Error::query(format!(
+                "connection {connection_id} not found in cache"
+            )))
+        }
+    }
+
+    fn get_ibc_connections_by_port_id(
+        &self,
+        channel_id: &ChannelId,
+    ) -> Result<IbcConnections, Error> {
+        let channel = self
+            .channel_cache
+            .get(channel_id)
+            .ok_or_else(|| Error::query(format!("channel {channel_id} not found in cache")))?;
+        // FIXME: should modify ibc contract
+        let connection_id = channel.connection_hops[0].parse().unwrap();
+        self.get_ibc_connections_by_connection_id(&connection_id)
+    }
+
+    fn get_ibc_connections_input(&self, client_id: &str) -> Result<CellInput, Error> {
+        let client_type = self.config.lc_client_type(client_id)?;
+        if let Some((_, cell_input, _)) = self.connection_cache.get(&client_type) {
+            Ok(cell_input.clone())
+        } else {
+            Err(Error::query(format!(
+                "client_type {client_type} isn't in cache"
+            )))
+        }
     }
 
     fn get_ibc_channel(&self, channel_id: &ChannelId) -> IbcChannel {
@@ -139,8 +193,11 @@ impl<'a> MsgToTxConverter for Converter<'a> {
             .clone()
     }
 
-    fn get_client_outpoint(&self) -> OutPoint {
-        self.client_outpoint.clone()
+    fn get_client_outpoint(&self, client_id: &str) -> Option<&OutPoint> {
+        let Some(client_type) = self.config.lc_client_type(client_id).ok() else {
+            return None;
+        };
+        self.client_outpoints.get(&client_type)
     }
 
     fn get_conn_contract_outpoint(&self) -> OutPoint {
@@ -165,14 +222,6 @@ impl<'a> MsgToTxConverter for Converter<'a> {
 
     fn get_connection_code_hash(&self) -> Byte32 {
         get_script_hash(&self.config.connection_type_args)
-    }
-
-    fn get_client_id(&self) -> ClientId {
-        self.client_id.clone()
-    }
-
-    fn get_client_id_bytes(&self) -> [u8; 32] {
-        self.client_id_bytes
     }
 
     fn get_packet_cell_input(

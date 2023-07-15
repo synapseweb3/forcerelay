@@ -4,7 +4,7 @@ use crate::{
             client_state::ClientState as Ics02ClientState, client_state::UpgradeOptions,
             client_type::ClientType, error::Error as Ics02Error,
         },
-        ics24_host::identifier::{ChainId, ClientId},
+        ics24_host::identifier::ChainId,
     },
     prelude::*,
     Height,
@@ -20,7 +20,6 @@ pub const AXON_CLIENT_STATE_TYPE_URL: &str = "/axon.client.v1.state";
 pub struct AxonClientState {
     pub chain_id: ChainId,
     pub latest_height: Height,
-    pub default_client_id: ClientId,
 }
 
 impl Ics02ClientState for AxonClientState {

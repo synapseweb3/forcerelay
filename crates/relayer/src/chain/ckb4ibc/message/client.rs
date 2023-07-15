@@ -1,8 +1,8 @@
 use ckb_ics_axon::message::{Envelope, MsgType};
 use ibc_relayer_types::{
     clients::{
-        ics07_axon::client_state::{AxonClientState, AXON_CLIENT_STATE_TYPE_URL},
-        ics07_ckb::client_state::{CkbClientState, CKB_CLIENT_STATE_TYPE_URL},
+        ics07_axon::client_state::AXON_CLIENT_STATE_TYPE_URL,
+        ics07_ckb::client_state::CKB_CLIENT_STATE_TYPE_URL,
     },
     core::ics02_client::{
         client_type::ClientType,
@@ -19,19 +19,23 @@ use crate::error::Error;
 
 pub fn convert_create_client<C: MsgToTxConverter>(
     msg: MsgCreateClient,
-    _converter: &C,
+    converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let client_id = match msg.client_state.type_url.as_str() {
-        AXON_CLIENT_STATE_TYPE_URL => {
-            AxonClientState::try_from(msg.client_state)
-                .unwrap()
-                .default_client_id
-        }
-        CKB_CLIENT_STATE_TYPE_URL => {
-            CkbClientState::try_from(msg.client_state)
-                .unwrap()
-                .default_client_id
-        }
+    let (client_type, client_id) = match msg.client_state.type_url.as_str() {
+        AXON_CLIENT_STATE_TYPE_URL => (
+            ClientType::Axon,
+            converter
+                .get_config()
+                .lc_client_id(ClientType::Axon)
+                .map_err(|e| Error::client_state_type(format!("{}: {e}", ClientType::Ckb4Ibc)))?,
+        ),
+        CKB_CLIENT_STATE_TYPE_URL => (
+            ClientType::Ckb4Ibc,
+            converter
+                .get_config()
+                .lc_client_id(ClientType::Ckb4Ibc)
+                .map_err(|e| Error::client_state_type(format!("{}: {e}", ClientType::Ckb4Ibc)))?,
+        ),
         url => {
             return Err(Error::other_error(format!(
                 "unsupport client_state url: {url}"
@@ -47,7 +51,7 @@ pub fn convert_create_client<C: MsgToTxConverter>(
         input_capacity: 0,
         event: Some(IbcEvent::CreateClient(CreateClient(Attributes {
             client_id,
-            client_type: ClientType::Ckb4Ibc,
+            client_type,
             consensus_height: Height::default(),
         }))),
     })

@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use super::{CkbTxInfo, MsgToTxConverter};
 use crate::chain::ckb4ibc::utils::{
-    convert_port_id_to_array, convert_proof, generate_connection_id, get_channel_capacity,
-    get_channel_idx, get_connection_capacity, get_connection_index_by_id,
-    get_connection_lock_script, get_encoded_object, get_packet_capacity,
+    convert_port_id_to_array, convert_proof, extract_client_id_by_connection_id,
+    get_channel_capacity, get_channel_idx, get_client_id_from_channel, get_client_outpoint,
+    get_connection_capacity, get_connection_lock_script, get_encoded_object, get_packet_capacity,
 };
 use crate::error::Error;
 use ckb_ics_axon::consts::{CHANNEL_CELL_CAPACITY, CONNECTION_CELL_CAPACITY, PACKET_CELL_CAPACITY};
@@ -44,7 +44,8 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelOpenInit,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_connection_cell = converter.get_ibc_connections();
+    let old_connection_cell =
+        converter.get_ibc_connections_by_connection_id(&msg.channel.connection_hops[0])?;
     let next_channel_num = old_connection_cell.next_channel_number;
     let mut new_connection_cell = old_connection_cell.clone();
     new_connection_cell.next_channel_number += 1;
@@ -53,25 +54,31 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
         convert_channel_end(msg.channel.clone(), msg.port_id.clone(), next_channel_num)?;
     let ibc_channel_end_encoded = get_encoded_object(ibc_channel_end);
 
-    let old_connection_encoded = get_encoded_object(old_connection_cell);
-    let new_connection_encoded = get_encoded_object(new_connection_cell);
-
     let envelope = Envelope {
         msg_type: MsgType::MsgChannelOpenInit,
         content: rlp::encode(&CkbMsgChannelOpenInit {}).to_vec(),
     };
+
+    let (client_cell_type_args, client_id) = get_client_id_from_channel(&msg.channel, converter)?;
     let channel_args = ChannelArgs {
-        client_id: converter.get_client_id_bytes(),
+        client_id: client_cell_type_args,
         open: false,
         channel_id: next_channel_num,
         port_id: convert_port_id_to_array(&msg.port_id)?,
     };
 
+    let old_connection_encoded = get_encoded_object(old_connection_cell);
+    let new_connection_encoded = get_encoded_object(new_connection_cell);
+
+    let client_outpoint = get_client_outpoint(converter, &client_id)?;
+    let ibc_connection_input = converter.get_ibc_connections_input(&client_id)?;
+    let connection_lock = get_connection_lock_script(converter.get_config(), Some(client_id))?;
+
     let packed_tx = TransactionView::new_advanced_builder()
         .cell_dep(
             CellDep::new_builder()
                 .dep_type(DepType::Code.into())
-                .out_point(converter.get_client_outpoint())
+                .out_point(client_outpoint)
                 .build(),
         )
         .cell_dep(
@@ -86,10 +93,10 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
                 .out_point(converter.get_chan_contract_outpoint())
                 .build(),
         )
-        .input(converter.get_ibc_connections_input())
+        .input(ibc_connection_input)
         .output(
             CellOutput::new_builder()
-                .lock(get_connection_lock_script(converter.get_config()))
+                .lock(connection_lock)
                 .capacity(get_connection_capacity().pack())
                 .build(),
         )
@@ -125,7 +132,7 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
         .build();
     let event = IbcEvent::OpenInitChannel(OpenInit {
         port_id: msg.port_id,
-        channel_id: Some(ChannelId::from_str(&get_channel_id_str(next_channel_num)).unwrap()),
+        channel_id: Some(get_channel_id_str(next_channel_num).parse().unwrap()),
         connection_id: msg.channel.connection_hops[0].clone(),
         counterparty_port_id: msg.channel.remote.port_id,
         counterparty_channel_id: msg.channel.remote.channel_id,
@@ -142,7 +149,8 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelOpenTry,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_connection_cell = converter.get_ibc_connections();
+    let old_connection_cell =
+        converter.get_ibc_connections_by_connection_id(&msg.channel.connection_hops[0])?;
     let next_channel_num = old_connection_cell.next_channel_number;
     let mut new_connection_cell = old_connection_cell.clone();
     new_connection_cell.next_channel_number += 1;
@@ -151,6 +159,7 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
         convert_channel_end(msg.channel.clone(), msg.port_id.clone(), next_channel_num)?;
     let ibc_channel_end_encoded = get_encoded_object(ibc_channel_end);
 
+    let (client_cell_type_args, client_id) = get_client_id_from_channel(&msg.channel, converter)?;
     let old_connection_encoded = get_encoded_object(old_connection_cell);
     let new_connection_encoded = get_encoded_object(new_connection_cell);
 
@@ -161,11 +170,22 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
         })
         .to_vec(),
     };
+
+    let channel_args = ChannelArgs {
+        client_id: client_cell_type_args,
+        open: false,
+        channel_id: next_channel_num,
+        port_id: convert_port_id_to_array(&msg.port_id)?,
+    };
+    let ibc_connection_input = converter.get_ibc_connections_input(&client_id)?;
+    let client_outpoint = get_client_outpoint(converter, &client_id)?;
+    let connection_lock = get_connection_lock_script(converter.get_config(), Some(client_id))?;
+
     let packed_tx = TransactionView::new_advanced_builder()
         .cell_dep(
             CellDep::new_builder()
                 .dep_type(DepType::Code.into())
-                .out_point(converter.get_client_outpoint())
+                .out_point(client_outpoint)
                 .build(),
         )
         .cell_dep(
@@ -174,10 +194,10 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
                 .out_point(converter.get_conn_contract_outpoint())
                 .build(),
         )
-        .input(converter.get_ibc_connections_input())
+        .input(ibc_connection_input)
         .output(
             CellOutput::new_builder()
-                .lock(get_connection_lock_script(converter.get_config()))
+                .lock(connection_lock)
                 .capacity(get_connection_capacity().pack())
                 .build(),
         )
@@ -186,16 +206,7 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
                 .lock(
                     Script::new_builder()
                         .code_hash(converter.get_channel_code_hash())
-                        .args(
-                            ChannelArgs {
-                                client_id: converter.get_client_id_bytes(),
-                                open: false,
-                                channel_id: next_channel_num,
-                                port_id: convert_port_id_to_array(&msg.port_id)?,
-                            }
-                            .to_args()
-                            .pack(),
-                        )
+                        .args(channel_args.to_args().pack())
                         .hash_type(ScriptHashType::Type.into())
                         .build(),
                 )
@@ -241,7 +252,6 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
 ) -> Result<CkbTxInfo, Error> {
     let channel_idx = get_channel_idx(&msg.channel_id)?;
     let old_channel = converter.get_ibc_channel(&msg.channel_id);
-    let connection_id = generate_connection_id(old_channel.connection_hops[0] as u16);
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id).unwrap();
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
@@ -255,8 +265,11 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
         .to_vec(),
     };
 
-    let lock_args = ChannelArgs {
-        client_id: converter.get_client_id_bytes(),
+    let connection_id = old_channel.connection_hops[0].clone();
+    let (client_cell_type_args, client_id) =
+        extract_client_id_by_connection_id(&connection_id, converter)?;
+    let channel_args = ChannelArgs {
+        client_id: client_cell_type_args,
         open: true,
         channel_id: channel_idx,
         port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -268,7 +281,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     let packed_tx = TransactionView::new_advanced_builder()
         .cell_dep(
             CellDep::new_builder()
-                .out_point(converter.get_client_outpoint())
+                .out_point(get_client_outpoint(converter, &client_id)?)
                 .build(),
         )
         .cell_dep(
@@ -289,7 +302,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
                 .lock(
                     Script::new_builder()
                         .code_hash(converter.get_channel_code_hash())
-                        .args(lock_args.to_args().pack())
+                        .args(channel_args.to_args().pack())
                         .hash_type(ScriptHashType::Type.into())
                         .build(),
                 )
@@ -310,7 +323,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     let event = IbcEvent::OpenAckChannel(OpenAck {
         port_id: msg.port_id,
         channel_id: Some(msg.channel_id),
-        connection_id,
+        connection_id: connection_id.parse().unwrap(),
         counterparty_port_id,
         counterparty_channel_id: Some(msg.counterparty_channel_id),
     });
@@ -330,7 +343,6 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
 
-    let connection_id = generate_connection_id(old_channel.connection_hops[0] as u16);
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id)
         .map_err(|_| Error::ckb_port_id_invalid(old_channel.counterparty.port_id.clone()))?;
     let counterparty_channel_id =
@@ -344,8 +356,11 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
         .to_vec(),
     };
 
+    let connection_id = old_channel.connection_hops[0].clone();
+    let (client_cell_type_args, client_id) =
+        extract_client_id_by_connection_id(&connection_id, converter)?;
     let lock_args = ChannelArgs {
-        client_id: converter.get_client_id_bytes(),
+        client_id: client_cell_type_args,
         open: true,
         channel_id: get_channel_idx(&msg.channel_id)?,
         port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -357,7 +372,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     let packed_tx = TransactionView::new_advanced_builder()
         .cell_dep(
             CellDep::new_builder()
-                .out_point(converter.get_client_outpoint())
+                .out_point(get_client_outpoint(converter, &client_id)?)
                 .build(),
         )
         .cell_dep(
@@ -392,7 +407,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     let event = IbcEvent::OpenConfirmChannel(OpenConfirm {
         port_id: msg.port_id,
         channel_id: Some(msg.channel_id),
-        connection_id,
+        connection_id: connection_id.parse().unwrap(),
         counterparty_port_id,
         counterparty_channel_id: Some(counterparty_channel_id),
     });
@@ -420,7 +435,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     let mut new_channel_end = old_channel_end.clone();
     new_channel_end.sequence.next_recv_ack += 1;
     let old_channel_end_encoded = get_encoded_object(old_channel_end);
-    let new_channel_end_encoded = get_encoded_object(new_channel_end);
+    let new_channel_end_encoded = get_encoded_object(new_channel_end.clone());
 
     let ckb_msg = CkbMsgAckPacket {
         proofs: convert_proof(msg.proofs)?,
@@ -446,10 +461,20 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         converter.get_packet_cell_input(channel_id.clone(), port_id.clone(), sequence);
     let channel_idx = get_channel_idx(&channel_id)?;
     let port_id_in_args: [u8; 32] = port_id.as_bytes().try_into().unwrap();
+
+    let (client_cell_type_args, client_id) =
+        extract_client_id_by_connection_id(&new_channel_end.connection_hops[0], converter)?;
+    let channel_args = ChannelArgs {
+        client_id: client_cell_type_args,
+        open: true,
+        channel_id: channel_idx,
+        port_id: port_id_in_args,
+    };
+
     let packed_tx = TransactionView::new_advanced_builder()
         .cell_dep(
             CellDep::new_builder()
-                .out_point(converter.get_client_outpoint())
+                .out_point(get_client_outpoint(converter, &client_id)?)
                 .build(),
         )
         .cell_dep(
@@ -466,16 +491,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
                     Script::new_builder()
                         .code_hash(converter.get_channel_code_hash())
                         .hash_type(ScriptHashType::Type.into())
-                        .args(
-                            ChannelArgs {
-                                client_id: converter.get_client_id_bytes(),
-                                open: true,
-                                channel_id: channel_idx,
-                                port_id: port_id_in_args,
-                            }
-                            .to_args()
-                            .pack(),
-                        )
+                        .args(channel_args.to_args().pack())
                         .hash_type(ScriptHashType::Type.into())
                         .build(),
                 )
@@ -538,7 +554,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     new_channel_end.sequence.next_recv_packet += 1;
 
     let old_channel_end_encoded = get_encoded_object(old_channel_end);
-    let new_channel_end_encoded = get_encoded_object(new_channel_end);
+    let new_channel_end_encoded = get_encoded_object(new_channel_end.clone());
 
     let ckb_msg = CkbMsgRecvPacket {
         proofs: convert_proof(msg.proofs)?,
@@ -560,10 +576,20 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     let ibc_packet_encoded = get_encoded_object(ibc_packet);
     let channel_idx = get_channel_idx(&channel_id)?;
     let port_id_in_args: [u8; 32] = port_id.as_str().as_bytes().try_into().unwrap();
+
+    let (client_cell_type_args, client_id) =
+        extract_client_id_by_connection_id(&new_channel_end.connection_hops[0], converter)?;
+    let channel_args = ChannelArgs {
+        client_id: client_cell_type_args,
+        open: true,
+        channel_id: channel_idx,
+        port_id: port_id_in_args,
+    };
+
     let packed_tx = TransactionView::new_advanced_builder()
         .cell_dep(
             CellDep::new_builder()
-                .out_point(converter.get_client_outpoint())
+                .out_point(get_client_outpoint(converter, &client_id)?)
                 .build(),
         )
         .input(channel_input)
@@ -573,16 +599,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
                     Script::new_builder()
                         .code_hash(converter.get_channel_code_hash())
                         .hash_type(ScriptHashType::Type.into())
-                        .args(
-                            ChannelArgs {
-                                client_id: converter.get_client_id_bytes(),
-                                open: true,
-                                channel_id: channel_idx,
-                                port_id: port_id_in_args,
-                            }
-                            .to_args()
-                            .pack(),
-                        )
+                        .args(channel_args.to_args().pack())
                         .build(),
                 )
                 .capacity(get_channel_capacity().pack())
@@ -655,10 +672,7 @@ pub fn convert_channel_end(
     let connection_hops = channel_end
         .connection_hops
         .into_iter()
-        .flat_map(|c| match get_connection_index_by_id(&c) {
-            Ok(s) => Ok(s as usize),
-            Err(e) => Err(e),
-        })
+        .map(|v| v.to_string())
         .collect::<Vec<_>>();
 
     if connection_hops.is_empty() {

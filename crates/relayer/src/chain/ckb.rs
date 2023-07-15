@@ -22,9 +22,7 @@ use ibc_relayer_types::clients::ics07_ckb::{
 use ibc_relayer_types::clients::ics07_eth::{
     client_state::EthClientState, types::Update as EthUpdate,
 };
-use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::height::Height;
-use ibc_relayer_types::core::ics24_host::identifier::ClientId;
 use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
@@ -654,7 +652,6 @@ impl ChainEndpoint for CkbChain {
                 client_state: AnyClientState::Ckb(CkbClientState {
                     chain_id: self.id(),
                     latest_height: Height::default(),
-                    default_client_id: ClientId::new(ClientType::Ckb, 0).unwrap(),
                 }),
             };
             clients.push(client_state);

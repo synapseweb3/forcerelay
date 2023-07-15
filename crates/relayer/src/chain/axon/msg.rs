@@ -1,8 +1,16 @@
 use ethers::types::Bytes;
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::{
+    clients::{
+        ics07_axon::client_state::AXON_CLIENT_STATE_TYPE_URL,
+        ics07_ckb::client_state::CKB_CLIENT_STATE_TYPE_URL,
+    },
     core::{
-        ics02_client::events as client_events,
+        ics02_client::{
+            client_type::ClientType,
+            events as client_events,
+            msgs::create_client::{self, MsgCreateClient},
+        },
         ics03_connection::{
             self,
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
@@ -308,6 +316,37 @@ impl From<Packet> for contract::PacketData {
             },
             timeout_timestamp: value.timeout_timestamp.nanoseconds(),
         }
+    }
+}
+
+impl TryFrom<MsgCreateClient> for contract::MsgCreateClient {
+    type Error = Error;
+
+    fn try_from(value: MsgCreateClient) -> Result<Self, Self::Error> {
+        let client_type = match value.client_state.type_url.as_str() {
+            AXON_CLIENT_STATE_TYPE_URL => ClientType::Axon.as_str(),
+            CKB_CLIENT_STATE_TYPE_URL => ClientType::Ckb4Ibc.as_str(),
+            type_url => {
+                return Err(Error::other_error(format!(
+                    "unsupported client state type_url: {type_url}"
+                )))
+            }
+        };
+        Ok(Self {
+            client_type: client_type.to_owned(),
+            client_state: value.client_state.value.into(),
+            consensus_state: value.consensus_state.value.into(),
+        })
+    }
+}
+
+impl TryFrom<Any> for contract::MsgCreateClient {
+    type Error = Error;
+
+    fn try_from(value: Any) -> Result<Self, Self::Error> {
+        MsgCreateClient::from_any(value)
+            .map_err(|e| Error::protobuf_decode(create_client::TYPE_URL.into(), e))?
+            .try_into()
     }
 }
 
@@ -744,14 +783,26 @@ impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
                 IbcEvent::AcknowledgePacket(event)
             }
             WriteAcknowledgementFilter(_) => todo!(),
-            CreateClientFilter(_) => todo!(),
+            CreateClientFilter(event) => {
+                let client_id: ClientId = event.client_id.parse().unwrap();
+                let client_type = client_id.clone().into();
+                assert!(client_type != ClientType::Mock);
+                let event = client_events::CreateClient(client_events::Attributes {
+                    client_id,
+                    client_type,
+                    consensus_height: Height::default(),
+                });
+                IbcEvent::CreateClient(event)
+            }
             UpdateClientFilter(event) => {
+                let client_id: ClientId = event.client_id.parse().unwrap();
+                let client_type = client_id.clone().into();
+                assert!(client_type != ClientType::Mock);
                 let event = client_events::UpdateClient {
                     common: client_events::Attributes {
-                        client_id: event.client_id.parse().unwrap(),
-                        client_type:
-                            ibc_relayer_types::core::ics02_client::client_type::ClientType::Axon,
-                        consensus_height: Height::new(0, 1).unwrap(),
+                        client_id,
+                        client_type,
+                        consensus_height: Height::default(),
                     },
                     header: None,
                 };

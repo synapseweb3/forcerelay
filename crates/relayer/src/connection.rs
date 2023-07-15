@@ -931,7 +931,7 @@ impl<ChainA: ChainHandle, ChainB: ChainHandle> Connection<ChainA, ChainB> {
         &self,
         consensus_height: Height,
     ) -> Result<(), ConnectionError> {
-        // FIXME: no need to check proof height for now
+        // FIXME: no need to check proof height until we find out the importance of this method
         match self.src_chain().config() {
             Ok(ChainConfig::Axon(_)) | Ok(ChainConfig::Ckb4Ibc(_)) => {
                 return Ok(());

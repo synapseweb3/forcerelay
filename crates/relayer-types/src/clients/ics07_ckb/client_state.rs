@@ -1,7 +1,7 @@
 use crate::{
     core::{
         ics02_client::{client_state::UpgradeOptions, client_type::ClientType},
-        ics24_host::identifier::{ChainId, ClientId},
+        ics24_host::identifier::ChainId,
     },
     prelude::*,
     Height,
@@ -21,7 +21,6 @@ pub const CKB_CLIENT_STATE_TYPE_URL: &str = "/ibc.lightclients.ckb.v1.ClientStat
 pub struct CkbClientState {
     pub chain_id: ChainId,
     pub latest_height: Height,
-    pub default_client_id: ClientId,
 }
 
 impl Ics02ClientState for CkbClientState {

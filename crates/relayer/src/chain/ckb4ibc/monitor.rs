@@ -11,7 +11,7 @@ use ckb_types::core::ScriptHashType;
 use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, Sender};
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::height::Height;
 use ibc_relayer_types::core::ics03_connection::events::{
@@ -43,14 +43,16 @@ use crate::event::IbcEventWithHeight;
 use super::cache_set::CacheSet;
 use super::utils::{get_script_hash, get_search_key};
 
-// todo add cell emitter here
+// TODO: add cell emitter here
 pub struct Ckb4IbcEventMonitor {
     rt: Arc<TokioRuntime>,
     rpc_client: Arc<RpcClient>,
     rx_cmd: Receiver<MonitorCmd>,
+    rx_internal: Receiver<ClientType>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
     config: ChainConfig,
     cache_set: RwLock<CacheSet<H256>>,
+    counterparty_client_type: ClientType,
 }
 
 impl Ckb4IbcEventMonitor {
@@ -58,17 +60,20 @@ impl Ckb4IbcEventMonitor {
         rt: Arc<TokioRuntime>,
         rpc_client: Arc<RpcClient>,
         config: ChainConfig,
-    ) -> (Self, TxMonitorCmd) {
+    ) -> (Self, TxMonitorCmd, Sender<ClientType>) {
         let (tx_cmd, rx_cmd) = crossbeam_channel::unbounded();
+        let (tx_internal, rx_internal) = crossbeam_channel::unbounded();
         let monitor = Ckb4IbcEventMonitor {
             rt,
             rpc_client,
             rx_cmd,
+            rx_internal,
             event_bus: EventBus::default(),
             config,
             cache_set: RwLock::new(CacheSet::new(512)),
+            counterparty_client_type: ClientType::Mock,
         };
-        (monitor, TxMonitorCmd::new(tx_cmd))
+        (monitor, TxMonitorCmd::new(tx_cmd), tx_internal)
     }
 
     pub fn run(mut self) {
@@ -82,12 +87,17 @@ impl Ckb4IbcEventMonitor {
             }
         }
     }
+
     async fn run_once(&mut self) -> Next {
         if let Ok(cmd) = self.rx_cmd.try_recv() {
             match cmd {
                 MonitorCmd::Shutdown => return Next::Abort,
                 MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
             }
+        }
+        // block here until the counterparty is revealed
+        if let Ok(client_type) = self.rx_internal.recv() {
+            self.counterparty_client_type = client_type;
         }
         let result = async {
             tokio::select! {
@@ -115,7 +125,7 @@ impl Ckb4IbcEventMonitor {
             .hash_type(ScriptHashType::Type.into())
             .args(
                 self.config
-                    .lc_client_id_bytes(ClientType::Ckb4Ibc)
+                    .lc_client_type_args(self.counterparty_client_type)
                     .unwrap()
                     .as_slice()
                     .pack(),
@@ -197,18 +207,19 @@ impl Ckb4IbcEventMonitor {
     }
 
     async fn fetch_channel_events(&self) -> Result<EventBatch> {
+        let client_id = self
+            .config
+            .lc_client_type_args(self.counterparty_client_type)
+            .map_err(|e| Error::collect_events_failed(e.to_string()))?;
+        let channel_args = ChannelArgs {
+            client_id,
+            open: false,
+            channel_id: Default::default(),
+            port_id: Default::default(),
+        };
         let script = Script::new_builder()
             .code_hash(get_script_hash(&self.config.channel_type_args))
-            .args(
-                ChannelArgs {
-                    client_id: self.config.lc_client_id_bytes(ClientType::Ckb4Ibc).unwrap(),
-                    open: false,
-                    channel_id: Default::default(),
-                    port_id: Default::default(),
-                }
-                .get_prefix_for_searching_unopen()
-                .pack(),
-            )
+            .args(channel_args.get_prefix_for_searching_unopen().pack())
             .build();
 
         let key = get_search_key(script);

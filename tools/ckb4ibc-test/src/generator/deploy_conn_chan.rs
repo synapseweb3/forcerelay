@@ -14,7 +14,7 @@ use ckb_types::{
 
 use crate::generator::{
     utils::{get_lock_script, get_secp256k1_cell_dep, wrap_rpc_request_and_save},
-    PRIVKEY,
+    GENESIS_TXHASH, PRIVKEY,
 };
 
 #[derive(Debug)]
@@ -33,10 +33,7 @@ pub fn generate_deploy_conn_chan() -> ConnChanAttribute {
     let input = CellInput::new_builder()
         .previous_output(
             OutPoint::new_builder()
-                .tx_hash(
-                    h256!("0x227de871ce6ab120a67960f831b04148bf79b4e56349dde7a8001f93191736ed")
-                        .pack(),
-                )
+                .tx_hash(GENESIS_TXHASH.pack())
                 .index(8u32.pack())
                 .build(),
         )

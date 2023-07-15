@@ -25,6 +25,7 @@ use ibc_relayer_types::core::ics04_channel::channel::{
     State as ChannelState,
 };
 use ibc_relayer_types::core::ics04_channel::version::Version as ChanVersion;
+use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
 
 use super::utils::generate_connection_id;
@@ -58,13 +59,14 @@ pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnect
 
 pub fn extract_connections_from_tx(
     tx: TransactionView,
+    prefix: &CommitmentPrefix,
 ) -> Result<(Vec<IdentifiedConnectionEnd>, IbcConnections), Error> {
     let ibc_connection_cell = extract_ibc_connections_from_tx(tx)?;
     let result = ibc_connection_cell
         .connections
         .iter()
         .enumerate()
-        .flat_map(|(idx, connection)| convert_connection_end(connection.clone(), idx))
+        .flat_map(|(idx, connection)| convert_connection_end(connection.clone(), idx, prefix))
         .collect();
     Ok((result, ibc_connection_cell))
 }
@@ -112,8 +114,9 @@ fn navigate(t: MsgType, object_type: ObjectType) -> usize {
 fn convert_connection_end(
     connection: CkbConnectionEnd,
     idx: usize,
+    prefix: &CommitmentPrefix,
 ) -> Result<IdentifiedConnectionEnd, Error> {
-    let connection_id = generate_connection_id(idx as u16);
+    let connection_id = generate_connection_id(idx as u16, &connection.client_id);
     let state = match connection.state {
         CkbState::Unknown => ConnectionState::Uninitialized,
         CkbState::Init => ConnectionState::Init,
@@ -139,11 +142,7 @@ fn convert_connection_end(
         connection_end: ConnectionEnd::new(
             state,
             client_id,
-            ConnectionCounterparty::new(
-                remote_client_id,
-                remote_connection_id,
-                vec![0u8].try_into().unwrap(),
-            ),
+            ConnectionCounterparty::new(remote_client_id, remote_connection_id, prefix.clone()),
             vec![ConnVersion::default()],
             Duration::from_secs(delay_period),
         ),
@@ -183,8 +182,9 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
         ckb_channel_end
             .connection_hops
             .into_iter()
-            .map(|c| generate_connection_id(c as u16))
-            .collect::<Vec<_>>()
+            .map(|c| c.parse())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| Error::other_error("bad connection_hops".to_owned()))?
     };
     let channel_end = ChannelEnd {
         state,

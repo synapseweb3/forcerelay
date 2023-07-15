@@ -1,6 +1,3 @@
-use std::str::FromStr;
-
-use super::error::Error;
 use ckb_types::H256;
 use ibc_relayer_types::core::{
     ics02_client::client_type::ClientType,
@@ -11,10 +8,12 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tendermint_rpc::Url;
 
+use crate::error::Error;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightClientItem {
     pub chain_id: ChainId,
-    pub client_type_args: H256,
+    pub client_cell_type_args: H256,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +22,7 @@ pub struct ChainConfig {
     pub ckb_rpc: Url,
     pub ckb_indexer_rpc: Url,
     pub key_name: String,
+    pub store_prefix: String,
 
     pub connection_type_args: H256,
     pub channel_type_args: H256,
@@ -32,38 +32,55 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub fn lc_chain_id(&self, client_id: ClientId) -> Result<ChainId, Error> {
+    pub fn lc_chain_id(&self, client_id: &String) -> Result<ChainId, Error> {
         let chain_id = self
             .onchain_light_clients
             .iter()
             .find_map(|(_, v)| {
-                if hex::encode(&v.client_type_args) == client_id.to_string() {
+                if hex::encode(&v.client_cell_type_args) == client_id.as_str() {
                     Some(v.chain_id.clone())
                 } else {
                     None
                 }
             })
-            .ok_or(Error::invalid(format!("config.toml missing {client_id}")))?;
+            .ok_or(Error::other_error(format!(
+                "config.toml missing {client_id}"
+            )))?;
         Ok(chain_id)
     }
 
-    pub fn lc_client_id(&self, client_type: ClientType) -> Result<ClientId, Error> {
-        let (_, item) = self
+    pub fn lc_client_type(&self, client_id: &str) -> Result<ClientType, Error> {
+        let client_type = self
             .onchain_light_clients
             .iter()
-            .find(|(v, _)| **v == client_type)
-            .ok_or(Error::invalid(format!("config.toml missing {client_type}")))?;
-        let value = hex::encode(&item.client_type_args);
-        ClientId::from_str(&value).map_err(|e| Error::invalid(e.to_string()))
+            .find_map(|(k, v)| {
+                if hex::encode(&v.client_cell_type_args) == client_id {
+                    Some(*k)
+                } else {
+                    None
+                }
+            })
+            .ok_or(Error::other_error(format!(
+                "config.toml missing client_id {client_id}"
+            )))?;
+        Ok(client_type)
     }
 
-    pub fn lc_client_id_bytes(&self, client_type: ClientType) -> Result<[u8; 32], Error> {
+    pub fn lc_client_id(&self, client_type: ClientType) -> Result<ClientId, Error> {
+        let client_type_args = self.lc_client_type_args(client_type)?;
+        let client_id = hex::encode(client_type_args).parse().unwrap();
+        Ok(client_id)
+    }
+
+    pub fn lc_client_type_args(&self, client_type: ClientType) -> Result<[u8; 32], Error> {
         let (_, item) = self
             .onchain_light_clients
             .iter()
             .find(|(v, _)| **v == client_type)
-            .ok_or(Error::invalid(format!("config.toml missing {client_type}")))?;
-        Ok(item.client_type_args.clone().into())
+            .ok_or(Error::other_error(format!(
+                "config.toml missing client_type {client_type}"
+            )))?;
+        Ok(item.client_cell_type_args.clone().into())
     }
 }
 

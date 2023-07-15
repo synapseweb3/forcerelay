@@ -2,6 +2,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc, thread};
 
 use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
 use eth2_types::Hash256;
+use rlp::Encodable;
 use tracing::warn;
 
 use crate::{
@@ -29,24 +30,17 @@ use ethers::{
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::{
     applications::ics31_icq::response::CrossChainQueryResponse,
-    clients::{
-        ics07_axon::{
-            client_state::{AxonClientState, AXON_CLIENT_STATE_TYPE_URL},
-            consensus_state::AxonConsensusState,
-            header::{AxonHeader, AXON_HEADER_TYPE_URL},
-            light_block::AxonLightBlock,
-        },
-        ics07_ckb::{
-            client_state::{CkbClientState, CKB_CLIENT_STATE_TYPE_URL},
-            consensus_state::CkbConsensusState,
-        },
+    clients::ics07_axon::{
+        client_state::AxonClientState,
+        consensus_state::AxonConsensusState,
+        header::{AxonHeader, AXON_HEADER_TYPE_URL},
+        light_block::AxonLightBlock,
     },
     core::{
         ics02_client::{
-            client_type::ClientType,
             error::Error as ClientError,
-            events::{Attributes, CreateClient, UpdateClient},
-            msgs::{create_client::MsgCreateClient, update_client},
+            events::UpdateClient,
+            msgs::{create_client, update_client},
         },
         ics03_connection::{
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
@@ -61,7 +55,7 @@ use ibc_relayer_types::{
             packet::{PacketMsgType, Sequence},
         },
         ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
-        ics24_host::identifier::{ChainId, ChannelId, ClientId, ConnectionId, PortId},
+        ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId},
     },
     events::IbcEvent,
     proofs::{ConsensusProof, Proofs},
@@ -96,15 +90,16 @@ use super::{
     },
     tracking::TrackedMsgs,
 };
-use strum::IntoEnumIterator;
 use tokio::runtime::Runtime as TokioRuntime;
 
 mod contract;
 mod monitor;
 mod msg;
 mod rpc;
+mod utils;
 
 pub use rpc::AxonRpc;
+use utils::*;
 
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
@@ -298,15 +293,13 @@ impl ChainEndpoint for AxonChain {
         &self,
         _request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
-        let chain_id = self.id();
-        let transfer = |client_state| to_identified_any_client_state(&chain_id, client_state);
         let client_states: Vec<_> = self
             .rt
             .block_on(self.contract.get_client_states().call())
             .map_err(convert_err)?;
         let client_states = client_states
             .iter()
-            .map(transfer)
+            .map(to_identified_any_client_state)
             .collect::<Result<Vec<IdentifiedAnyClientState>, Error>>()?;
         Ok(client_states)
     }
@@ -330,7 +323,7 @@ impl ChainEndpoint for AxonChain {
             )
             .map_err(convert_err)?;
 
-        let client_state = to_any_client_state(&self.config.id, &client_state)?;
+        let (_, client_state) = to_any_client_state(&client_state)?;
         Ok((client_state, None))
     }
 
@@ -349,8 +342,7 @@ impl ChainEndpoint for AxonChain {
             .rt
             .block_on(self.contract.get_consensus_state(client_id, height).call())
             .map_err(convert_err)?;
-        let consensus_state = to_any_consensus_state(&consensus_state)?;
-        Ok((consensus_state, None))
+        Ok((to_any_consensus_state(&consensus_state)?, None))
     }
 
     fn query_consensus_state_heights(
@@ -512,11 +504,10 @@ impl ChainEndpoint for AxonChain {
             )
             .map_err(convert_err)?;
 
-        if !found {
-            Ok(None)
+        if found {
+            Ok(Some(to_identified_any_client_state(&client_state)?))
         } else {
-            let client_state = to_identified_any_client_state(&self.config.id, &client_state)?;
-            Ok(Some(client_state))
+            Ok(None)
         }
     }
 
@@ -738,8 +729,6 @@ impl ChainEndpoint for AxonChain {
             ClientSettings::AxonCkb | ClientSettings::Other => Ok(AxonClientState {
                 chain_id: self.id(),
                 latest_height: height,
-                // FIXME: we always use one light client for Axon endpoint thus the counter is permanent 0
-                default_client_id: ClientId::new(ClientType::Axon, 0).unwrap(),
             }),
             _ => Err(Error::build_client_state_failure()),
         }
@@ -944,19 +933,16 @@ impl AxonChain {
             .block_on(self.get_proofs_ingredients(block_number))?;
 
         // FIXME: keep it commentted until Axon team fixed this verify issue
+        //
         // check the validation of receipts mpt proof
         // let key = rlp::encode(&receipt.transaction_index.as_u64());
         // axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
         //     .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
 
-        let object_proof = rlp::RlpStream::new()
-            .append(&receipt)
-            .append_list::<Vec<_>, Vec<_>>(&receipt_proof)
-            .append(&block)
-            .append(&state_root)
-            .append(&block_proof)
-            .as_raw()
-            .to_owned();
+        let object_proof =
+            to_ckb_like_object_proof(&receipt, &receipt_proof, &block, &state_root, &block_proof)
+                .rlp_bytes()
+                .to_vec();
 
         let useless_client_proof = vec![0u8].try_into().unwrap();
         let useless_consensus_proof =
@@ -995,7 +981,7 @@ impl AxonChain {
             .await?
             .header
             .state_root;
-        // maybe we won't get proof because the next block isn't mined yet, so here needs double check
+        // FIXME: maybe we won't get proof because the next block isn't mined yet, so here needs double check
         let proof = self.rpc_client.get_proof_by_id(next_number.into()).await?;
         let validators = self
             .rpc_client
@@ -1077,62 +1063,33 @@ macro_rules! convert {
 }
 
 impl AxonChain {
-    fn filter_create_client_message(&self, message: &Any) -> Result<IbcEventWithHeight, Error> {
-        let msg = MsgCreateClient::from_any(message.clone())
-            .map_err(|e| Error::protobuf_decode(message.type_url.clone(), e))?;
-        let create_client_event = match msg.client_state.type_url.as_str() {
-            AXON_CLIENT_STATE_TYPE_URL => {
-                let axon_client_state = AxonClientState::try_from(msg.client_state).unwrap();
-                let event = IbcEvent::CreateClient(CreateClient(Attributes {
-                    client_id: axon_client_state.default_client_id,
-                    client_type: ClientType::Axon,
-                    consensus_height: Height::default(),
-                }));
-                IbcEventWithHeight::new(event, Height::default())
-            }
-            CKB_CLIENT_STATE_TYPE_URL => {
-                let ckb_client_state = CkbClientState::try_from(msg.client_state).unwrap();
-                let event = IbcEvent::CreateClient(CreateClient(Attributes {
-                    client_id: ckb_client_state.default_client_id,
-                    client_type: ClientType::Ckb,
-                    consensus_height: Height::default(),
-                }));
-                IbcEventWithHeight::new(event, Height::default())
-            }
-            url => {
-                return Err(Error::other_error(format!(
-                    "not support message type url: {url}"
-                )))
-            }
-        };
-        Ok(create_client_event)
-    }
-
     fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
-        if let Ok(event) = self.filter_create_client_message(&message) {
-            return Ok(event);
-        }
-
         use contract::*;
         let msg = message.clone();
         let tx_receipt: eyre::Result<_> = match msg.type_url.as_str() {
+            // client
+            create_client::TYPE_URL => {
+                convert!(self, msg, MsgCreateClient, create_client)
+            }
+            // TODO: this update_client uses Hermes internal message to handle the Axon-specific function,
+            // so maybe there is possibility to create a new one to do so
             update_client::TYPE_URL => {
                 let msg = update_client::MsgUpdateClient::from_any(msg)
-                    .map_err(|e| Error::send_tx(format!("fail to decode MsgUpdateClient {}", e)))?;
+                    .map_err(|e| Error::protobuf_decode(update_client::TYPE_URL.to_string(), e))?;
                 let bytes = msg.header.value.as_slice();
                 let type_url = msg.header.type_url;
                 let to = match type_url.as_str() {
                     AXON_HEADER_TYPE_URL => self.config.ckb_light_client_contract_address,
                     "CELL_TYPE_URL" => self.config.image_cell_contract_address,
                     type_url => {
-                        return Err(Error::send_tx(format!("unknown type_url {}", type_url)))
+                        return Err(Error::other_error(format!("unknown type_url {type_url}")))
                     }
                 };
-
                 let tx = TransactionRequest::new().to(to).data(bytes.to_vec());
                 self.rt
                     .block_on(async { Ok(self.client.send_transaction(tx, None).await?.await?) })
             }
+            // connection
             conn_open_init::TYPE_URL => {
                 convert!(self, msg, MsgConnectionOpenInit, connection_open_init)
             }
@@ -1145,6 +1102,7 @@ impl AxonChain {
             conn_open_confirm::TYPE_URL => {
                 convert!(self, msg, MsgConnectionOpenConfirm, connection_open_confirm)
             }
+            // channel
             chan_open_init::TYPE_URL => {
                 convert!(self, msg, MsgChannelOpenInit, channel_open_init)
             }
@@ -1163,6 +1121,7 @@ impl AxonChain {
             chan_close_confirm::TYPE_URL => {
                 convert!(self, msg, MsgChannelCloseConfirm, channel_close_confirm)
             }
+            // packet
             recv_packet::TYPE_URL => {
                 convert!(self, msg, MsgPacketRecv, recv_packet)
             }
@@ -1170,8 +1129,8 @@ impl AxonChain {
                 convert!(self, msg, MsgPacketAcknowledgement, acknowledge_packet)
             }
             url => {
-                return Err(Error::send_tx(format!(
-                    "not support message type url: {url}"
+                return Err(Error::other_error(format!(
+                    "non-support message type url: {url}"
                 )))
             }
         };
@@ -1186,6 +1145,9 @@ impl AxonChain {
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
             match message.type_url.as_str() {
+                create_client::TYPE_URL => {
+                    events.find(|event| matches!(event, Ok(CreateClientFilter(_))))
+                }
                 update_client::TYPE_URL => {
                     let msg = update_client::MsgUpdateClient::from_any(message).map_err(|e| {
                         Error::send_tx(format!("fail to decode MsgUpdateClient {}", e))
@@ -1233,7 +1195,7 @@ impl AxonChain {
                 }
                 url => {
                     return Err(Error::send_tx(format!(
-                        "not support message type url: {url}"
+                        "non-support message type url: {url}"
                     )))
                 }
             }
@@ -1260,70 +1222,4 @@ impl AxonChain {
             tx_hash,
         })
     }
-}
-
-fn convert_err<T: ToString>(err: T) -> Error {
-    Error::other_error(err.to_string())
-}
-
-fn to_identified_any_client_state(
-    chain_id: &ChainId,
-    client_state_from_contract: &ethers::core::types::Bytes,
-) -> Result<IdentifiedAnyClientState, Error> {
-    let client_id = String::from_utf8_lossy(client_state_from_contract);
-    Ok(IdentifiedAnyClientState {
-        client_id: ClientId::from_str(&client_id).unwrap(),
-        client_state: to_any_client_state(chain_id, client_state_from_contract)?,
-    })
-}
-
-fn to_any_client_state(
-    chain_id: &ChainId,
-    client_state_from_contract: &ethers::core::types::Bytes,
-) -> Result<AnyClientState, Error> {
-    // Axon solidity contract regulate the returned client_state is the string of client id
-    let client_id = String::from_utf8_lossy(client_state_from_contract);
-    let mut client_type = ClientType::Mock;
-    for value in ClientType::iter() {
-        if client_id.starts_with(value.as_str()) {
-            client_type = value;
-        }
-    }
-    let any_client_state = match client_type {
-        ClientType::Axon => AxonClientState {
-            chain_id: chain_id.clone(),
-            latest_height: Height::default(),
-            default_client_id: ClientId::from_str(&client_id).unwrap(),
-        }
-        .into(),
-        ClientType::Ckb4Ibc => CkbClientState {
-            chain_id: chain_id.clone(),
-            latest_height: Height::default(),
-            default_client_id: ClientId::from_str(&client_id).unwrap(),
-        }
-        .into(),
-        // currently, only support Axon and Ckb4Ibc
-        _ => unimplemented!(),
-    };
-    Ok(any_client_state)
-}
-
-fn to_any_consensus_state(
-    consensus_state_from_contract: &ethers::core::types::Bytes,
-) -> Result<AnyConsensusState, Error> {
-    // Axon solidity contract regulate the returned consensus_state is the string of client id
-    let client_id = String::from_utf8_lossy(consensus_state_from_contract);
-    let mut client_type = ClientType::Mock;
-    for value in ClientType::iter() {
-        if client_id.starts_with(value.as_str()) {
-            client_type = value;
-        }
-    }
-    let any_consensus_state = match client_type {
-        ClientType::Axon => AxonConsensusState {}.into(),
-        ClientType::Ckb4Ibc => CkbConsensusState {}.into(),
-        // currently, only support Axon and Ckb4Ibc
-        _ => unimplemented!(),
-    };
-    Ok(any_consensus_state)
 }
