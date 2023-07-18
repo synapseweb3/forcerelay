@@ -62,7 +62,8 @@ impl BinaryChainTest for PythonTest {
     }
 }
 
-// it's successful in the native env with compiled gaiad v10.0.2
+// it's successful in the native env with compiled gaiad v10.0.2 but failed in the CI, so
+// we comment it until we merge the latest Hermes version into Forcerelay
 //
 // #[test]
 // fn python_end_to_end_tests() -> Result<(), Error> {
