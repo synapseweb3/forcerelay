@@ -669,7 +669,8 @@ impl ChainEndpoint for Ckb4IbcChain {
         _target: Height,
         _client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
-        // use default is ok
+        // Ckb4Ibc doesn't have light client module until we insert cell-emitter crate to
+        // relay ckb headers and cells to Axon endpoint
         Ok(CkbLightBlock {})
     }
 

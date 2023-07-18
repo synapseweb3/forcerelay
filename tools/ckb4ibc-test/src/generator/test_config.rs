@@ -90,7 +90,8 @@ pub const CONNECTION_CODE_HASH: H256 =
 pub const CHANNEL_CODE_HASH: H256 =
     h256!("0x{}");
 pub const CLIENT_TYPE_ARGS: H256 =
-    h256!("0x{}");"#,
+    h256!("0x{}");
+"#,
         conn_chan_attr.connection_code_hash,
         conn_chan_attr.channel_code_hash,
         packet_metadata_attr.metadata_type_args
