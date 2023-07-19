@@ -6,10 +6,10 @@ use std::time::Duration;
 use crate::account::Balance;
 use crate::chain::ckb::prelude::{CellSearcher, CkbReader, CkbWriter, TxCompleter};
 use crate::chain::ckb4ibc::extractor::extract_channel_end_from_tx;
-use crate::chain::ckb4ibc::utils::{get_connection_idx, get_connection_search_key};
+use crate::chain::ckb4ibc::utils::{get_connection_index_by_id, get_connection_search_key};
 use crate::chain::endpoint::ChainEndpoint;
 use crate::client_state::{AnyClientState, IdentifiedAnyClientState};
-use crate::config::ckb4ibc::ChainConfig as Ckb4IbcChainConfig;
+use crate::config::ckb4ibc::{ChainConfig as Ckb4IbcChainConfig, LightClientItem};
 use crate::config::ChainConfig;
 use crate::connection::ConnectionMsgType;
 use crate::consensus_state::AnyConsensusState;
@@ -34,36 +34,39 @@ use ckb_types::core::TransactionView as CoreTransactionView;
 use ckb_types::molecule::prelude::Entity;
 use ckb_types::packed::{CellInput, OutPoint, Script, WitnessArgs};
 use ckb_types::prelude::{Builder, Pack, Unpack};
+use crossbeam_channel::Sender;
 use futures::TryFutureExt;
 use ibc_proto::ibc::apps::fee::v1::{
     QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse,
 };
 use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_ckb::{
-    client_state::ClientState as CkbClientState,
-    consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
-    light_block::LightBlock as CkbLightBlock,
+    client_state::CkbClientState, consensus_state::CkbConsensusState, header::CkbHeader,
+    light_block::CkbLightBlock,
 };
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
+use ibc_relayer_types::core::ics02_client::error::Error as ClientError;
 use ibc_relayer_types::core::ics02_client::events::UpdateClient;
 use ibc_relayer_types::core::ics03_connection::connection::{
     ConnectionEnd, IdentifiedConnectionEnd,
 };
 use ibc_relayer_types::core::ics04_channel::channel::{ChannelEnd, IdentifiedChannelEnd};
 use ibc_relayer_types::core::ics04_channel::packet::{PacketMsgType, Sequence};
-use ibc_relayer_types::core::ics23_commitment::commitment::{CommitmentPrefix, CommitmentRoot};
+use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics23_commitment::merkle::MerkleProof;
 use ibc_relayer_types::core::ics24_host::identifier::{
     ChainId, ChannelId, ClientId, ConnectionId, PortId,
 };
+use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::proofs::Proofs;
 use ibc_relayer_types::signer::Signer;
 use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
 use semver::Version;
 use std::sync::RwLock;
-use tendermint::Time;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime;
+use tracing::log::info;
 
 use self::extractor::{extract_connections_from_tx, extract_ibc_packet_from_tx};
 use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverter};
@@ -110,15 +113,19 @@ pub struct Ckb4IbcChain {
     cached_network: RwLock<Option<NetworkType>>,
 
     tx_monitor_cmd: Option<TxMonitorCmd>,
+    tx_internal_cmd: Option<Sender<ClientType>>,
 
-    client_outpoint: OutPoint,
     connection_outpoint: OutPoint,
     channel_outpoint: OutPoint,
     packet_outpoint: OutPoint,
 
+    counterparty_client_type: RefCell<ClientType>,
+    client_outpoints: RefCell<HashMap<ClientType, OutPoint>>,
     channel_input_data: RefCell<HashMap<(ChannelId, PortId), CellInput>>,
     channel_cache: RefCell<HashMap<ChannelId, IbcChannel>>,
-    connection_cache: RefCell<Option<(IbcConnections, CellInput)>>,
+    #[allow(clippy::type_complexity)]
+    connection_cache:
+        RefCell<HashMap<ClientType, (IbcConnections, CellInput, Vec<IdentifiedConnectionEnd>)>>,
     packet_input_data: RefCell<HashMap<(ChannelId, PortId, Sequence), CellInput>>,
 
     cached_tx_assembler_address: RwLock<Option<Address>>,
@@ -175,30 +182,31 @@ impl Ckb4IbcChain {
         Ok(address)
     }
 
-    pub fn get_converter(&self) -> Converter {
-        if self.connection_cache.borrow().is_none() {
-            let _ = self.query_connection_and_cache().unwrap();
+    pub fn get_converter(&self) -> Result<Converter, Error> {
+        if self.connection_cache.borrow().is_empty() {
+            self.query_connection_and_cache()?;
         }
-        Converter {
+        Ok(Converter {
             channel_input_data: self.channel_input_data.borrow(),
             channel_cache: self.channel_cache.borrow(),
             config: &self.config,
             connection_cache: self.connection_cache.borrow(),
-            client_outpoint: &self.client_outpoint,
+            client_outpoints: self.client_outpoints.borrow(),
             packet_input_data: self.packet_input_data.borrow(),
             packet_owner: Default::default(),
             chan_contract_outpoint: &self.channel_outpoint,
             packet_contract_outpoint: &self.packet_outpoint,
             conn_contract_outpoint: &self.connection_outpoint,
-        }
+        })
     }
 
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
-        let (monitor, monitor_tx) = Ckb4IbcEventMonitor::new(
+        let (monitor, monitor_tx, internal_tx) = Ckb4IbcEventMonitor::new(
             self.rt.clone(),
             self.rpc_client.clone(),
             self.config.clone(),
         );
+        self.tx_internal_cmd = Some(internal_tx);
         std::thread::spawn(move || monitor.run());
         Ok(monitor_tx)
     }
@@ -210,7 +218,7 @@ impl Ckb4IbcChain {
         sequence: Sequence,
     ) -> Result<(IbcPacket, CellInput), Error> {
         let script = Script::new_builder()
-            .code_hash(self.get_converter().get_packet_code_hash())
+            .code_hash(self.get_converter()?.get_packet_code_hash())
             .hash_type(ScriptHashType::Type.into())
             .args(
                 PacketArgs {
@@ -266,19 +274,19 @@ impl Ckb4IbcChain {
         port_id: PortId,
         is_open: bool,
     ) -> Result<ChannelEnd, Error> {
-        let channel_code_hash = self.get_converter().get_channel_code_hash();
+        let channel_code_hash = self.get_converter()?.get_channel_code_hash();
+        let client_id = self
+            .config
+            .lc_client_type_args(*self.counterparty_client_type.borrow())?;
+        let channel_args = ChannelArgs {
+            client_id,
+            open: is_open,
+            channel_id: get_channel_idx(&channel_id)?,
+            port_id: convert_port_id_to_array(&port_id)?,
+        };
         let script = Script::new_builder()
             .code_hash(channel_code_hash)
-            .args(
-                ChannelArgs {
-                    client_id: self.config.client_id(),
-                    open: is_open,
-                    channel_id: get_channel_idx(&channel_id)?,
-                    port_id: convert_port_id_to_array(&port_id)?,
-                }
-                .to_args()
-                .pack(),
-            )
+            .args(channel_args.to_args().pack())
             .hash_type(ScriptHashType::Type.into())
             .build();
         let search_key = get_search_key(script);
@@ -302,9 +310,7 @@ impl Ckb4IbcChain {
                 let tx = match tx_resp.inner {
                     ckb_jsonrpc_types::Either::Left(r) => r,
                     ckb_jsonrpc_types::Either::Right(json_bytes) => {
-                        let bytes = json_bytes.as_bytes();
-                        let tx: TransactionView = serde_json::from_slice(bytes).unwrap();
-                        tx
+                        serde_json::from_slice::<TransactionView>(json_bytes.as_bytes()).unwrap()
                     }
                 };
                 let channel_end = extract_channel_end_from_tx(tx)?;
@@ -331,68 +337,52 @@ impl Ckb4IbcChain {
     }
 
     fn clear_cache(&mut self) {
-        let channel_data = self.channel_input_data.get_mut();
-        channel_data.clear();
-
-        let channel_cache = self.channel_cache.get_mut();
-        channel_cache.clear();
-
-        let packet_data = self.packet_input_data.get_mut();
-        packet_data.clear();
-
-        self.connection_cache.swap(&RefCell::new(None));
+        self.channel_input_data.get_mut().clear();
+        self.channel_cache.get_mut().clear();
+        self.packet_input_data.get_mut().clear();
+        self.connection_cache.get_mut().clear();
     }
 
-    fn query_connection_and_cache(
-        &self,
-    ) -> Result<(Vec<IdentifiedConnectionEnd>, IbcConnections, CellInput), Error> {
-        let search_key = get_connection_search_key(&self.config);
-
-        let cells_rpc_result = self
+    fn query_connection_and_cache(&self) -> Result<(), Error> {
+        let search_key = get_connection_search_key(&self.config, None)?;
+        let future = self
             .rpc_client
-            .fetch_live_cells(search_key, 1, None)
-            .and_then(|cells| async {
-                let cell = cells
-                    .objects
-                    .into_iter()
-                    .next()
-                    .ok_or(Error::query("get ibc connection cell failed 1".to_string()))?;
-                let tx_resp = self
-                    .rpc_client
-                    .get_transaction(&cell.out_point.tx_hash)
-                    .await?;
-                Ok((
-                    tx_resp,
-                    CellInput::new_builder()
+            // FIXME: use `u32::MAX` to search all cells in one action may be a little heavy if cells are too much,
+            //        use `loop` expression to progressivly search
+            .fetch_live_cells(search_key, u32::MAX, None)
+            .and_then(|response| async {
+                let mut resps = vec![];
+                for cell in response.objects {
+                    let tx = self
+                        .rpc_client
+                        .get_transaction(&cell.out_point.tx_hash)
+                        .await?;
+                    let cell_input = CellInput::new_builder()
                         .previous_output(cell.out_point.into())
-                        .build(),
-                ))
+                        .build();
+                    let client_id = hex::encode(cell.output.lock.args.into_bytes());
+                    resps.push((tx, cell_input, client_id));
+                }
+                Ok(resps)
             });
-        let r = self.rt.block_on(cells_rpc_result);
-        // let (transaction, cell_input) = self.rt.block_on(cells_rpc_result)?;
-        let (transaction, cell_input) = match r {
-            Ok(r) => r,
-            Err(e) => {
-                print!("{e}");
-                return Err(e);
-            }
-        };
-        let tx = transaction
-            .ok_or(Error::query("get ibc connection cell failed 2".to_string()))?
-            .transaction
-            .ok_or(Error::query("get ibc connection cell failed 3".to_string()))?;
-        let tx = match tx.inner {
-            ckb_jsonrpc_types::Either::Left(r) => r,
-            ckb_jsonrpc_types::Either::Right(json_bytes) => {
-                let bytes = json_bytes.as_bytes();
-                let tx: TransactionView = serde_json::from_slice(bytes).unwrap();
-                tx
-            }
-        };
-        let (connections, ibc_connection) = extract_connections_from_tx(tx)?;
-        let result = std::cell::RefCell::new(Some((ibc_connection.clone(), cell_input.clone())));
-        self.connection_cache.swap(&result);
-        Ok((connections, ibc_connection, cell_input))
+        let mut cache = self.connection_cache.borrow_mut();
+        let prefix = self.query_commitment_prefix()?;
+        for (transaction, cell_input, client_id) in self.rt.block_on(future)? {
+            let tx = transaction
+                .expect("empty transaction response")
+                .transaction
+                .expect("empty transaction view");
+            let tx = match tx.inner {
+                ckb_jsonrpc_types::Either::Left(tx) => tx,
+                ckb_jsonrpc_types::Either::Right(bytes) => {
+                    serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
+                }
+            };
+            let (connections, ibc_connection) = extract_connections_from_tx(tx, &prefix)?;
+            let client_type = self.config.lc_client_type(&client_id)?;
+            cache.insert(client_type, (ibc_connection, cell_input, connections));
+        }
+        Ok(())
     }
 
     pub fn complete_tx_with_secp256k1_change_and_envelope(
@@ -423,17 +413,21 @@ impl Ckb4IbcChain {
             .build();
         Ok(result)
     }
+
+    fn sync_counterparty_client_type(&self, client_type: ClientType) {
+        *self.counterparty_client_type.borrow_mut() = client_type;
+        if let Some(cmd) = &self.tx_internal_cmd {
+            cmd.send(client_type)
+                .expect("send counterparty_client_type");
+        }
+    }
 }
 
 impl ChainEndpoint for Ckb4IbcChain {
     type LightBlock = CkbLightBlock;
-
     type Header = CkbHeader;
-
     type ConsensusState = CkbConsensusState;
-
     type ClientState = CkbClientState;
-
     type SigningKeyPair = Secp256k1KeyPair;
 
     fn config(&self) -> ChainConfig {
@@ -450,14 +444,25 @@ impl ChainEndpoint for Ckb4IbcChain {
             rt.block_on(init_sighash_celldep(rpc_client.as_ref()))?;
         }
 
-        let client_cell = rt.block_on(rpc_client.search_cell_by_typescript(
-            &TYPE_ID_CODE_HASH.pack(),
-            &config.client_type_args.as_bytes().to_owned(),
-        ))?;
-        if client_cell.is_none() {
-            return Err(Error::other_error(
-                "invalid `client type args not found` option".to_owned(),
-            ));
+        let mut client_outpoints = HashMap::new();
+        for (
+            client_type,
+            LightClientItem {
+                chain_id,
+                client_cell_type_args,
+            },
+        ) in &config.onchain_light_clients
+        {
+            let client_cell = rt.block_on(rpc_client.search_cell_by_typescript(
+                &TYPE_ID_CODE_HASH.pack(),
+                &client_cell_type_args.as_bytes().to_owned(),
+            ))?;
+            let Some(cell) = client_cell else {
+                return Err(Error::other_error(format!(
+                    "client cell not found on {chain_id}"
+                )));
+            };
+            client_outpoints.insert(*client_type, cell.out_point);
         }
 
         let conn_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
@@ -465,9 +470,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             &config.connection_type_args.as_bytes().to_owned(),
         ))?;
         if conn_contract_cell.is_none() {
-            return Err(Error::other_error(
-                "invalid `connection type args not found` option".to_owned(),
-            ));
+            return Err(Error::other_error("connection cell not found".to_owned()));
         }
 
         let chan_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
@@ -475,9 +478,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             &config.channel_type_args.as_bytes().to_owned(),
         ))?;
         if chan_contract_cell.is_none() {
-            return Err(Error::other_error(
-                "invalid `channel type args not found` option".to_owned(),
-            ));
+            return Err(Error::other_error("channel contract not found".to_owned()));
         }
 
         let packet_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
@@ -485,9 +486,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             &config.packet_type_args.as_bytes().to_owned(),
         ))?;
         if packet_contract_cell.is_none() {
-            return Err(Error::other_error(
-                "invalid `packet type args not found` option".to_owned(),
-            ));
+            return Err(Error::other_error("packet contract not found".to_owned()));
         }
         let keybase =
             KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
@@ -498,13 +497,15 @@ impl ChainEndpoint for Ckb4IbcChain {
             keybase,
             cached_network: RwLock::new(None),
             tx_monitor_cmd: None,
-            client_outpoint: client_cell.unwrap().out_point,
+            tx_internal_cmd: None,
+            client_outpoints: RefCell::new(client_outpoints),
             connection_outpoint: conn_contract_cell.unwrap().out_point,
             channel_outpoint: chan_contract_cell.unwrap().out_point,
             packet_outpoint: packet_contract_cell.unwrap().out_point,
+            counterparty_client_type: RefCell::new(ClientType::Mock),
             channel_input_data: RefCell::new(HashMap::new()),
             channel_cache: RefCell::new(HashMap::new()),
-            connection_cache: RefCell::new(None),
+            connection_cache: RefCell::new(HashMap::new()),
             packet_input_data: RefCell::new(HashMap::new()),
             cached_tx_assembler_address: RwLock::new(None),
         };
@@ -564,9 +565,9 @@ impl ChainEndpoint for Ckb4IbcChain {
         let mut txs = Vec::new();
         let mut tx_hashes = Vec::new();
         let mut events = Vec::new();
-        let converter = self.get_converter();
         let mut result_events = Vec::new();
         for msg in tracked_msgs.msgs {
+            let converter = self.get_converter()?;
             let CkbTxInfo {
                 unsigned_tx,
                 envelope,
@@ -575,11 +576,12 @@ impl ChainEndpoint for Ckb4IbcChain {
             } = convert_msg_to_ckb_tx(msg, &converter)?;
             if unsigned_tx.is_none() {
                 if let Some(e) = event {
-                    let ibc_event = IbcEventWithHeight {
-                        event: e,
-                        height: Height::new(1, 1).unwrap(),
-                        tx_hash: [0; 32],
-                    };
+                    if let IbcEvent::CreateClient(e) = &e {
+                        let client_type = e.0.client_type;
+                        info!("the counterparty client type of Ckb4Ibc is set as {client_type}");
+                        self.sync_counterparty_client_type(client_type);
+                    }
+                    let ibc_event = IbcEventWithHeight::new(e, Height::default());
                     result_events.push(ibc_event);
                 }
                 continue;
@@ -630,26 +632,25 @@ impl ChainEndpoint for Ckb4IbcChain {
                     )
                 })
         });
-        let resps = self.rt.block_on(futures::future::join_all(resps));
-        for (i, res) in resps.iter().enumerate() {
-            match res {
-                Ok(_) => {
+        let responses = self.rt.block_on(futures::future::join_all(resps));
+        for (i, response) in responses.iter().enumerate() {
+            match response {
+                Ok(height) => {
                     if let Some(event) = events.get(i).unwrap().clone() {
                         let tx_hash: [u8; 32] = tx_hashes.get(i).unwrap().clone().into();
                         let ibc_event_with_height = IbcEventWithHeight {
                             event,
-                            height: Height::new(1, 1).unwrap(),
+                            height: Height::from_noncosmos_height(*height),
                             tx_hash,
                         };
                         result_events.push(ibc_event_with_height);
                     }
                 }
-                Err(_) => {
-                    return Err(Error::send_tx("todo".into()));
+                Err(e) => {
+                    return Err(Error::send_tx(e.to_string()));
                 }
             }
         }
-        drop(converter);
         self.clear_cache();
 
         Ok(result_events)
@@ -668,6 +669,8 @@ impl ChainEndpoint for Ckb4IbcChain {
         _target: Height,
         _client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
+        // Ckb4Ibc doesn't have light client module until we insert cell-emitter crate to
+        // relay ckb headers and cells to Axon endpoint
         Ok(CkbLightBlock {})
     }
 
@@ -676,6 +679,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _update: &UpdateClient,
         _client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
+        // Ckb4Ibc doesn't have to check the misbehaviour on Axon's metadata cell
         Ok(None)
     }
 
@@ -716,12 +720,13 @@ impl ChainEndpoint for Ckb4IbcChain {
     }
 
     fn query_commitment_prefix(&self) -> Result<CommitmentPrefix, Error> {
-        Ok(vec![0u8].try_into().unwrap())
+        CommitmentPrefix::try_from(self.config.store_prefix.as_bytes().to_vec())
+            .map_err(|_| Error::ics02(ClientError::empty_prefix()))
     }
 
     fn query_application_status(&self) -> Result<ChainStatus, Error> {
         let header = self.rt.block_on(self.rpc_client.get_tip_header())?;
-        let height = Height::new(1, header.inner.number.value()).unwrap();
+        let height = Height::from_noncosmos_height(header.inner.number.value());
         let ts_milisec = header.inner.timestamp.value();
         let timestamp = Timestamp::from_nanoseconds(ts_milisec * 1_000_000).unwrap();
         Ok(ChainStatus { height, timestamp })
@@ -731,20 +736,37 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryClientStatesRequest,
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
-        Ok(vec![])
+        Ok(self
+            .config
+            .onchain_light_clients
+            .keys()
+            .map(|client_type| {
+                let client_id = self.config.lc_client_id(*client_type).unwrap();
+                IdentifiedAnyClientState {
+                    client_id: client_id.clone(),
+                    client_state: CkbClientState {
+                        chain_id: self.id(),
+                        latest_height: Height::default(),
+                    }
+                    .into(),
+                }
+            })
+            .collect())
     }
 
     fn query_client_state(
         &self,
-        _request: QueryClientStateRequest,
+        request: QueryClientStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
-        Ok((
-            AnyClientState::Ckb(CkbClientState {
-                chain_id: self.config.counter_chain.clone(),
-            }),
-            None,
-        ))
+        let chain_id = self.config.lc_chain_id(&request.client_id.to_string())?;
+        let client_state = CkbClientState {
+            chain_id,
+            latest_height: Height::default(),
+        };
+        let client_type = self.config.lc_client_type(&request.client_id.to_string())?;
+        self.sync_counterparty_client_type(client_type);
+        Ok((client_state.into(), None))
     }
 
     fn query_consensus_state(
@@ -752,20 +774,14 @@ impl ChainEndpoint for Ckb4IbcChain {
         _request: QueryConsensusStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error> {
-        Ok((
-            AnyConsensusState::Ckb(CkbConsensusState {
-                timestamp: Time::now(),
-                commitment_root: CommitmentRoot::from_bytes(&[]),
-            }),
-            None,
-        ))
+        Ok((CkbConsensusState {}.into(), None))
     }
 
     fn query_consensus_state_heights(
         &self,
         _request: QueryConsensusStateHeightsRequest,
     ) -> Result<Vec<Height>, Error> {
-        Ok(vec![])
+        todo!()
     }
 
     fn query_upgraded_client_state(
@@ -786,16 +802,29 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryConnectionsRequest,
     ) -> Result<Vec<IdentifiedConnectionEnd>, Error> {
-        let (result, _, _) = self.query_connection_and_cache()?;
-        Ok(result)
+        self.query_connection_and_cache()?;
+        let connections = self
+            .connection_cache
+            .borrow()
+            .iter()
+            .flat_map(|(_, (_, _, connection))| connection.clone())
+            .collect();
+        Ok(connections)
     }
 
     fn query_client_connections(
         &self,
-        _request: QueryClientConnectionsRequest,
+        request: QueryClientConnectionsRequest,
     ) -> Result<Vec<ConnectionId>, Error> {
-        let (result, _, _) = self.query_connection_and_cache()?;
-        Ok(result.into_iter().map(|c| c.id().clone()).collect())
+        self.query_connection_and_cache()?;
+        let client_type = self.config.lc_client_type(&request.client_id.to_string())?;
+        if let Some((_, _, connection)) = self.connection_cache.borrow().get(&client_type) {
+            self.sync_counterparty_client_type(client_type);
+            let connection_ids = connection.iter().map(|v| v.connection_id.clone()).collect();
+            Ok(connection_ids)
+        } else {
+            Ok(vec![])
+        }
     }
 
     fn query_connection(
@@ -803,15 +832,20 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryConnectionRequest,
         _include_proof: IncludeProof,
     ) -> Result<(ConnectionEnd, Option<MerkleProof>), Error> {
-        let (connections, _, _) = self.query_connection_and_cache()?;
-        let idx = get_connection_idx(&request.connection_id)? as usize;
-        let connection_end = connections
+        let connections = self.query_connections(QueryConnectionsRequest { pagination: None })?;
+        let index = get_connection_index_by_id(&request.connection_id)? as usize;
+        let connection = connections
             .into_iter()
-            .nth(idx)
+            .nth(index)
             .ok_or(Error::ckb_conn_id_invalid(
                 request.connection_id.as_str().to_string(),
-            ))?;
-        Ok((connection_end.connection_end, None))
+            ))?
+            .connection_end;
+        let client_type = self
+            .config
+            .lc_client_type(&connection.client_id().to_string())?;
+        self.sync_counterparty_client_type(client_type);
+        Ok((connection, None))
     }
 
     fn query_connection_channels(
@@ -825,7 +859,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         request: QueryChannelsRequest,
     ) -> Result<Vec<IdentifiedChannelEnd>, Error> {
-        let channel_code_hash = self.get_converter().get_channel_code_hash();
+        let channel_code_hash = self.get_converter()?.get_channel_code_hash();
         let script = Script::new_builder()
             .code_hash(channel_code_hash)
             .args("".pack())
@@ -836,7 +870,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             if let Some(pagination) = request.pagination {
                 (pagination.limit as u32, pagination.offset as u32)
             } else {
-                (100, 0)
+                (u32::MAX, 0)
             }
         };
         let json_bytes = JsonBytes::from_vec(index.to_be_bytes().to_vec());
@@ -852,17 +886,19 @@ impl ChainEndpoint for Ckb4IbcChain {
             .rt
             .block_on(futures::future::join_all(txs_rpc_result))
             .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|resp| resp.tx_status.status == Status::Committed && resp.transaction.is_some())
+            .filter_map(|tx| {
+                if let Ok(Some(tx)) = tx {
+                    if tx.tx_status.status == Status::Committed {
+                        return Some(tx);
+                    }
+                }
+                None
+            })
             .flat_map(|tx| {
-                let tx_resp = tx.transaction.unwrap();
-                let tx = match tx_resp.inner {
-                    ckb_jsonrpc_types::Either::Left(r) => r,
-                    ckb_jsonrpc_types::Either::Right(json_bytes) => {
-                        let bytes = json_bytes.as_bytes();
-                        let tx: TransactionView = serde_json::from_slice(bytes).unwrap();
-                        tx
+                let tx = match tx.transaction.unwrap().inner {
+                    ckb_jsonrpc_types::Either::Left(tx) => tx,
+                    ckb_jsonrpc_types::Either::Right(bytes) => {
+                        serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
                     }
                 };
                 extract_channel_end_from_tx(tx)
@@ -1003,7 +1039,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .filter(|(packet, _)| packet.status == PacketStatus::InboxAck)
             .map(|(p, _)| Sequence::from(p.packet.sequence as u64))
             .collect::<Vec<_>>();
-        Ok((result, Height::new(u64::MAX, u64::MAX).unwrap()))
+        Ok((result, Height::default()))
     }
 
     fn query_unreceived_acknowledgements(
@@ -1055,22 +1091,23 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn build_client_state(
         &self,
-        _height: Height,
-        _settings: ClientSettings,
+        height: Height,
+        settings: ClientSettings,
     ) -> Result<Self::ClientState, Error> {
-        Ok(CkbClientState {
-            chain_id: self.config.counter_chain.clone(),
-        })
+        match settings {
+            ClientSettings::AxonCkb | ClientSettings::Other => Ok(CkbClientState {
+                chain_id: self.id(),
+                latest_height: height,
+            }),
+            _ => Err(Error::build_client_state_failure()),
+        }
     }
 
     fn build_consensus_state(
         &self,
         _light_block: Self::LightBlock,
     ) -> Result<Self::ConsensusState, Error> {
-        Ok(CkbConsensusState {
-            timestamp: Time::now(),
-            commitment_root: CommitmentRoot::from_bytes(&[]),
-        })
+        Ok(CkbConsensusState {})
     }
 
     fn build_header(
@@ -1119,6 +1156,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok((
             Some(AnyClientState::Ckb(CkbClientState {
                 chain_id: self.id(),
+                latest_height: height,
             })),
             get_dummy_merkle_proof(height),
         ))

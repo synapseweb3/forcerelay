@@ -21,6 +21,28 @@ pub struct Height {
     revision_height: u64,
 }
 
+// FIXME: the place where uses default value of Height means no need to care about it for now, and
+// set `1u64` as value is to prevent the casting issue of from Any to Object
+impl Default for Height {
+    fn default() -> Self {
+        Self {
+            revision_number: 1u64,
+            revision_height: 1u64,
+        }
+    }
+}
+
+// `revision_number` can be ignored for non-cosmos chains, and the reason to set as `1u64`
+// is the same as the Default trait above
+impl Height {
+    pub fn from_noncosmos_height(height: u64) -> Self {
+        Self {
+            revision_number: 1u64,
+            revision_height: height,
+        }
+    }
+}
+
 impl Height {
     pub fn new(revision_number: u64, revision_height: u64) -> Result<Self, Error> {
         if revision_height == 0 {

@@ -960,7 +960,7 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=e57a669#e57a669663a4de283d92ce2f538c5cb001035f44"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=fe67bd3#fe67bd3c1ccb519077276bc4844e0e64d5108094"
 dependencies = [
  "bytes",
  "ethereum-types",
@@ -1246,6 +1246,7 @@ dependencies = [
  "reqwest",
  "rlp",
  "secp256k1",
+ "serde",
  "serde_json",
  "tendermint-rpc",
  "tiny-keccak",
@@ -3708,6 +3709,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "strum",
  "subtle-encoding",
  "tendermint",
  "tendermint-light-client-verifier",

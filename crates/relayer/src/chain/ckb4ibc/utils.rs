@@ -8,17 +8,20 @@ use ckb_ics_axon::consts::{
 };
 use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
-use ckb_ics_axon::ConnectionArgs;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
 use ckb_types::core::{Capacity, ScriptHashType};
-use ckb_types::packed::{Byte32, Bytes, BytesOpt, Script};
+use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script};
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
+use ibc_relayer_types::core::ics04_channel::channel::ChannelEnd;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ConnectionId, PortId};
 use ibc_relayer_types::proofs::{ConsensusProof, Proofs};
 use ibc_relayer_types::Height;
 use tiny_keccak::{Hasher, Keccak};
+
+use super::message::MsgToTxConverter;
 
 pub fn keccak256(slice: &[u8]) -> [u8; 32] {
     let mut hasher = Keccak::v256();
@@ -83,44 +86,60 @@ pub fn get_channel_idx(id: &ChannelId) -> Result<u16, Error> {
         .map_err(|_| Error::ckb_chan_id_invalid(s.to_string()))
 }
 
-pub fn get_connection_id(idx: u16) -> ConnectionId {
-    ConnectionId::from_str(&format!("{CONNECTION_ID_PREFIX}{idx}")).unwrap()
+pub fn get_connection_id_prefix(client_id: &str) -> String {
+    // to keep connection_id unique in global
+    format!("{}-{CONNECTION_ID_PREFIX}", &client_id[..6])
 }
 
-pub fn get_connection_idx(id: &ConnectionId) -> Result<u16, Error> {
+pub fn generate_connection_id(idx: u16, client_id: &str) -> ConnectionId {
+    ConnectionId::from_str(&format!("{}{idx}", get_connection_id_prefix(client_id))).unwrap()
+}
+
+pub fn get_connection_index_by_id(id: &ConnectionId) -> Result<u16, Error> {
     let s = id.as_str();
     let result = s
-        .strip_prefix(CONNECTION_ID_PREFIX)
+        .split('-')
+        .last()
         .ok_or(Error::ckb_conn_id_invalid(s.to_string()))?;
     result
         .parse::<u16>()
         .map_err(|_| Error::ckb_conn_id_invalid(s.to_string()))
 }
 
-pub fn get_connection_search_key(config: &ChainConfig) -> SearchKey {
-    let script = get_connection_lock_script(config);
-    SearchKey {
+pub fn get_connection_search_key(
+    config: &ChainConfig,
+    client_type: Option<ClientType>,
+) -> Result<SearchKey, Error> {
+    let mut client_id = None;
+    if let Some(client_type) = client_type {
+        client_id = Some(config.lc_client_id(client_type)?.to_string());
+    }
+    let script = get_connection_lock_script(config, client_id)?;
+    Ok(SearchKey {
         script: script.into(),
         script_type: ScriptType::Lock,
         filter: None,
         with_data: None,
         group_by_transaction: None,
-    }
+    })
 }
 
-pub fn get_connection_lock_script(config: &ChainConfig) -> Script {
-    Script::new_builder()
+pub fn get_connection_lock_script(
+    config: &ChainConfig,
+    client_id: Option<String>,
+) -> Result<Script, Error> {
+    let mut client_cell_type_args = vec![];
+    if let Some(client_id) = client_id {
+        let client_type = config.lc_client_type(&client_id)?;
+        client_cell_type_args.append(&mut config.lc_client_type_args(client_type)?.to_vec());
+    }
+    let script = Script::new_builder()
         .code_hash(get_script_hash(&config.connection_type_args))
-        .args(
-            ConnectionArgs {
-                client_id: config.client_type_args.clone().into(),
-            }
-            .client_id
-            .as_slice()
-            .pack(),
-        )
+        // fetch specific (concrete client cell) or all (prefix search)
+        .args(client_cell_type_args.pack())
         .hash_type(ScriptHashType::Type.into())
-        .build()
+        .build();
+    Ok(script)
 }
 
 pub fn get_search_key(script: Script) -> SearchKey {
@@ -150,17 +169,55 @@ pub fn get_packet_capacity() -> Capacity {
 
 pub fn get_dummy_merkle_proof(height: Height) -> Proofs {
     let encoded = rlp::encode(&ObjectProof::default()).to_vec();
-    let consensus_proof = ConsensusProof::new(
-        vec![0u8].try_into().unwrap(),
-        Height::new(1, u64::MAX).unwrap(),
-    )
-    .unwrap();
+    let useless_client_proof = vec![0u8].try_into().unwrap();
+    let useless_consensus_proof =
+        ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
     Proofs::new(
         encoded.try_into().unwrap(),
-        Some(vec![0u8].try_into().unwrap()),
-        Some(consensus_proof),
+        Some(useless_client_proof),
+        Some(useless_consensus_proof),
         None,
         height,
     )
     .unwrap()
+}
+
+pub fn get_client_outpoint(
+    converter: &impl MsgToTxConverter,
+    client_id: &str,
+) -> Result<OutPoint, Error> {
+    converter
+        .get_client_outpoint(client_id)
+        .cloned()
+        .ok_or(Error::other_error(format!("not found {client_id}")))
+}
+
+pub fn get_client_id_from_channel(
+    channel: &ChannelEnd,
+    converter: &impl MsgToTxConverter,
+) -> Result<([u8; 32], String), Error> {
+    let connection_id = channel.connection_hops[0].clone();
+    extract_client_id_by_connection_id(&connection_id.to_string(), converter)
+}
+
+pub fn extract_client_id_by_connection_id(
+    connection_id: &String,
+    converter: &impl MsgToTxConverter,
+) -> Result<([u8; 32], String), Error> {
+    let connection_id = connection_id
+        .parse()
+        .map_err(|_| Error::other_error(format!("bad connection_id {connection_id}")))?;
+    let idx = get_connection_index_by_id(&connection_id)
+        .map_err(|_| Error::other_error(format!("bad connection_id {connection_id}")))?;
+    let ibc_conn = converter.get_ibc_connections_by_connection_id(&connection_id)?;
+    let connection_end = ibc_conn
+        .connections
+        .get(idx as usize)
+        .ok_or(Error::other_error(format!("exceed connection index {idx}")))?;
+    let client_id = connection_end.client_id.clone();
+    let client_cell_type_args = hex::decode(&client_id)
+        .map_err(|_| Error::other_error(format!("client_id {client_id} hex decodeable")))?
+        .try_into()
+        .map_err(|_| Error::other_error(format!("client_id {client_id} size = 32")))?;
+    Ok((client_cell_type_args, client_id))
 }

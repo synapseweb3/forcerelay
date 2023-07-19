@@ -15,14 +15,15 @@ use crate::core::ics02_client::{
     client_state::ClientState as Ics02ClientState, error::Error as Ics02Error,
 };
 
-pub const CLIENT_STATE_TYPE_URL: &str = "/ibc.lightclients.ckb.v1.ClientState";
+pub const CKB_CLIENT_STATE_TYPE_URL: &str = "/ibc.lightclients.ckb.v1.ClientState";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ClientState {
+pub struct CkbClientState {
     pub chain_id: ChainId,
+    pub latest_height: Height,
 }
 
-impl Ics02ClientState for ClientState {
+impl Ics02ClientState for CkbClientState {
     fn chain_id(&self) -> ChainId {
         self.chain_id.clone()
     }
@@ -32,7 +33,7 @@ impl Ics02ClientState for ClientState {
     }
 
     fn latest_height(&self) -> Height {
-        Height::new(1, 1).unwrap()
+        self.latest_height
     }
 
     fn frozen_height(&self) -> Option<Height> {
@@ -52,14 +53,14 @@ impl Ics02ClientState for ClientState {
     }
 }
 
-impl Protobuf<Any> for ClientState {}
+impl Protobuf<Any> for CkbClientState {}
 
-impl TryFrom<Any> for ClientState {
+impl TryFrom<Any> for CkbClientState {
     type Error = Ics02Error;
 
     fn try_from(raw: Any) -> Result<Self, Self::Error> {
         match raw.type_url.as_str() {
-            CLIENT_STATE_TYPE_URL => {
+            CKB_CLIENT_STATE_TYPE_URL => {
                 let value = serde_json::from_slice::<Self>(&raw.value).unwrap();
                 Ok(value)
             }
@@ -68,10 +69,10 @@ impl TryFrom<Any> for ClientState {
     }
 }
 
-impl From<ClientState> for Any {
-    fn from(value: ClientState) -> Self {
+impl From<CkbClientState> for Any {
+    fn from(value: CkbClientState) -> Self {
         Any {
-            type_url: CLIENT_STATE_TYPE_URL.to_string(),
+            type_url: CKB_CLIENT_STATE_TYPE_URL.to_string(),
             value: serde_json::to_vec(&value).expect("encoding to `Any` from `CKbClientState`"),
         }
     }

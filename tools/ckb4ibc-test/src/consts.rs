@@ -1,0 +1,8 @@
+use ckb_types::{h256, H256};
+
+pub const CONNECTION_CODE_HASH: H256 =
+    h256!("0xcf6e0c0148123081af1deda0ef162d39cfdfe1ea6565d3689009c1f3562a5e82");
+pub const CHANNEL_CODE_HASH: H256 =
+    h256!("0x9ea73e5003f580eb4f380944b1de0711c6b5a4bb96c6f9bf8186203b7c684606");
+pub const CLIENT_TYPE_ARGS: H256 =
+    h256!("0xccffb188453b890936c3b1ba81743d6c48a26216d57cf9f19f735af9d4eefbed");

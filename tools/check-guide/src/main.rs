@@ -44,7 +44,7 @@ lazy_static! {
     static ref TEMPLATE_RE: Regex = Regex::new(r"\{{2}#template.*templates/commands/hermes/.*\}\}").unwrap();
 
     // FileReader for mdbook_template
-    static ref FILEREADER: SystemFileReader = SystemFileReader::default();
+    static ref FILEREADER: SystemFileReader = SystemFileReader;
 }
 
 fn check_correctness<'a, T>(command: T) -> Result<(), ParseError>

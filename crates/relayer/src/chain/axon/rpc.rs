@@ -6,7 +6,7 @@ use ethers::types::{BlockId, BlockNumber};
 use reqwest::Client;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tendermint_rpc::{Error as TmError, Url};
+use tendermint_rpc::Url;
 
 pub type Response<T> = Result<T, Error>;
 
@@ -58,7 +58,7 @@ macro_rules! jsonrpc {
         let resp = c
             .send()
             .await
-            .map_err(|_| Error::rpc(url.clone(), TmError::invalid_url(url)))?;
+            .map_err(|e| Error::rpc_response(format!("url: {}, error: {}", url, e)))?;
         let output = resp
             .json::<jsonrpc_core::response::Output>()
             .await

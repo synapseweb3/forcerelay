@@ -1,2 +1,2 @@
 #[derive(Debug, Clone, Default)]
-pub struct CkbLightBlock {}
+pub struct AxonLightBlock {}

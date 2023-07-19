@@ -4,14 +4,15 @@ use std::time::Duration;
 
 use ckb_ics_axon::handler::{IbcPacket, PacketStatus};
 use ckb_ics_axon::object::State as CkbState;
-use ckb_ics_axon::{ChannelArgs, ConnectionArgs};
+use ckb_ics_axon::ChannelArgs;
 use ckb_jsonrpc_types::{Status, TransactionView};
 use ckb_sdk::rpc::ckb_indexer::SearchKey;
 use ckb_types::core::ScriptHashType;
 use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, Sender};
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::height::Height;
 use ibc_relayer_types::core::ics03_connection::events::{
     Attributes, OpenInit as ConnectionOpenInit, OpenTry as ConnectionOpenTry,
@@ -42,14 +43,16 @@ use crate::event::IbcEventWithHeight;
 use super::cache_set::CacheSet;
 use super::utils::{get_script_hash, get_search_key};
 
-// todo add cell emitter here
+// TODO: add cell emitter here
 pub struct Ckb4IbcEventMonitor {
     rt: Arc<TokioRuntime>,
     rpc_client: Arc<RpcClient>,
     rx_cmd: Receiver<MonitorCmd>,
+    rx_internal: Receiver<ClientType>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
     config: ChainConfig,
     cache_set: RwLock<CacheSet<H256>>,
+    counterparty_client_type: ClientType,
 }
 
 impl Ckb4IbcEventMonitor {
@@ -57,17 +60,20 @@ impl Ckb4IbcEventMonitor {
         rt: Arc<TokioRuntime>,
         rpc_client: Arc<RpcClient>,
         config: ChainConfig,
-    ) -> (Self, TxMonitorCmd) {
+    ) -> (Self, TxMonitorCmd, Sender<ClientType>) {
         let (tx_cmd, rx_cmd) = crossbeam_channel::unbounded();
+        let (tx_internal, rx_internal) = crossbeam_channel::unbounded();
         let monitor = Ckb4IbcEventMonitor {
             rt,
             rpc_client,
             rx_cmd,
+            rx_internal,
             event_bus: EventBus::default(),
             config,
             cache_set: RwLock::new(CacheSet::new(512)),
+            counterparty_client_type: ClientType::Mock,
         };
-        (monitor, TxMonitorCmd::new(tx_cmd))
+        (monitor, TxMonitorCmd::new(tx_cmd), tx_internal)
     }
 
     pub fn run(mut self) {
@@ -81,12 +87,17 @@ impl Ckb4IbcEventMonitor {
             }
         }
     }
+
     async fn run_once(&mut self) -> Next {
         if let Ok(cmd) = self.rx_cmd.try_recv() {
             match cmd {
                 MonitorCmd::Shutdown => return Next::Abort,
                 MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
             }
+        }
+        // block here until the counterparty is revealed
+        if let Ok(client_type) = self.rx_internal.recv() {
+            self.counterparty_client_type = client_type;
         }
         let result = async {
             tokio::select! {
@@ -113,12 +124,11 @@ impl Ckb4IbcEventMonitor {
             .code_hash(connection_code_hash)
             .hash_type(ScriptHashType::Type.into())
             .args(
-                ConnectionArgs {
-                    client_id: self.config.client_type_args.clone().into(),
-                }
-                .client_id
-                .as_slice()
-                .pack(),
+                self.config
+                    .lc_client_type_args(self.counterparty_client_type)
+                    .unwrap()
+                    .as_slice()
+                    .pack(),
             )
             .build();
         let key = get_search_key(script);
@@ -141,7 +151,7 @@ impl Ckb4IbcEventMonitor {
             return Ok(EventBatch {
                 chain_id: self.config.id.clone(),
                 tracking_id: TrackingId::Static("ckb connection events collection"),
-                height: Height::new(1, 1).unwrap(), // todo
+                height: Height::default(),
                 events: vec![],
             });
         }
@@ -154,10 +164,7 @@ impl Ckb4IbcEventMonitor {
                 CkbState::Init => {
                     let attrs = Attributes {
                         connection_id: Some(ConnectionId::from_str(&idx.to_string()).unwrap()), // todo connection id here is invalid
-                        client_id: ClientId::from_str(
-                            &String::from_utf8(self.config.client_id().to_vec()).unwrap(),
-                        )
-                        .unwrap(),
+                        client_id: self.config.lc_client_id(ClientType::Ckb4Ibc).unwrap(),
                         counterparty_connection_id: None,
                         counterparty_client_id: ClientId::from_str(
                             &connection_end.counterparty.client_id,
@@ -167,17 +174,14 @@ impl Ckb4IbcEventMonitor {
                     let event = IbcEvent::OpenInitConnection(ConnectionOpenInit(attrs));
                     Some(IbcEventWithHeight {
                         event,
-                        height: Height::new(1, 1).unwrap(),
+                        height: Height::default(),
                         tx_hash: tx_hash.clone().into(),
                     })
                 }
                 CkbState::OpenTry => {
                     let attrs = Attributes {
                         connection_id: Some(ConnectionId::from_str(&idx.to_string()).unwrap()), // todo connection id here is invalid
-                        client_id: ClientId::from_str(
-                            &String::from_utf8(self.config.client_id().to_vec()).unwrap(),
-                        )
-                        .unwrap(),
+                        client_id: self.config.lc_client_id(ClientType::Ckb4Ibc).unwrap(),
                         counterparty_connection_id: None,
                         counterparty_client_id: ClientId::from_str(
                             &connection_end.counterparty.client_id,
@@ -187,7 +191,7 @@ impl Ckb4IbcEventMonitor {
                     let event = IbcEvent::OpenTryConnection(ConnectionOpenTry(attrs));
                     Some(IbcEventWithHeight {
                         event,
-                        height: Height::new(1, 1).unwrap(),
+                        height: Height::default(),
                         tx_hash: tx_hash.clone().into(),
                     })
                 }
@@ -197,24 +201,25 @@ impl Ckb4IbcEventMonitor {
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb connection events collection"),
-            height: Height::new(1, 1).unwrap(), // todo
+            height: Height::default(),
             events,
         })
     }
 
     async fn fetch_channel_events(&self) -> Result<EventBatch> {
+        let client_id = self
+            .config
+            .lc_client_type_args(self.counterparty_client_type)
+            .map_err(|e| Error::collect_events_failed(e.to_string()))?;
+        let channel_args = ChannelArgs {
+            client_id,
+            open: false,
+            channel_id: Default::default(),
+            port_id: Default::default(),
+        };
         let script = Script::new_builder()
             .code_hash(get_script_hash(&self.config.channel_type_args))
-            .args(
-                ChannelArgs {
-                    client_id: self.config.client_id(),
-                    open: false,
-                    channel_id: Default::default(),
-                    port_id: Default::default(),
-                }
-                .get_prefix_for_searching_unopen()
-                .pack(),
-            )
+            .args(channel_args.get_prefix_for_searching_unopen().pack())
             .build();
 
         let key = get_search_key(script);
@@ -248,7 +253,7 @@ impl Ckb4IbcEventMonitor {
                         counterparty_port_id: item.0.channel_end.remote.port_id,
                         counterparty_channel_id: item.0.channel_end.remote.channel_id,
                     }),
-                    height: Height::new(1, 1).unwrap(), // todo
+                    height: Height::default(),
                     tx_hash: item.1.into(),
                 },
                 State::TryOpen => IbcEventWithHeight {
@@ -259,7 +264,7 @@ impl Ckb4IbcEventMonitor {
                         counterparty_port_id: item.0.channel_end.remote.port_id,
                         counterparty_channel_id: item.0.channel_end.remote.channel_id,
                     }),
-                    height: Height::new(1, 1).unwrap(), // todo
+                    height: Height::default(),
                     tx_hash: item.1.into(),
                 },
                 _ => unreachable!(),
@@ -268,7 +273,7 @@ impl Ckb4IbcEventMonitor {
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb channel events collection"),
-            height: Height::new(1, 1).unwrap(), // todo
+            height: Height::default(),
             events,
         })
     }
@@ -305,21 +310,21 @@ impl Ckb4IbcEventMonitor {
                     event: IbcEvent::SendPacket(SendPacket {
                         packet: convert_packet(item.0),
                     }),
-                    height: Height::new(1, 1).unwrap(), // todo
+                    height: Height::default(),
                     tx_hash: item.1.into(),
                 },
                 PacketStatus::Recv => IbcEventWithHeight {
                     event: IbcEvent::ReceivePacket(ReceivePacket {
                         packet: convert_packet(item.0),
                     }),
-                    height: Height::new(1, 1).unwrap(), // todo
+                    height: Height::default(),
                     tx_hash: item.1.into(),
                 },
                 PacketStatus::InboxAck => IbcEventWithHeight {
                     event: IbcEvent::AcknowledgePacket(AcknowledgePacket {
                         packet: convert_packet(item.0),
                     }),
-                    height: Height::new(1, 1).unwrap(),
+                    height: Height::default(),
                     tx_hash: item.1.into(),
                 },
                 PacketStatus::OutboxAck => todo!(),
@@ -329,7 +334,7 @@ impl Ckb4IbcEventMonitor {
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb channel events collection"),
-            height: Height::new(1, 1).unwrap(), // todo
+            height: Height::default(),
             events,
         })
     }

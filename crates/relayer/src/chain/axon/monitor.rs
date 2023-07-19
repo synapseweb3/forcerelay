@@ -4,19 +4,13 @@ use super::contract::*;
 // use super::ibc::*;
 use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
-use crate::light_client::AnyHeader;
+use axon_tools::types::AxonHeader;
 use crossbeam_channel as channel;
-use ethers::contract::stream::EventStreamMeta;
-use ethers::contract::EthEvent;
 use ethers::contract::LogMeta;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
 use ethers::types::Address;
-use ibc_relayer_types::clients::ics07_axon::header::Header as AxonHeader;
-use ibc_relayer_types::core::ics02_client::client_type::ClientType;
-use ibc_relayer_types::core::ics02_client::events::{self, Attributes};
-use ibc_relayer_types::core::ics02_client::header::Header;
-use ibc_relayer_types::events::IbcEvent;
+use ibc_relayer_types::core::ics02_client::events;
 use ibc_relayer_types::Height;
 use tokio::sync::mpsc::Receiver;
 use OwnableIBCHandler as Contract;
@@ -24,8 +18,8 @@ use OwnableIBCHandlerEvents as ContractEvents;
 
 use crate::chain::tracking::TrackingId;
 use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonitorCmd};
-use ibc_relayer_types::core::ics24_host::identifier::{ChainId, ClientId};
-use tendermint_rpc::{Url, WebSocketClientUrl};
+use ibc_relayer_types::core::ics24_host::identifier::ChainId;
+use tendermint_rpc::WebSocketClientUrl;
 use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error, info, instrument};
 
@@ -133,7 +127,7 @@ impl AxonEventMonitor {
                         if let Next::Abort = self.update_subscribe() {
                             return Next::Abort;
                         }
-                        let height = header.height();
+                        let height = Height::new(0u64, header.number).expect("axon header height");
                         let event = IbcEventWithHeight::new(
                             events::NewBlock::new(height).into(),
                             height,
@@ -185,7 +179,6 @@ impl AxonEventMonitor {
     }
 
     fn to_ibc_event(&self, event: ContractEvents, meta: LogMeta) -> IbcEventWithHeight {
-        let attr = Attributes::default();
         let height = meta.block_number.as_u64();
         let tx_hash = meta.transaction_hash;
         IbcEventWithHeight::new_with_tx_hash(

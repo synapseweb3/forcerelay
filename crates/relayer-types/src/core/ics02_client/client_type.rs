@@ -1,11 +1,24 @@
-use crate::prelude::*;
+use crate::{core::ics24_host::identifier::ClientId, prelude::*};
 use core::fmt::{Display, Error as FmtError, Formatter};
 use serde_derive::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 
 use super::error::Error;
 
 /// Type of the client, depending on the specific consensus algorithm.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::EnumIter,
+)]
 pub enum ClientType {
     Tendermint = 1,
     Eth = 2,
@@ -14,15 +27,15 @@ pub enum ClientType {
     Ckb4Ibc = 5,
 
     #[cfg(any(test, feature = "mocks"))]
-    Mock = 9999,
+    Mock = 255,
 }
 
 impl ClientType {
     const TENDERMINT_STR: &'static str = "07-tendermint";
     const ETH_STR: &'static str = "07-ethereum";
-    const CKB_STR: &'static str = "07-ckb0";
+    const CKB_STR: &'static str = "07-ckb4eth";
     const CKB4IBC_STR: &'static str = "07-ckb4ibc";
-    const AXON_STR: &'static str = "07-axon0";
+    const AXON_STR: &'static str = "07-axon";
 
     #[cfg_attr(not(test), allow(dead_code))]
     const MOCK_STR: &'static str = "9999-mock";
@@ -50,11 +63,24 @@ impl TryFrom<u64> for ClientType {
             2 => Ok(Self::Eth),
             3 => Ok(Self::Ckb),
             4 => Ok(Self::Axon),
+            5 => Ok(Self::Ckb4Ibc),
 
             #[cfg(any(test, feature = "mocks"))]
             9999 => Ok(Self::Mock),
             _ => Err(Error::unknown_client_type(value.to_string())),
         }
+    }
+}
+
+impl From<ClientId> for ClientType {
+    fn from(client_id: ClientId) -> Self {
+        let mut client_type = ClientType::Mock;
+        for value in ClientType::iter() {
+            if client_id.as_str().starts_with(value.as_str()) {
+                client_type = value;
+            }
+        }
+        client_type
     }
 }
 
@@ -70,6 +96,10 @@ impl core::str::FromStr for ClientType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             Self::TENDERMINT_STR => Ok(Self::Tendermint),
+            Self::ETH_STR => Ok(Self::Eth),
+            Self::CKB_STR => Ok(Self::Ckb),
+            Self::AXON_STR => Ok(Self::Axon),
+            Self::CKB4IBC_STR => Ok(Self::Ckb4Ibc),
 
             #[cfg(any(test, feature = "mocks"))]
             Self::MOCK_STR => Ok(Self::Mock),
