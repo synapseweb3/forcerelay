@@ -123,7 +123,7 @@ ibc-relayer-types = { version = "0.23.0", path = "../relayer-types", features = 
 serial_test = "1.0.0"
 env_logger = "0.10.0"
 tracing-subscriber = { version = "0.3.14", features = ["fmt", "env-filter", "json"] }
-test-log = { version = "0.2.10", features = ["trace"] }
+test-log = { version = "0.2.12", features = ["trace"] }
 tempfile = "3.3.0"
 rand = "0.8.5"
 
