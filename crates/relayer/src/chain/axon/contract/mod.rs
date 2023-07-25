@@ -1,5 +1,5 @@
-mod contract;
-pub use contract::*;
+mod generate;
+pub use generate::*;
 
 #[cfg(test)]
 mod contract_generator {
@@ -14,7 +14,7 @@ mod contract_generator {
         .unwrap()
         .generate()
         .unwrap()
-        .write_to_file("./src/chain/axon/contract/contract.rs")
+        .write_to_file("./src/chain/axon/contract/generate.rs")
         .unwrap();
     }
 }

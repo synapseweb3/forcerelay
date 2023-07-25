@@ -100,9 +100,9 @@ impl AnyClientState {
     pub fn trust_threshold(&self) -> Option<TrustThreshold> {
         match self {
             AnyClientState::Tendermint(state) => Some(state.trust_threshold),
-            AnyClientState::Eth(_) => Some(TrustThreshold::ONE_THIRD.clone()),
-            AnyClientState::Ckb(_) => Some(TrustThreshold::ONE_THIRD.clone()),
-            AnyClientState::Axon(_) => Some(TrustThreshold::ONE_THIRD.clone()),
+            AnyClientState::Eth(_) => Some(TrustThreshold::ONE_THIRD),
+            AnyClientState::Ckb(_) => Some(TrustThreshold::ONE_THIRD),
+            AnyClientState::Axon(_) => Some(TrustThreshold::ONE_THIRD),
 
             #[cfg(test)]
             AnyClientState::Mock(_) => None,
