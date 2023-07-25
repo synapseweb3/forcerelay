@@ -46,7 +46,7 @@ use crate::{
 use super::{
     client::ClientSettings,
     endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
-    handle::{CacheTxHashStatus, ChainHandle, ChainRequest, ReplyTo, Subscription},
+    handle::{ChainHandle, ChainRequest, ReplyTo, Subscription},
     requests::*,
     tracking::TrackedMsgs,
 };
@@ -348,12 +348,7 @@ where
 
                         ChainRequest::QueryIncentivizedPacket { request, reply_to } => {
                             self.query_incentivized_packet(request, reply_to)?
-                        },
-
-                        ChainRequest::CacheIcsTxHash { cached_status, tx_hash, reply_to } => {
-                            self.cache_ics_tx_hash(cached_status, tx_hash, reply_to)?
-                        },
-
+                        }
                     }
                 },
             }
@@ -853,17 +848,6 @@ where
         let result = self.chain.query_incentivized_packet(request);
         reply_to.send(result).map_err(Error::send)?;
 
-        Ok(())
-    }
-
-    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
-        &mut self,
-        cached_status: CacheTxHashStatus,
-        tx_hash: T,
-        reply_to: ReplyTo<()>,
-    ) -> Result<(), Error> {
-        let result = self.chain.cache_ics_tx_hash(cached_status, tx_hash);
-        reply_to.send(result).map_err(Error::send)?;
         Ok(())
     }
 }

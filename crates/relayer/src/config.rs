@@ -217,8 +217,8 @@ impl ChainConfig {
             ChainConfig::Cosmos(c) => &c.packet_filter,
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
-            ChainConfig::Axon(_) => todo!(),
-            ChainConfig::Ckb4Ibc(_) => todo!(),
+            ChainConfig::Axon(c) => &c.packet_filter,
+            ChainConfig::Ckb4Ibc(c) => &c.packet_filter,
         }
     }
 
@@ -471,13 +471,16 @@ impl Config {
     ) -> bool {
         match self.find_chain(chain_id) {
             Some(chain_config) => {
-                if !matches!(chain_config, ChainConfig::Cosmos(_)) {
-                    false
-                } else {
+                if matches!(chain_config, ChainConfig::Cosmos(_))
+                    || matches!(chain_config, ChainConfig::Ckb4Ibc(_))
+                    || matches!(chain_config, ChainConfig::Axon(_))
+                {
                     chain_config
                         .packet_filter()
                         .channel_policy
                         .is_allowed(port_id, channel_id)
+                } else {
+                    false
                 }
             }
             None => false,

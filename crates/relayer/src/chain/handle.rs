@@ -388,12 +388,6 @@ pub enum ChainRequest {
         request: QueryIncentivizedPacketRequest,
         reply_to: ReplyTo<QueryIncentivizedPacketResponse>,
     },
-
-    CacheIcsTxHash {
-        cached_status: CacheTxHashStatus,
-        tx_hash: [u8; 32],
-        reply_to: ReplyTo<()>,
-    },
 }
 
 pub trait ChainHandle: Clone + Display + Send + Sync + Debug + 'static {
@@ -705,12 +699,4 @@ pub trait ChainHandle: Clone + Display + Send + Sync + Debug + 'static {
         &self,
         request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error>;
-
-    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
-        &mut self,
-        _cached_status: CacheTxHashStatus,
-        _tx_hash: T,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
 }

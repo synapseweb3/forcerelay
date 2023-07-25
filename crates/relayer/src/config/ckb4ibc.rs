@@ -10,6 +10,8 @@ use tendermint_rpc::Url;
 
 use crate::error::Error;
 
+use super::filter::PacketFilter;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightClientItem {
     pub chain_id: ChainId,
@@ -27,6 +29,10 @@ pub struct ChainConfig {
     pub connection_type_args: H256,
     pub channel_type_args: H256,
     pub packet_type_args: H256,
+
+    #[serde(default)]
+    pub packet_filter: PacketFilter,
+
     #[serde(serialize_with = "light_client_serialize")]
     pub onchain_light_clients: HashMap<ClientType, LightClientItem>,
 }

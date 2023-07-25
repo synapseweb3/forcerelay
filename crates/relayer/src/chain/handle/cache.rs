@@ -40,8 +40,6 @@ use crate::light_client::AnyHeader;
 use crate::misbehaviour::MisbehaviourEvidence;
 use crate::telemetry;
 
-use super::CacheTxHashStatus;
-
 /// A chain handle with support for caching.
 /// To be used for the passive relaying mode (i.e., `start` CLI).
 #[derive(Debug, Clone)]
@@ -511,13 +509,5 @@ impl<Handle: ChainHandle> ChainHandle for CachingChainHandle<Handle> {
         request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error> {
         self.inner.query_incentivized_packet(request)
-    }
-
-    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
-        &mut self,
-        cached_status: CacheTxHashStatus,
-        tx_hash: T,
-    ) -> Result<(), Error> {
-        self.inner.cache_ics_tx_hash(cached_status, tx_hash)
     }
 }

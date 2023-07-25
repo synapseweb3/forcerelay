@@ -3595,6 +3595,7 @@ dependencies = [
  "ibc-telemetry",
  "itertools",
  "jsonrpc-core",
+ "lazy_static",
  "moka",
  "num-bigint",
  "num-rational",
