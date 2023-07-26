@@ -45,11 +45,9 @@ impl Height {
 
 impl Height {
     pub fn new(revision_number: u64, revision_height: u64) -> Result<Self, Error> {
-        // FIXME: Axon solidity contract allows `revision_height` to be 0 to skip some checks
-        //
-        // if revision_height == 0 {
-        //     return Err(Error::invalid_height());
-        // }
+        if revision_height == 0 {
+            return Err(Error::invalid_height());
+        }
 
         Ok(Self {
             revision_number,
