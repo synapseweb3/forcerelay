@@ -15,7 +15,7 @@ members = [
     "tools/check-guide",
     "tools/query-events",
     "tools/forcerelay-test",
-    "tools/ckb4ibc-test",
+    "tools/ckb4ibc-test"
 ]
 
 [patch.crates-io]

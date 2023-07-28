@@ -7,6 +7,7 @@ edition = "2021"
 ckb-sdk = "=2.4.0"
 ckb-jsonrpc-types = "0.106.0"
 ckb-types = "0.106.0"
+ckb-chain-spec = "0.106.0"
 hex = "0.4"
 
 relayer = {version = "*", package = "ibc-relayer", path = "../../crates/relayer"}
@@ -24,3 +25,8 @@ secp256k1 = "0.24"
 ckb-hash = "0.106"
 tiny-keccak = { version = "2.0.2", features = ["keccak"], default-features = false }
 axon-types = {git = "https://github.com/axonweb3/axon-contract", rev = "8c2338a"}
+
+ibc-test-framework = { path = "../test-framework" }
+toml = "=0.5.11"
+anyhow = "1.0.72"
+log = "0.4.19"

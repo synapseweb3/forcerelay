@@ -240,6 +240,14 @@ impl ChainConfig {
         }
     }
 
+    pub fn downcast_ckb4ibc(self) -> Ckb4IbcChainConfig {
+        if let ChainConfig::Ckb4Ibc(c) = self {
+            c
+        } else {
+            panic!("Not a ckb4ibc chain")
+        }
+    }
+
     pub fn rpc_addr(&self) -> &Url {
         if let ChainConfig::Cosmos(c) = &self {
             &c.rpc_addr
@@ -268,7 +276,7 @@ impl ChainConfig {
         if let ChainConfig::Ckb4Ibc(c) = self {
             c
         } else {
-            panic!("Not a cosmos chain")
+            panic!("Not a ckb4ibc chain")
         }
     }
 
@@ -723,9 +731,7 @@ mod tests {
             "/tests/config/fixtures/relayer_conf_example.toml"
         );
 
-        let config = load(path).expect("could not parse config");
-
-        dbg!(config);
+        let _config = load(path).expect("could not parse config");
     }
 
     #[test]
@@ -735,9 +741,7 @@ mod tests {
             "/tests/config/fixtures/relayer_conf_example_fee_filter.toml"
         );
 
-        let config = load(path).expect("could not parse config");
-
-        dbg!(config);
+        let _config = load(path).expect("could not parse config");
     }
 
     #[test]

@@ -8,9 +8,12 @@ use eyre::eyre;
 use eyre::Report as Error;
 use ibc_relayer::chain::ChainType;
 use ibc_relayer::config;
+use ibc_relayer::config::ckb4ibc::LightClientItem;
 use ibc_relayer::config::cosmos::gas_multiplier::GasMultiplier;
 use ibc_relayer::keyring::Store;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tendermint_rpc::Url;
 use tendermint_rpc::WebSocketClientUrl;
@@ -116,12 +119,71 @@ impl<'a, Chain> TaggedFullNodeExt<Chain> for MonoTagged<Chain, &'a FullNode> {
     }
 }
 
+fn hex_to_h256(h: &[u8]) -> [u8; 32] {
+    let raw = hex::decode(h).expect("decode hex");
+    raw.try_into().expect("convert to h256")
+}
+
 impl FullNode {
     /**
        Generate the relayer's chain config based on the configuration of
        the full node.
     */
     pub fn generate_chain_config(
+        &self,
+        chain_type: &TestedChainType,
+    ) -> Result<config::ChainConfig, Error> {
+        match chain_type {
+            TestedChainType::Ckb => self.generate_ckb_chain_config(chain_type),
+            _ => self.generate_cosmos_chain_config(chain_type),
+        }
+    }
+
+    fn generate_ckb_chain_config(
+        &self,
+        _chain_type: &TestedChainType,
+    ) -> Result<config::ChainConfig, Error> {
+        let ckb_rpc = Url::from_str(self.chain_driver.rpc_address().as_str())?;
+        let connection_type_args = hex_to_h256(
+            &b"0xf49ce32397c6741998b04d7548c5ed372007424daf67ee5bfadaefec3c865781"[2..],
+        )
+        .into();
+        let channel_type_args = hex_to_h256(
+            &b"0xfbe09e8ff3e5f3d0fab7cc7431feed2131846184d356a9626639f55e7f471846"[2..],
+        )
+        .into();
+        let packet_type_args = hex_to_h256(
+            &b"0x2b0faaa9a508ccb5a276f36e8116d70f2ace8b714a8bd07aa4f6839393e1d8c2"[2..],
+        )
+        .into();
+        let client_cell_type_args = hex_to_h256(
+            &b"0xccffb188453b890936c3b1ba81743d6c48a26216d57cf9f19f735af9d4eefbed"[2..],
+        )
+        .into();
+        let mut onchain_light_clients = HashMap::default();
+        onchain_light_clients.insert(
+            ClientType::Ckb4Ibc,
+            LightClientItem {
+                chain_id: self.chain_driver.chain_id.clone(),
+                client_cell_type_args,
+            },
+        );
+
+        let ckb_config = config::ckb4ibc::ChainConfig {
+            id: self.chain_driver.chain_id.clone(),
+            ckb_rpc: ckb_rpc.clone(),
+            ckb_indexer_rpc: ckb_rpc,
+            key_name: "relayer_ckb_wallet".to_string(),
+            store_prefix: "forcerelay".to_string(),
+            connection_type_args,
+            channel_type_args,
+            packet_type_args,
+            onchain_light_clients,
+        };
+        Ok(config::ChainConfig::Ckb4Ibc(ckb_config))
+    }
+
+    fn generate_cosmos_chain_config(
         &self,
         chain_type: &TestedChainType,
     ) -> Result<config::ChainConfig, Error> {

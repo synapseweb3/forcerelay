@@ -442,10 +442,8 @@ mod tests {
             ]
             "#;
 
-        let filter_policy: ChannelPolicy =
+        let _filter_policy: ChannelPolicy =
             toml::from_str(toml_content).expect("could not parse filter policy");
-
-        dbg!(filter_policy);
     }
 
     #[test]
