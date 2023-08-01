@@ -265,7 +265,7 @@ impl Ckb4IbcChain {
                 }
                 Ok(packets)
             });
-        Ok(self.rt.block_on(packets)?)
+        self.rt.block_on(packets)
     }
 
     fn fetch_channel_cell_and_extract(
