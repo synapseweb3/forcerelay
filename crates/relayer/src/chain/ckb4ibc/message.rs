@@ -48,6 +48,7 @@ use ibc_relayer_types::{
             },
             packet::Sequence,
         },
+        ics23_commitment::commitment::CommitmentPrefix,
         ics24_host::identifier::{ChannelId, ConnectionId, PortId},
     },
     events::IbcEvent,
@@ -103,7 +104,7 @@ pub trait MsgToTxConverter {
 
     fn get_packet_cell_input(&self, chan: ChannelId, port: PortId, seq: Sequence) -> CellInput;
 
-    fn get_packet_owner(&self) -> [u8; 32];
+    fn get_commitment_prefix(&self) -> Vec<u8>;
 
     fn get_config(&self) -> &ChainConfig;
 }
@@ -120,7 +121,7 @@ pub struct Converter<'a> {
     pub chan_contract_outpoint: &'a OutPoint,
     pub packet_contract_outpoint: &'a OutPoint,
     pub conn_contract_outpoint: &'a OutPoint,
-    pub packet_owner: [u8; 32],
+    pub commitment_prefix: CommitmentPrefix,
 }
 
 impl<'a> MsgToTxConverter for Converter<'a> {
@@ -236,8 +237,8 @@ impl<'a> MsgToTxConverter for Converter<'a> {
             .clone()
     }
 
-    fn get_packet_owner(&self) -> [u8; 32] {
-        self.packet_owner
+    fn get_commitment_prefix(&self) -> Vec<u8> {
+        self.commitment_prefix.as_bytes().to_vec()
     }
 
     fn get_config(&self) -> &ChainConfig {

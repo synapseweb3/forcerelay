@@ -960,7 +960,7 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=fe67bd3#fe67bd3c1ccb519077276bc4844e0e64d5108094"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=61e8330#61e8330cd6a86d9976bf81ec245c6b8ba4303c9c"
 dependencies = [
  "bytes",
  "ethereum-types",

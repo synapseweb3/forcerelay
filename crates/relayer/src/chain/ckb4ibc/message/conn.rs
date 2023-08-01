@@ -43,6 +43,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
     let counterparty = ConnectionCounterparty {
         client_id: remote_client_id,
         connection_id: None,
+        commitment_prefix: converter.get_commitment_prefix(),
     };
 
     let connection_end = CkbConnectionEnd {
@@ -50,6 +51,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         client_id: client_id.clone(),
         counterparty,
         delay_period: msg.delay_period.as_secs(),
+        versions: vec![Default::default()],
     };
     let old_ibc_connection_cell = converter.get_ibc_connections(&client_id)?;
     let this_conn_idx = old_ibc_connection_cell.next_connection_number;
@@ -125,6 +127,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
     let counterparty = ConnectionCounterparty {
         client_id: remote_client_id,
         connection_id: Some(remote_conn_id),
+        commitment_prefix: converter.get_commitment_prefix(),
     };
 
     let connection_end = CkbConnectionEnd {
@@ -132,6 +135,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
         client_id: client_id.clone(),
         counterparty,
         delay_period: msg.delay_period.as_secs(),
+        versions: vec![Default::default()],
     };
     let old_ibc_connection_cell = converter.get_ibc_connections(&client_id)?;
     let this_conn_idx = old_ibc_connection_cell.next_connection_number;

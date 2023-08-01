@@ -66,7 +66,7 @@ use semver::Version;
 use std::sync::RwLock;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime;
-use tracing::log::info;
+use tracing::log::{info, warn};
 
 use self::extractor::{extract_connections_from_tx, extract_ibc_packet_from_tx};
 use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverter};
@@ -87,7 +87,7 @@ use super::requests::{
     QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientStateRequest,
     QueryClientStatesRequest, QueryConnectionChannelsRequest, QueryConnectionRequest,
     QueryConnectionsRequest, QueryConsensusStateHeightsRequest, QueryConsensusStateRequest,
-    QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
+    QueryHeight, QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
     QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
     QueryPacketCommitmentRequest, QueryPacketCommitmentsRequest, QueryPacketEventDataRequest,
     QueryPacketReceiptRequest, QueryTxRequest, QueryUnreceivedAcksRequest,
@@ -193,10 +193,10 @@ impl Ckb4IbcChain {
             connection_cache: self.connection_cache.borrow(),
             client_outpoints: self.client_outpoints.borrow(),
             packet_input_data: self.packet_input_data.borrow(),
-            packet_owner: Default::default(),
             chan_contract_outpoint: &self.channel_outpoint,
             packet_contract_outpoint: &self.packet_outpoint,
             conn_contract_outpoint: &self.connection_outpoint,
+            commitment_prefix: self.query_commitment_prefix()?,
         })
     }
 
@@ -211,12 +211,17 @@ impl Ckb4IbcChain {
         Ok(monitor_tx)
     }
 
-    fn fetch_packet_cell_and_extract(
+    fn fetch_packet_cells_and_extract(
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-        sequence: Sequence,
-    ) -> Result<(IbcPacket, CellInput), Error> {
+        sequence: Option<Sequence>,
+    ) -> Result<Vec<(IbcPacket, CellInput)>, Error> {
+        let (sequence, search_all, limit) = if let Some(value) = sequence {
+            (u64::from(value) as u16, false, 1)
+        } else {
+            (0, true, u32::MAX)
+        };
         let script = Script::new_builder()
             .code_hash(self.get_converter()?.get_packet_code_hash())
             .hash_type(ScriptHashType::Type.into())
@@ -224,48 +229,43 @@ impl Ckb4IbcChain {
                 PacketArgs {
                     channel_id: get_channel_idx(channel_id)?,
                     port_id: port_id.as_str().as_bytes().try_into().unwrap(),
-                    sequence: u64::from(sequence) as u16,
-                    owner: Default::default(),
+                    sequence,
                 }
-                .get_search_args()
+                .get_search_args(search_all)
                 .pack(),
             )
             .build();
         let search_key = get_search_key(script);
-        let resp = self
+        let packets = self
             .rpc_client
-            .fetch_live_cells(search_key, 1, None)
+            .fetch_live_cells(search_key, limit, None)
             .and_then(|resp| async move {
-                let cell = resp
-                    .objects
-                    .into_iter()
-                    .next()
-                    .ok_or(Error::query(String::from("query packet")))?;
-                let tx_hash = &cell.out_point.tx_hash;
-                let tx_resp = self
-                    .rpc_client
-                    .get_transaction(tx_hash)
-                    .await
-                    .map_err(|_| Error::query("".to_string()))?
-                    .ok_or(Error::query("".to_string()))?
-                    .transaction
-                    .unwrap();
-                let tx = match tx_resp.inner {
-                    ckb_jsonrpc_types::Either::Left(r) => r,
-                    ckb_jsonrpc_types::Either::Right(json_bytes) => {
-                        let bytes = json_bytes.as_bytes();
-                        let tx: TransactionView = serde_json::from_slice(bytes).unwrap();
-                        tx
-                    }
-                };
-                let ibc_packet = extract_ibc_packet_from_tx(tx)?;
-                let cell_input = CellInput::new_builder()
-                    .previous_output(cell.out_point.into())
-                    .build();
-                Ok((ibc_packet, cell_input))
+                let mut packets = vec![];
+                for cell in resp.objects {
+                    let tx_hash = &cell.out_point.tx_hash;
+                    let tx = self
+                        .rpc_client
+                        .get_transaction(tx_hash)
+                        .await
+                        .map_err(|e| Error::query(e.to_string()))?
+                        .unwrap()
+                        .transaction
+                        .unwrap();
+                    let tx = match tx.inner {
+                        ckb_jsonrpc_types::Either::Left(tx) => tx,
+                        ckb_jsonrpc_types::Either::Right(bytes) => {
+                            serde_json::from_slice(bytes.as_bytes()).unwrap()
+                        }
+                    };
+                    let ibc_packet = extract_ibc_packet_from_tx(tx)?;
+                    let cell_input = CellInput::new_builder()
+                        .previous_output(cell.out_point.into())
+                        .build();
+                    packets.push((ibc_packet, cell_input));
+                }
+                Ok(packets)
             });
-        let result = self.rt.block_on(resp)?;
-        Ok(result)
+        Ok(self.rt.block_on(packets)?)
     }
 
     fn fetch_channel_cell_and_extract(
@@ -273,7 +273,7 @@ impl Ckb4IbcChain {
         channel_id: ChannelId,
         port_id: PortId,
         is_open: bool,
-    ) -> Result<ChannelEnd, Error> {
+    ) -> Result<(ChannelEnd, IbcChannel), Error> {
         let channel_code_hash = self.get_converter()?.get_channel_code_hash();
         let client_id = self
             .config
@@ -290,7 +290,7 @@ impl Ckb4IbcChain {
             .hash_type(ScriptHashType::Type.into())
             .build();
         let search_key = get_search_key(script);
-        let channel_end_future = self
+        let channel_future = self
             .rpc_client
             .fetch_live_cells(search_key, 1, None)
             .and_then(|resp| async move {
@@ -308,7 +308,7 @@ impl Ckb4IbcChain {
                     .transaction
                     .unwrap();
                 let tx = match tx_resp.inner {
-                    ckb_jsonrpc_types::Either::Left(r) => r,
+                    ckb_jsonrpc_types::Either::Left(channel) => channel,
                     ckb_jsonrpc_types::Either::Right(json_bytes) => {
                         serde_json::from_slice::<TransactionView>(json_bytes.as_bytes()).unwrap()
                     }
@@ -324,16 +324,13 @@ impl Ckb4IbcChain {
                     .build();
                 Ok((channel_end, input))
             });
-        let ((channel_end, ibc_channel_end), cell_input) = self.rt.block_on(channel_end_future)?;
+        let ((channel, ibc_channel_end), cell_input) = self.rt.block_on(channel_future)?;
 
         let mut data = self.channel_input_data.borrow_mut();
-        data.insert(
-            (channel_end.channel_id.clone(), channel_end.port_id),
-            cell_input,
-        );
+        data.insert((channel.channel_id.clone(), channel.port_id), cell_input);
         let mut cache = self.channel_cache.borrow_mut();
-        cache.insert(channel_end.channel_id, ibc_channel_end);
-        Ok(channel_end.channel_end)
+        cache.insert(channel.channel_id, ibc_channel_end.clone());
+        Ok((channel.channel_end, ibc_channel_end))
     }
 
     fn clear_cache(&mut self) {
@@ -420,6 +417,19 @@ impl Ckb4IbcChain {
             cmd.send(client_type)
                 .expect("send counterparty_client_type");
         }
+    }
+
+    fn fetch_packet_cell_and_extract(
+        &self,
+        channel_id: &ChannelId,
+        port_id: &PortId,
+        sequence: Sequence,
+    ) -> Result<(IbcPacket, CellInput), Error> {
+        let packets = self.fetch_packet_cells_and_extract(channel_id, port_id, Some(sequence))?;
+        let (ibc_packet, cell_input) = packets.into_iter().next().ok_or(Error::query(format!(
+            "packet not found on ({channel_id}/{port_id}/{sequence})"
+        )))?;
+        Ok((ibc_packet, cell_input))
     }
 }
 
@@ -663,9 +673,23 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn send_messages_and_wait_check_tx(
         &mut self,
-        _tracked_msgs: TrackedMsgs,
+        tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<Response>, Error> {
-        todo!()
+        let responses = self
+            .send_messages_and_wait_commit(tracked_msgs)?
+            .into_iter()
+            .map(|event| {
+                let value = event.to_string();
+                let data = value.as_bytes().to_vec();
+                Response {
+                    code: tendermint::abci::Code::Ok,
+                    data: data.into(),
+                    log: String::new(),
+                    hash: tendermint::Hash::Sha256(event.tx_hash),
+                }
+            })
+            .collect();
+        Ok(responses)
     }
 
     fn verify_header(
@@ -717,11 +741,16 @@ impl ChainEndpoint for Ckb4IbcChain {
     }
 
     fn query_all_balances(&self, _key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
-        todo!()
+        warn!("axon query_all_balances() cannot implement");
+        Ok(vec![])
     }
 
     fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {
-        todo!()
+        warn!("axon query_denom_trace() cannot implement");
+        Ok(DenomTrace {
+            path: "".to_owned(),
+            base_denom: "".to_owned(),
+        })
     }
 
     fn query_commitment_prefix(&self) -> Result<CommitmentPrefix, Error> {
@@ -779,6 +808,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _request: QueryConsensusStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error> {
+        // TODO: fix it when Ckb4Ibc contract refactorred
         Ok((CkbConsensusState {}.into(), None))
     }
 
@@ -786,21 +816,22 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryConsensusStateHeightsRequest,
     ) -> Result<Vec<Height>, Error> {
-        todo!()
+        // TODO: fix it when Ckb4Ibc contract refactorred
+        Ok(vec![Height::default()])
     }
 
     fn query_upgraded_client_state(
         &self,
         _request: QueryUpgradedClientStateRequest,
     ) -> Result<(AnyClientState, MerkleProof), Error> {
-        todo!()
+        unimplemented!("not support")
     }
 
     fn query_upgraded_consensus_state(
         &self,
         _request: QueryUpgradedConsensusStateRequest,
     ) -> Result<(AnyConsensusState, MerkleProof), Error> {
-        todo!()
+        unimplemented!("not support")
     }
 
     fn query_connections(
@@ -918,24 +949,44 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryChannelRequest,
         _include_proof: IncludeProof,
     ) -> Result<(ChannelEnd, Option<MerkleProof>), Error> {
-        if let Ok(r) = self.fetch_channel_cell_and_extract(
+        if let Ok((channel, _)) = self.fetch_channel_cell_and_extract(
             request.channel_id.clone(),
             request.port_id.clone(),
             false,
         ) {
-            Ok((r, None))
+            Ok((channel, None))
         } else {
-            let r =
+            let (channel, _) =
                 self.fetch_channel_cell_and_extract(request.channel_id, request.port_id, true)?;
-            Ok((r, None))
+            Ok((channel, None))
         }
     }
 
     fn query_channel_client_state(
         &self,
-        _request: QueryChannelClientStateRequest,
+        request: QueryChannelClientStateRequest,
     ) -> Result<Option<IdentifiedAnyClientState>, Error> {
-        Ok(None)
+        let request = QueryChannelRequest {
+            port_id: request.port_id,
+            channel_id: request.channel_id,
+            height: QueryHeight::Latest,
+        };
+        let (channel, _) = self.query_channel(request, IncludeProof::No)?;
+        assert!(!channel.connection_hops.is_empty());
+        let request = QueryConnectionRequest {
+            connection_id: channel.connection_hops[0].clone(),
+            height: QueryHeight::Latest,
+        };
+        let (connection, _) = self.query_connection(request, IncludeProof::No)?;
+        let request = QueryClientStateRequest {
+            client_id: connection.client_id().clone(),
+            height: QueryHeight::Latest,
+        };
+        let (client, _) = self.query_client_state(request, IncludeProof::No)?;
+        Ok(Some(IdentifiedAnyClientState {
+            client_id: connection.client_id().clone(),
+            client_state: client,
+        }))
     }
 
     fn query_packet_commitment(
@@ -961,9 +1012,8 @@ impl ChainEndpoint for Ckb4IbcChain {
                         .try_into()
                         .unwrap(),
                     sequence: ibc_packet.packet.sequence,
-                    owner: Default::default(),
                 }
-                .get_search_args(),
+                .get_search_args(false),
                 None,
             ))
         }
@@ -971,9 +1021,14 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn query_packet_commitments(
         &self,
-        _request: QueryPacketCommitmentsRequest,
+        request: QueryPacketCommitmentsRequest,
     ) -> Result<(Vec<Sequence>, Height), Error> {
-        todo!()
+        let sequences = self
+            .fetch_packet_cells_and_extract(&request.channel_id, &request.port_id, None)?
+            .into_iter()
+            .map(|(v, _)| (v.packet.sequence as u64).into())
+            .collect();
+        Ok((sequences, Height::default()))
     }
 
     fn query_packet_receipt(
@@ -999,9 +1054,8 @@ impl ChainEndpoint for Ckb4IbcChain {
                         .try_into()
                         .unwrap(),
                     sequence: ibc_packet.packet.sequence,
-                    owner: Default::default(),
                 }
-                .get_search_args(),
+                .get_search_args(false),
                 None,
             ))
         }
@@ -1011,7 +1065,8 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryUnreceivedPacketsRequest,
     ) -> Result<Vec<Sequence>, Error> {
-        todo!()
+        // TODO: fix it when Ckb4Ibc contract refactorred
+        Ok(vec![])
     }
 
     fn query_packet_acknowledgement(
@@ -1070,21 +1125,26 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn query_next_sequence_receive(
         &self,
-        _request: QueryNextSequenceReceiveRequest,
+        request: QueryNextSequenceReceiveRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Sequence, Option<MerkleProof>), Error> {
-        todo!()
+        let (_, ibc_channel) =
+            self.fetch_channel_cell_and_extract(request.channel_id, request.port_id, true)?;
+        let sequence = (ibc_channel.sequence.next_sequence_recvs as u64).into();
+        Ok((sequence, None))
     }
 
     fn query_txs(&self, _request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
-        todo!()
+        warn!("ckb4ibc query_txs() not support");
+        Ok(vec![])
     }
 
     fn query_packet_events(
         &self,
         _request: QueryPacketEventDataRequest,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        todo!()
+        warn!("ckb4ibc query_packet_events() not support");
+        Ok(vec![])
     }
 
     fn query_host_consensus_state(
@@ -1137,7 +1197,8 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _requests: Vec<CrossChainQueryRequest>,
     ) -> Result<Vec<CrossChainQueryResponse>, Error> {
-        todo!()
+        warn!("ckb4ibc cross_chain_query() not support");
+        Ok(vec![])
     }
 
     fn query_incentivized_packet(
@@ -1163,6 +1224,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 chain_id: self.id(),
                 latest_height: height,
             })),
+            // FIXME: fix it until the hardfork of CKB
             get_dummy_merkle_proof(height),
         ))
     }
@@ -1173,6 +1235,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _channel_id: &ChannelId,
         height: Height,
     ) -> Result<Proofs, Error> {
+        // FIXME: fix it until the hardfork of CKB
         Ok(get_dummy_merkle_proof(height))
     }
 
@@ -1184,6 +1247,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _sequence: Sequence,
         height: Height,
     ) -> Result<Proofs, Error> {
+        // FIXME: fix it until the hardfork of CKB
         Ok(get_dummy_merkle_proof(height))
     }
 }

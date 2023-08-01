@@ -433,7 +433,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     let channel_id = msg.packet.source_channel.clone();
     let old_channel_end = converter.get_ibc_channel(&channel_id);
     let mut new_channel_end = old_channel_end.clone();
-    new_channel_end.sequence.next_recv_ack += 1;
+    new_channel_end.sequence.next_sequence_acks += 1;
     let old_channel_end_encoded = get_encoded_object(old_channel_end);
     let new_channel_end_encoded = get_encoded_object(new_channel_end.clone());
 
@@ -509,7 +509,6 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
                                 channel_id: channel_idx,
                                 port_id: port_id_in_args,
                                 sequence: seq,
-                                owner: converter.get_packet_owner(),
                             }
                             .to_args()
                             .pack(),
@@ -551,7 +550,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     let channel_id = msg.packet.destination_channel.clone();
     let old_channel_end = converter.get_ibc_channel(&channel_id);
     let mut new_channel_end = old_channel_end.clone();
-    new_channel_end.sequence.next_recv_packet += 1;
+    new_channel_end.sequence.next_sequence_recvs += 1;
 
     let old_channel_end_encoded = get_encoded_object(old_channel_end);
     let new_channel_end_encoded = get_encoded_object(new_channel_end.clone());
@@ -616,7 +615,6 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
                                 channel_id: channel_idx,
                                 port_id: port_id_in_args,
                                 sequence: seq,
-                                owner: converter.get_packet_owner(),
                             }
                             .to_args()
                             .pack(),
@@ -654,7 +652,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
 pub fn convert_channel_end(
     channel_end: ChannelEnd,
     port_id: PortId,
-    channel_num: u16,
+    channel_number: u16,
 ) -> Result<IbcChannel, Error> {
     let state = match channel_end.state {
         State::Uninitialized => CkbState::Unknown,
@@ -694,7 +692,7 @@ pub fn convert_channel_end(
     };
 
     let result = IbcChannel {
-        num: channel_num,
+        number: channel_number,
         port_id,
         state,
         order,
@@ -718,5 +716,7 @@ pub fn convert_ibc_packet(packet: Packet) -> CkbPacket {
         destination_port_id,
         destination_channel_id,
         data: packet.data,
+        timeout_height: packet.timeout_height.commitment_revision_height(),
+        timeout_timestamp: packet.timeout_timestamp.nanoseconds() / 100000, // use second as unit
     }
 }

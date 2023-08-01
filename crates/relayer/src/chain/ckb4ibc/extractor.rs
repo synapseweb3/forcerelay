@@ -197,7 +197,7 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
     let port_id =
         PortId::from_str(&ckb_channel_end.port_id).map_err(|_| Error::convert_channel_end())?;
 
-    let channel_id = get_channel_id_str(ckb_channel_end.num);
+    let channel_id = get_channel_id_str(ckb_channel_end.number);
     let channel_id =
         ChannelId::from_str(&channel_id).map_err(|_| Error::ckb_chan_id_invalid(channel_id))?;
 
