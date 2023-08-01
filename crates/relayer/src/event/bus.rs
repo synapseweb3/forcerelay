@@ -1,9 +1,9 @@
-use alloc::collections::VecDeque;
+use alloc::vec::Vec;
 
 use crossbeam_channel as channel;
 
 pub struct EventBus<T> {
-    txs: VecDeque<channel::Sender<T>>,
+    txs: Vec<channel::Sender<T>>,
 }
 
 impl<T> Default for EventBus<T> {
@@ -14,14 +14,12 @@ impl<T> Default for EventBus<T> {
 
 impl<T> EventBus<T> {
     pub fn new() -> Self {
-        Self {
-            txs: VecDeque::new(),
-        }
+        Self { txs: Vec::new() }
     }
 
     pub fn subscribe(&mut self) -> channel::Receiver<T> {
         let (tx, rx) = channel::unbounded();
-        self.txs.push_back(tx);
+        self.txs.push(tx);
         rx
     }
 
@@ -29,19 +27,9 @@ impl<T> EventBus<T> {
     where
         T: Clone,
     {
-        let mut disconnected = Vec::new();
-
-        for (idx, tx) in self.txs.iter().enumerate() {
-            // TODO: Avoid cloning when sending to last subscriber
-            if let Err(channel::SendError(_)) = tx.send(value.clone()) {
-                disconnected.push(idx);
-            }
-        }
-
-        // Remove all disconnected subscribers
-        for idx in disconnected {
-            self.txs.remove(idx);
-        }
+        // Send to all txs. Remove disconnected.
+        self.txs
+            .retain(|tx| !matches!(tx.send(value.clone()), Err(channel::SendError(_))));
     }
 }
 
@@ -116,5 +104,30 @@ mod tests {
         }
 
         assert_eq!(counter(), 20);
+    }
+
+    #[test]
+    fn multi_disconnected() {
+        let mut bus = EventBus::new();
+
+        let n = 10;
+        let mut rxs = vec![];
+
+        for _ in 0..n {
+            rxs.push(bus.subscribe());
+        }
+
+        rxs.remove(0);
+        rxs.remove(0);
+
+        bus.broadcast(42);
+        for rx in &rxs {
+            assert_eq!(rx.recv(), Ok(42));
+        }
+
+        bus.broadcast(43);
+        for rx in &rxs {
+            assert_eq!(rx.recv(), Ok(43));
+        }
     }
 }
