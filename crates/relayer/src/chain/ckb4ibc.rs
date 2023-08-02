@@ -587,35 +587,41 @@ impl ChainEndpoint for Ckb4IbcChain {
                 continue;
             }
             let unsigned_tx = unsigned_tx.unwrap();
-            if let Ok(tx) = self.complete_tx_with_secp256k1_change_and_envelope(
+            match self.complete_tx_with_secp256k1_change_and_envelope(
                 unsigned_tx,
                 input_capacity,
                 envelope,
             ) {
-                let last_input_idx = tx.inputs().len() - 1;
-                let secret_key = self
-                    .keybase
-                    .get_key(&self.config.key_name)
-                    .map_err(Error::key_base)?
-                    .into_ckb_keypair(self.network()?)
-                    .private_key;
-                let signer = SecpSighashScriptSigner::new(Box::new(
-                    SecpCkbRawKeySigner::new_with_secret_keys(vec![secret_key]),
-                ));
-                let tx = signer
-                    .sign_tx(
-                        &tx,
-                        &ScriptGroup {
-                            script: Script::from(&self.tx_assembler_address()?),
-                            group_type: ScriptGroupType::Lock,
-                            input_indices: vec![last_input_idx],
-                            output_indices: vec![],
-                        },
-                    )
-                    .unwrap();
-                tx_hashes.push(tx.hash().unpack());
-                txs.push(tx);
-                events.push(event);
+                Ok(tx) => {
+                    let last_input_idx = tx.inputs().len() - 1;
+                    let secret_key = self
+                        .keybase
+                        .get_key(&self.config.key_name)
+                        .map_err(Error::key_base)?
+                        .into_ckb_keypair(self.network()?)
+                        .private_key;
+                    let signer = SecpSighashScriptSigner::new(Box::new(
+                        SecpCkbRawKeySigner::new_with_secret_keys(vec![secret_key]),
+                    ));
+                    let tx = signer
+                        .sign_tx(
+                            &tx,
+                            &ScriptGroup {
+                                script: Script::from(&self.tx_assembler_address()?),
+                                group_type: ScriptGroupType::Lock,
+                                input_indices: vec![last_input_idx],
+                                output_indices: vec![],
+                            },
+                        )
+                        .unwrap();
+                    tx_hashes.push(tx.hash().unpack());
+                    txs.push(tx);
+                    events.push(event);
+                }
+                Err(err) => {
+                    // return signing error such as no enough ckb
+                    return Err(err);
+                }
             }
         }
         let resps = txs.into_iter().map(|tx| {
@@ -652,7 +658,6 @@ impl ChainEndpoint for Ckb4IbcChain {
             }
         }
         self.clear_cache();
-
         Ok(result_events)
     }
 

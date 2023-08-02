@@ -223,6 +223,24 @@ impl TryFrom<VersionedKeyPair> for Secp256k1KeyPair {
 }
 
 impl Secp256k1KeyPair {
+    pub fn from_key_pair(
+        private_key: SecretKey,
+        public_key: PublicKey,
+        address_type: Secp256k1AddressType,
+        account_prefix: &str,
+    ) -> Result<Self, Error> {
+        let address = get_address(&public_key, address_type);
+        let account = encode_address(account_prefix, &address)?;
+
+        Ok(Self {
+            private_key,
+            public_key,
+            address,
+            address_type,
+            account,
+        })
+    }
+
     fn from_mnemonic_internal(
         mnemonic: &str,
         hd_path: &StandardHDPath,
@@ -231,16 +249,12 @@ impl Secp256k1KeyPair {
     ) -> Result<Self, Error> {
         let private_key = private_key_from_mnemonic(mnemonic, hd_path)?;
         let public_key = ExtendedPubKey::from_priv(&Secp256k1::signing_only(), &private_key);
-        let address = get_address(&public_key.public_key, address_type);
-        let account = encode_address(account_prefix, &address)?;
-
-        Ok(Self {
-            private_key: private_key.private_key,
-            public_key: public_key.public_key,
-            address,
+        Self::from_key_pair(
+            private_key.private_key,
+            public_key.public_key,
             address_type,
-            account,
-        })
+            account_prefix,
+        )
     }
 
     pub fn into_ckb_keypair(self, network: NetworkType) -> Self {

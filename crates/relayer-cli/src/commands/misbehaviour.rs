@@ -92,7 +92,7 @@ pub fn monitor_misbehaviour(
                 }
             }
             Err(e) => {
-                dbg!(e);
+                eprintln!("{}", e);
             }
         }
     }

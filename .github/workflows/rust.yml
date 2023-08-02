@@ -96,7 +96,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --no-fail-fast --workspace --exclude ibc-integration-test -- --nocapture
+          args: --all-features --no-fail-fast --workspace --exclude ibc-integration-test --exclude ckb4ibc-test -- --nocapture
 
   # test-coverage:
   #   runs-on: ubuntu-latest

@@ -28,12 +28,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v3
-      - name: add test key
-        run: |
-          mkdir -p ~/.hermes/keys/ckb4ibc-0/keyring-test
-          mkdir -p ~/.hermes/keys/ckb4ibc-1/keyring-test
-          cp ./tools/forcerelay-test/ckb/relayer_ckb_wallet.json ~/.hermes/keys/ckb4ibc-0/keyring-test
-          cp ./tools/forcerelay-test/ckb/relayer_ckb_wallet.json ~/.hermes/keys/ckb4ibc-1/keyring-test
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -54,6 +48,10 @@ jobs:
         with:
           python-version: '3.10'
       - uses: actions-rs/cargo@v1
+      - env:
+          CHAIN_COMMAND_PATHS=ckb
+          ACCOUNT_PREFIXES=ckb
+          RUST_LOG=info
         with:
           command: test
-          args: -p ckb4ibc-test --lib --all-features -- tests::integration_test --exact --nocapture --ignored
+          args: -p ckb4ibc-test --all-features -- --nocapture

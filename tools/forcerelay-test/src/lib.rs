@@ -224,7 +224,7 @@ mod tests {
             println!("searching for cells...");
             let cells = indexer_rpc.get_cells(search_key.clone(), Order::Asc, 4.into(), None);
             if let Err(e) = cells {
-                dbg!(e);
+                eprintln!("{:?}", e);
                 sleep(10);
                 retry_time += 1;
                 continue;

@@ -7,11 +7,14 @@ use crate::util::random::{random_u32, random_unused_tcp_port};
 
 const COSMOS_HD_PATH: &str = "m/44'/118'/0'/0/0";
 const EVMOS_HD_PATH: &str = "m/44'/60'/0'/0/0";
+/// FIXME use correct HD path for CKB
+const CKB_HD_PATH: &str = "m/44'/42'/0'/0/0";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChainType {
     Cosmos,
     Evmos,
+    Ckb,
 }
 
 impl ChainType {
@@ -19,6 +22,7 @@ impl ChainType {
         match self {
             Self::Cosmos => COSMOS_HD_PATH,
             Self::Evmos => EVMOS_HD_PATH,
+            Self::Ckb => CKB_HD_PATH,
         }
     }
 
@@ -32,6 +36,7 @@ impl ChainType {
                 }
             }
             Self::Evmos => ChainId::from_string(&format!("evmos_9000-{prefix}")),
+            Self::Ckb => ChainId::from_string(&format!("ckb4ibc-{prefix}")),
         }
     }
 
@@ -45,6 +50,7 @@ impl ChainType {
                 res.push("--json-rpc.address".to_owned());
                 res.push(format!("localhost:{json_rpc_port}"));
             }
+            Self::Ckb => {}
         }
         res
     }
@@ -55,6 +61,7 @@ impl ChainType {
             Self::Evmos => AddressType::Ethermint {
                 pk_type: "/ethermint.crypto.v1.ethsecp256k1.PubKey".to_string(),
             },
+            Self::Ckb => AddressType::Ckb { is_mainnet: false },
         }
     }
 }
@@ -69,6 +76,7 @@ impl FromStr for ChainType {
             name if name.contains("wasmd") => Ok(ChainType::Cosmos),
             name if name.contains("icad") => Ok(ChainType::Cosmos),
             name if name.contains("evmosd") => Ok(ChainType::Evmos),
+            name if name.contains("ckb") => Ok(ChainType::Ckb),
             _ => Ok(ChainType::Cosmos),
         }
     }
