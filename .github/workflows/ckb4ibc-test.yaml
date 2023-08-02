@@ -48,6 +48,10 @@ jobs:
         with:
           python-version: '3.10'
       - uses: actions-rs/cargo@v1
+      - env:
+          CHAIN_COMMAND_PATHS=ckb
+          ACCOUNT_PREFIXES=ckb
+          RUST_LOG=info
         with:
           command: test
           args: -p ckb4ibc-test --all-features -- --nocapture
