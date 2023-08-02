@@ -53,10 +53,6 @@ pub fn bootstrap_chains_with_full_nodes(
     ),
     Error,
 > {
-    eprintln!(
-        "bootstrapping chains {} and {}",
-        node_a.chain_driver.chain_id, node_b.chain_driver.chain_id
-    );
     let mut config = Config::default();
 
     add_chain_config(&mut config, &node_a)?;
