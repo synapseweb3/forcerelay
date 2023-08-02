@@ -6,6 +6,5 @@ Tx generator: <https://github.com/ImJeremyHe/forcerelay-tests-tx/commit/8ef5c2ad
 Run tests:
 
 ```
-CHAIN_COMMAND_PATHS=ckb ACCOUNT_PREFIXES=ckb RUST_LOG=info cargo test -p ckb4ibc-test tes
-t_ibc_transfer
+CHAIN_COMMAND_PATHS=ckb ACCOUNT_PREFIXES=ckb RUST_LOG=info cargo test -p ckb4ibc-test
 ```
