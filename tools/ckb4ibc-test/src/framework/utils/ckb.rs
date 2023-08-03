@@ -21,9 +21,12 @@ use relayer::chain::ckb4ibc::extractor::{
     extract_channel_end_from_tx, extract_connections_from_tx,
 };
 use relayer::keyring::{Secp256k1AddressType, Secp256k1KeyPair};
+use reqwest::blocking::Client;
 use secp256k1::rand::Rng;
 use secp256k1::{rand, PublicKey, Secp256k1, SecretKey};
+use toml_edit::{value, Document};
 
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
 use std::time::Duration;
@@ -56,21 +59,64 @@ pub fn check_ibc_connection(connection: IbcConnections, count: u32) -> bool {
     connection.state == State::Open
 }
 
-fn send_tx(req: &str, port: u32) -> RpcResponse {
-    let output = Command::new("curl")
-        .arg("-H")
-        .arg("content-type: application/json")
-        .arg("-d")
-        .arg(format!("@{}", req))
-        .arg(format!("http://localhost:{}", port))
-        .output()
-        .unwrap();
-    serde_json::from_slice(&output.stdout)
-        .map_err(|e| {
-            println!("{}", String::from_utf8_lossy(&output.stdout));
-            e
-        })
-        .unwrap()
+fn send_tx(request_body: String, port: u32) -> Result<RpcResponse> {
+    // Create a reqwest client
+    let client = Client::new();
+
+    // Build the request with the appropriate headers and body
+    let response = client
+        .post(&format!("http://localhost:{}", port))
+        .header("content-type", "application/json")
+        .body(request_body)
+        .send()?
+        .error_for_status()?;
+
+    // Deserialize the response JSON into RpcResponse
+    let rpc_response = response.json::<RpcResponse>()?;
+    Ok(rpc_response)
+}
+
+fn modify_ckb_config_port(ckb_path: &PathBuf, port: u32) -> Result<()> {
+    fn replace_port(addr: &str, port: u32, sep: &str) -> String {
+        let port_str = port.to_string();
+        let mut parts: Vec<_> = addr.split(sep).collect();
+        parts.pop();
+        parts.push(&port_str);
+        parts.join(sep)
+    }
+
+    fn replace_port_in_item(item: &mut toml_edit::Item, port: u32, sep: &str) {
+        let addr = item.as_value().unwrap().as_str().unwrap();
+        *item = value(replace_port(addr, port, sep));
+    }
+
+    // modify ckb.toml
+    {
+        let ckb_config_path = ckb_path.join("ckb.toml");
+        let content = fs::read_to_string(&ckb_config_path)?;
+        let mut ckb_config = content.parse::<Document>().expect("invalid toml");
+        // rpc port
+        replace_port_in_item(&mut ckb_config["rpc"]["listen_address"], port, ":");
+        // network p2p port
+        replace_port_in_item(
+            &mut ckb_config["network"]["listen_addresses"][0],
+            port + 1,
+            "/",
+        );
+        fs::write(ckb_config_path, ckb_config.to_string())?;
+    }
+
+    // modify miner.toml
+    {
+        let miner_config_path = ckb_path.join("ckb-miner.toml");
+        let content = fs::read_to_string(&miner_config_path)?;
+        let mut miner_config = content.parse::<Document>().expect("invalid toml");
+        // rpc port
+        replace_port_in_item(&mut miner_config["miner"]["client"]["rpc_url"], port, ":");
+        fs::write(miner_config_path, miner_config.to_string())?;
+    }
+
+    Ok(())
 }
 
 pub fn prepare_ckb_chain(
@@ -126,30 +172,7 @@ pub fn prepare_ckb_chain(
     }
 
     if port != 8114 {
-        Command::new("sed")
-            .arg("-i")
-            .arg("")
-            .arg("-e")
-            .arg(format!("s/8114/{}/g", port))
-            .arg("-e")
-            .arg(format!("s/8115/{}/g", port + 1))
-            .arg("ckb.toml")
-            .current_dir(&working_dir)
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap();
-        Command::new("sed")
-            .arg("-i")
-            .arg("")
-            .arg("-e")
-            .arg(format!("s/8114/{}/g", port))
-            .arg("ckb-miner.toml")
-            .current_dir(&working_dir)
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap();
+        modify_ckb_config_port(&ckb_path.try_into().unwrap(), port).unwrap();
     }
 
     let ckb_process = ChildProcess::new(
@@ -180,19 +203,31 @@ pub fn prepare_ckb_chain(
         port,
     );
 
-    let output = send_tx("txs/deploy_conn_chan.json", port);
+    let output = send_tx(
+        fs::read_to_string("txs/deploy_conn_chan.json").unwrap(),
+        port,
+    )
+    .unwrap();
     print!("deploying conn and channel: {output}");
 
     // check `txs/deploy_conn_chan.json`
     check_and_wait_ckb_transacton(output.result, port);
 
-    let output = send_tx("txs/deploy_packet_metadata.json", port);
+    let output = send_tx(
+        fs::read_to_string("txs/deploy_packet_metadata.json").unwrap(),
+        port,
+    )
+    .unwrap();
     print!("deploying packet and metadata: {output}");
 
     // check `txs/deploy_packet_metadata.json`
     check_and_wait_ckb_transacton(output.result, port);
 
-    let output = send_tx("txs/create_connection.json", port);
+    let output = send_tx(
+        fs::read_to_string("txs/create_connection.json").unwrap(),
+        port,
+    )
+    .unwrap();
     print!("deploying create connection: {output}");
 
     // check `txs/create_connection.json`

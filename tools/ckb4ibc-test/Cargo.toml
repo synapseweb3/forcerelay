@@ -30,3 +30,4 @@ ibc-test-framework = { path = "../test-framework" }
 toml = "=0.5.11"
 anyhow = "1.0.72"
 log = "0.4.19"
+toml_edit = "0.19.14"
