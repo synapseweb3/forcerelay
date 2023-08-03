@@ -25,6 +25,7 @@ use relayer::keyring::{Secp256k1AddressType, Secp256k1KeyPair};
 use reqwest::blocking::Client;
 use secp256k1::rand::Rng;
 use secp256k1::{rand, PublicKey, Secp256k1, SecretKey};
+use tokio::runtime::Runtime;
 use toml_edit::{value, Document};
 
 use std::path::Path;
@@ -243,8 +244,15 @@ fn pubkey_to_script_args(public_key: &PublicKey) -> [u8; 20] {
         .unwrap()
 }
 
+fn get_rt() -> &'static Runtime {
+    lazy_static::lazy_static! {
+        static ref RT: Runtime = Runtime::new().unwrap();
+    }
+    &RT
+}
+
 fn wait_task<F: Future>(f: F) -> F::Output {
-    tokio::runtime::Runtime::new().unwrap().block_on(f)
+    get_rt().block_on(f)
 }
 
 fn wait_for_port(port: u32) {

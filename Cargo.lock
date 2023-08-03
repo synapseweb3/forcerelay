@@ -1246,6 +1246,7 @@ dependencies = [
  "ibc-relayer",
  "ibc-test-framework",
  "jsonrpc-core",
+ "lazy_static",
  "log",
  "reqwest",
  "rlp",
