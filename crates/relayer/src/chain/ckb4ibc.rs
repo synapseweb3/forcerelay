@@ -748,7 +748,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .map(|client_type| {
                 let client_id = self.config.lc_client_id(*client_type).unwrap();
                 IdentifiedAnyClientState {
-                    client_id: client_id.clone(),
+                    client_id,
                     client_state: CkbClientState {
                         chain_id: self.id(),
                         latest_height: Height::default(),
