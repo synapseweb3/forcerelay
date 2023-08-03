@@ -7,13 +7,14 @@ use ckb_chain_spec::ChainSpec;
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections};
 use ckb_ics_axon::object::State;
 use ckb_ics_axon::ChannelArgs;
-use ckb_jsonrpc_types::{ChainInfo, Deserialize, JsonBytes, Status};
+use ckb_jsonrpc_types::{Deserialize, JsonBytes, Status};
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
 use ckb_sdk::*;
 use ckb_types::core::ScriptHashType;
 use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::{h256, H256};
+use futures::Future;
 use ibc_test_framework::prelude::Wallet;
 use ibc_test_framework::types::process::ChildProcess;
 use relayer::chain::ckb::prelude::CkbReader;
@@ -24,9 +25,10 @@ use relayer::keyring::{Secp256k1AddressType, Secp256k1KeyPair};
 use reqwest::blocking::Client;
 use secp256k1::rand::Rng;
 use secp256k1::{rand, PublicKey, Secp256k1, SecretKey};
+use tokio::runtime::Runtime;
 use toml_edit::{value, Document};
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
 use std::time::Duration;
@@ -65,7 +67,7 @@ fn send_tx(request_body: String, port: u32) -> Result<RpcResponse> {
 
     // Build the request with the appropriate headers and body
     let response = client
-        .post(&format!("http://localhost:{}", port))
+        .post(format!("http://localhost:{}", port))
         .header("content-type", "application/json")
         .body(request_body)
         .send()?
@@ -76,7 +78,7 @@ fn send_tx(request_body: String, port: u32) -> Result<RpcResponse> {
     Ok(rpc_response)
 }
 
-fn modify_ckb_config_port(ckb_path: &PathBuf, port: u32) -> Result<()> {
+fn modify_ckb_config_port(ckb_path: &Path, port: u32) -> Result<()> {
     fn replace_port(addr: &str, port: u32, sep: &str) -> String {
         let port_str = port.to_string();
         let mut parts: Vec<_> = addr.split(sep).collect();
@@ -172,7 +174,7 @@ pub fn prepare_ckb_chain(
     }
 
     if port != 8114 {
-        modify_ckb_config_port(&ckb_path.try_into().unwrap(), port).unwrap();
+        modify_ckb_config_port(Path::new(ckb_path), port).unwrap();
     }
 
     let ckb_process = ChildProcess::new(
@@ -198,7 +200,7 @@ pub fn prepare_ckb_chain(
     );
 
     // check transaction in genesis
-    check_and_wait_ckb_transacton(
+    check_and_wait_ckb_transaction(
         h256!("0x227de871ce6ab120a67960f831b04148bf79b4e56349dde7a8001f93191736ed"),
         port,
     );
@@ -211,7 +213,7 @@ pub fn prepare_ckb_chain(
     print!("deploying conn and channel: {output}");
 
     // check `txs/deploy_conn_chan.json`
-    check_and_wait_ckb_transacton(output.result, port);
+    check_and_wait_ckb_transaction(output.result, port);
 
     let output = send_tx(
         fs::read_to_string("txs/deploy_packet_metadata.json").unwrap(),
@@ -221,7 +223,7 @@ pub fn prepare_ckb_chain(
     print!("deploying packet and metadata: {output}");
 
     // check `txs/deploy_packet_metadata.json`
-    check_and_wait_ckb_transacton(output.result, port);
+    check_and_wait_ckb_transaction(output.result, port);
 
     let output = send_tx(
         fs::read_to_string("txs/create_connection.json").unwrap(),
@@ -231,7 +233,7 @@ pub fn prepare_ckb_chain(
     print!("deploying create connection: {output}");
 
     // check `txs/create_connection.json`
-    check_and_wait_ckb_transacton(output.result, port);
+    check_and_wait_ckb_transaction(output.result, port);
 
     (ckb_process, miner_process)
 }
@@ -242,10 +244,21 @@ fn pubkey_to_script_args(public_key: &PublicKey) -> [u8; 20] {
         .unwrap()
 }
 
+fn get_rt() -> &'static Runtime {
+    lazy_static::lazy_static! {
+        static ref RT: Runtime = Runtime::new().unwrap();
+    }
+    &RT
+}
+
+fn wait_task<F: Future>(f: F) -> F::Output {
+    get_rt().block_on(f)
+}
+
 fn wait_for_port(port: u32) {
     let timeout = Duration::from_secs(15);
     let now = Instant::now();
-    while let Err(err) = get_blockchain_info(port) {
+    while let Err(err) = wait_task(get_client(port).get_blockchain_info()) {
         if now.elapsed() > timeout {
             panic!(
                 "wait for port {} timeout({:?}), error {:?}",
@@ -255,21 +268,16 @@ fn wait_for_port(port: u32) {
     }
 }
 
-fn get_blockchain_info(port: u32) -> Result<ChainInfo> {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+fn get_client(port: u32) -> RpcClient {
     let url = Url::from_str(&format!("http://127.0.0.1:{}", port)).unwrap();
-    let client = RpcClient::new(&url, &url);
-    rt.block_on(client.get_blockchain_info())
-        .map_err(Into::into)
+    RpcClient::new(&url, &url)
 }
 
-fn check_and_wait_ckb_transacton(hash: H256, port: u32) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let url = Url::from_str(&format!("http://127.0.0.1:{}", port)).unwrap();
-    let client = RpcClient::new(&url, &url);
+fn check_and_wait_ckb_transaction(hash: H256, port: u32) {
+    let client = get_client(port);
     let mut loop_count = 0;
     loop {
-        let result = rt.block_on(client.get_transaction(&hash)).unwrap();
+        let result = wait_task(client.get_transaction(&hash)).unwrap();
         if let Some(tx) = result {
             if Status::Committed == tx.tx_status.status {
                 return;
@@ -284,9 +292,7 @@ fn check_and_wait_ckb_transacton(hash: H256, port: u32) {
 }
 
 pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let url = Url::from_str(&format!("http://127.0.0.1:{}", port)).unwrap();
-    let client = RpcClient::new(&url, &url);
+    let client = get_client(port);
     let mut loop_count = 0;
     loop {
         let search_connection_cell = client.fetch_live_cells(
@@ -305,10 +311,9 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
             1,
             None,
         );
-        let cells = rt.block_on(search_connection_cell).unwrap();
+        let cells = wait_task(search_connection_cell).unwrap();
         if let Some(connection_cell) = cells.objects.into_iter().next() {
-            let tx = rt
-                .block_on(client.get_transaction(&connection_cell.out_point.tx_hash))
+            let tx = wait_task(client.get_transaction(&connection_cell.out_point.tx_hash))
                 .unwrap()
                 .unwrap()
                 .transaction
@@ -334,9 +339,7 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
 }
 
 pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32]) -> IbcChannel {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let url = Url::from_str(&format!("http://127.0.0.1:{}", port)).unwrap();
-    let rpc_client = RpcClient::new(&url, &url);
+    let rpc_client = get_client(port);
     let mut loop_count = 0;
     loop {
         let search_channel_cell = rpc_client.fetch_live_cells(
@@ -364,11 +367,10 @@ pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32]) -> IbcChannel {
             1,
             None,
         );
-        let cells = rt.block_on(search_channel_cell).unwrap();
+        let cells = wait_task(search_channel_cell).unwrap();
         if let Some(channel_cell) = cells.objects.first() {
             let tx_hash = &channel_cell.out_point.tx_hash;
-            let tx = rt
-                .block_on(rpc_client.get_transaction(tx_hash))
+            let tx = wait_task(rpc_client.get_transaction(tx_hash))
                 .unwrap()
                 .unwrap()
                 .transaction
