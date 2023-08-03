@@ -1256,6 +1256,7 @@ dependencies = [
  "tiny-keccak",
  "tokio",
  "toml 0.5.11",
+ "toml_edit",
 ]
 
 [[package]]
