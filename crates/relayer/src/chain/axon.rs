@@ -24,7 +24,7 @@ use ethers::{
     prelude::{k256::ecdsa::SigningKey, EthLogDecode, SignerMiddleware},
     providers::{Middleware, Provider, Ws},
     signers::{Signer as _, Wallet},
-    types::{TransactionRequest, TxHash, U64},
+    types::{BlockNumber, TransactionRequest, TxHash, U64},
     utils::rlp,
 };
 use ibc_proto::google::protobuf::Any;
@@ -50,12 +50,12 @@ use ibc_relayer_types::{
             channel::{ChannelEnd, IdentifiedChannelEnd},
             msgs::{
                 acknowledgement, chan_close_confirm, chan_close_init, chan_open_ack,
-                chan_open_confirm, chan_open_init, chan_open_try, recv_packet,
+                chan_open_confirm, chan_open_init, chan_open_try, recv_packet, timeout,
             },
             packet::{PacketMsgType, Sequence},
         },
         ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
-        ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId},
+        ics24_host::identifier::{ChainId, ChannelId, ClientId, ConnectionId, PortId},
     },
     events::IbcEvent,
     proofs::{ConsensusProof, Proofs},
@@ -101,6 +101,20 @@ mod utils;
 pub use rpc::AxonRpc;
 use utils::*;
 
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+
+// use lazy_static to replace in-object variables to speed up message transfer while
+// counting on the process of cross-thread message is too slow to trigger some issues
+lazy_static! {
+    pub static ref CONNECTION_TX_HASH: Mutex<HashMap<(ChainId, ConnectionId), TxHash>> =
+        Mutex::new(HashMap::new());
+    pub static ref CHANNEL_TX_HASH: Mutex<HashMap<(ChainId, ChannelId, PortId), TxHash>> =
+        Mutex::new(HashMap::new());
+    pub static ref PACKET_TX_HASH: Mutex<HashMap<(ChainId, ChannelId, PortId, u64), TxHash>> =
+        Mutex::new(HashMap::new());
+}
+
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
     config: AxonChainConfig,
@@ -110,12 +124,8 @@ pub struct AxonChain {
     rpc_client: rpc::AxonRpcClient,
     client: Arc<ContractProvider>,
     keybase: KeyRing<Secp256k1KeyPair>,
-    conn_tx_hash: HashMap<ConnectionId, TxHash>,
-    chan_tx_hash: HashMap<(ChannelId, PortId), TxHash>,
-    packet_tx_hash: HashMap<(ChannelId, PortId, u64), TxHash>,
 }
 
-// Allow temporarily for development. Should remove when work is done.
 impl ChainEndpoint for AxonChain {
     type LightBlock = AxonLightBlock;
     type Header = AxonHeader;
@@ -150,6 +160,7 @@ impl ChainEndpoint for AxonChain {
 
         // TODO: since Ckb endpoint uses Axon metadata cell as its light client, Axon
         //       endpoint has no need to monitor the update of its metadata
+        //
         // let metadata = rt.block_on(rpc_client.get_current_metadata())?;
         // let epoch_len = metadata.version.end - metadata.version.start + 1;
         // light_client.bootstrap(client.clone(), rpc_client.clone(), epoch_len)?;
@@ -163,9 +174,6 @@ impl ChainEndpoint for AxonChain {
             contract,
             rpc_client,
             client,
-            conn_tx_hash: HashMap::new(),
-            chan_tx_hash: HashMap::new(),
-            packet_tx_hash: HashMap::new(),
         })
     }
 
@@ -226,9 +234,23 @@ impl ChainEndpoint for AxonChain {
 
     fn send_messages_and_wait_check_tx(
         &mut self,
-        _tracked_msgs: TrackedMsgs,
+        tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<Response>, Error> {
-        todo!()
+        let responses = self
+            .send_messages_and_wait_commit(tracked_msgs)?
+            .into_iter()
+            .map(|event| {
+                let value = event.to_string();
+                let data = value.as_bytes().to_vec();
+                Response {
+                    code: tendermint::abci::Code::Ok,
+                    data: data.into(),
+                    log: String::new(),
+                    hash: tendermint::Hash::Sha256(event.tx_hash),
+                }
+            })
+            .collect();
+        Ok(responses)
     }
 
     fn verify_header(
@@ -255,19 +277,22 @@ impl ChainEndpoint for AxonChain {
         _key_name: Option<&str>,
         _denom: Option<&str>,
     ) -> Result<Balance, Error> {
+        // TODO: implement the real `query_balance` function later
         warn!("axon query_balance() cannot implement");
         Ok(Balance {
-            amount: "".to_owned(),
-            denom: "".to_owned(),
+            amount: "100".to_owned(),
+            denom: "AT".to_owned(),
         })
     }
 
     fn query_all_balances(&self, _key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
+        // TODO: implement the real `query_all_balances` function later
         warn!("axon query_all_balances() cannot implement");
         Ok(vec![])
     }
 
     fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {
+        // TODO: implement the real `query_denom_trace` function later
         warn!("axon query_denom_trace() cannot implement");
         Ok(DenomTrace {
             path: "".to_owned(),
@@ -281,12 +306,26 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn query_application_status(&self) -> Result<ChainStatus, Error> {
-        // we don't care about axon's light client, so we should skip status check on light client
-        let max_height = Height::new(u64::MAX, u64::MAX).map_err(Error::ics02)?;
-        Ok(ChainStatus {
-            height: max_height,
-            timestamp: Timestamp::now(),
-        })
+        let tip_block = self
+            .rt
+            .block_on(self.client.get_block(BlockNumber::Latest))
+            .map_err(|e| Error::rpc_response(e.to_string()))?;
+        if let Some(block) = tip_block {
+            let height = if let Some(number) = block.number {
+                Height::from_noncosmos_height(number.as_u64())
+            } else {
+                Height::default()
+            };
+            Ok(ChainStatus {
+                height,
+                timestamp: to_timestamp(block.timestamp.as_u64())?,
+            })
+        } else {
+            Ok(ChainStatus {
+                height: Height::default(),
+                timestamp: Timestamp::now(),
+            })
+        }
     }
 
     fn query_clients(
@@ -310,9 +349,7 @@ impl ChainEndpoint for AxonChain {
         _include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
         if matches!(request.height, QueryHeight::Specific(_)) {
-            return Err(Error::other_error(
-                "not support client state query in specific height".to_string(),
-            ));
+            warn!("query client state at specific height will fallback to latest");
         }
         let (client_state, _) = self
             .rt
@@ -332,6 +369,9 @@ impl ChainEndpoint for AxonChain {
         request: QueryConsensusStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error> {
+        if matches!(request.query_height, QueryHeight::Specific(_)) {
+            warn!("query consensus state at specific height will fallback to latest");
+        }
         let client_id: String = request.client_id.to_string();
         let height = request.consensus_height;
         let height = HeightData {
@@ -472,9 +512,8 @@ impl ChainEndpoint for AxonChain {
         _include_proof: IncludeProof,
     ) -> Result<(ChannelEnd, Option<MerkleProof>), Error> {
         if matches!(request.height, QueryHeight::Specific(_)) {
-            return Err(Error::other_error(
-                "not support channel query in specific height".to_string(),
-            ));
+            // TODO: no implemention for specific channel query
+            warn!("query channel at specific height will fallback to latest");
         }
         let (channel_end, _) = self
             .rt
@@ -605,9 +644,8 @@ impl ChainEndpoint for AxonChain {
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
         if matches!(request.height, QueryHeight::Specific(_)) {
-            return Err(Error::other_error(
-                "not support packet commitment query in specific height".to_string(),
-            ));
+            // TODO: no implemention for specific acknowledgement query
+            warn!("search packet acknoledgement at specific height will fallback to latest");
         }
         let (commitment, _) = self
             .rt
@@ -694,6 +732,7 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn query_txs(&self, _request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
+        // TODO
         warn!("axon query_txs() not support");
         Ok(vec![])
     }
@@ -702,6 +741,7 @@ impl ChainEndpoint for AxonChain {
         &self,
         _request: QueryPacketEventDataRequest,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        // TODO
         warn!("axon query_packet_events() not support");
         Ok(vec![])
     }
@@ -756,6 +796,7 @@ impl ChainEndpoint for AxonChain {
         _port_id: &PortId,
         _counterparty_payee: &Signer,
     ) -> Result<(), Error> {
+        // TODO
         warn!("axon maybe_register_counterparty_payee() not support");
         Ok(())
     }
@@ -764,6 +805,7 @@ impl ChainEndpoint for AxonChain {
         &self,
         _requests: Vec<CrossChainQueryRequest>,
     ) -> Result<Vec<CrossChainQueryResponse>, Error> {
+        // TODO
         warn!("axon cross_chain_query() not support");
         Ok(vec![])
     }
@@ -780,9 +822,9 @@ impl ChainEndpoint for AxonChain {
             ConnectionMsgType::OpenAck => connection::State::TryOpen,
             ConnectionMsgType::OpenConfirm => connection::State::Open,
         };
-        let tx_hash = self
-            .conn_tx_hash
-            .get(connection_id)
+        let conn_tx_hash = CONNECTION_TX_HASH.lock().unwrap();
+        let tx_hash = conn_tx_hash
+            .get(&(self.id(), connection_id.clone()))
             .ok_or(Error::conn_proof(
                 connection_id.clone(),
                 format!("missing connection tx_hash, state {state:?}"),
@@ -802,9 +844,9 @@ impl ChainEndpoint for AxonChain {
         channel_id: &ChannelId,
         height: Height,
     ) -> Result<Proofs, Error> {
-        let tx_hash = self
-            .chan_tx_hash
-            .get(&(channel_id.clone(), port_id.clone()))
+        let chan_tx_hash = CHANNEL_TX_HASH.lock().unwrap();
+        let tx_hash = chan_tx_hash
+            .get(&(self.id(), channel_id.clone(), port_id.clone()))
             .ok_or(Error::chan_proof(
                 port_id.clone(),
                 channel_id.clone(),
@@ -824,59 +866,57 @@ impl ChainEndpoint for AxonChain {
         sequence: Sequence,
         height: Height,
     ) -> Result<Proofs, Error> {
-        let tx_hash = self
-            .packet_tx_hash
-            .get(&(channel_id.clone(), port_id.clone(), sequence.into()))
+        let conn_tx_hash = PACKET_TX_HASH.lock().unwrap();
+        let tx_hash = conn_tx_hash
+            .get(&(
+                self.id(),
+                channel_id.clone(),
+                port_id.clone(),
+                sequence.into(),
+            ))
             .ok_or(Error::packet_proof(
                 port_id.clone(),
                 channel_id.clone(),
                 sequence.into(),
-                format!("missing packet tx_hash, type {packet_type:?}"),
+                format!(
+                    "missing packet tx_hash on {packet_type}({channel_id}/{port_id}/{sequence})"
+                ),
             ))?;
         let proofs = self.get_proofs(tx_hash, height).map_err(|e| {
             Error::chan_proof(
                 port_id.clone(),
                 channel_id.clone(),
-                format!("{}, type {packet_type:?}", e.detail()),
+                format!(
+                    "{}, {packet_type}({channel_id}/{port_id}/{sequence})",
+                    e.detail()
+                ),
             )
         })?;
         Ok(proofs)
-    }
-
-    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
-        &mut self,
-        cached_status: CacheTxHashStatus,
-        tx_hash: T,
-    ) -> Result<(), Error> {
-        let hash: [u8; 32] = tx_hash.into();
-        match cached_status {
-            CacheTxHashStatus::Connection(conn_id) => {
-                self.conn_tx_hash.insert(conn_id, hash.into());
-            }
-            CacheTxHashStatus::Channel(chan_id, port_id) => {
-                self.chan_tx_hash.insert((chan_id, port_id), hash.into());
-            }
-            CacheTxHashStatus::Packet(chan_id, port_id, sequence) => {
-                self.packet_tx_hash
-                    .insert((chan_id, port_id, sequence), hash.into());
-            }
-        }
-        Ok(())
     }
 }
 
 impl AxonChain {
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
         crate::time!("axon_init_event_monitor");
-        let header_receiver = self.light_client.subscribe();
+        // let header_receiver = self.light_client.subscribe();
         let (event_monitor, monitor_tx) = AxonEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
             self.config.contract_address,
-            header_receiver,
+            // header_receiver,
             self.rt.clone(),
         )
         .map_err(Error::event_monitor)?;
+
+        // restore past events to initialize tx_hash caches
+        let latest_block_count = self.config.restore_block_count;
+        event_monitor
+            .restore_event_tx_hashes(latest_block_count)
+            .map_err(Error::event_monitor)?
+            .into_iter()
+            .for_each(|v| cache_ics_tx_hash_with_event(self.id(), v.event, v.tx_hash));
+
         thread::spawn(move || event_monitor.run());
         Ok(monitor_tx)
     }
@@ -999,58 +1039,6 @@ impl AxonChain {
 
         Ok((block, state_root, proof, validators))
     }
-
-    fn cache_ics_tx_hash_with_event<T: Into<[u8; 32]>>(
-        &mut self,
-        event: IbcEvent,
-        tx_hash: T,
-    ) -> Result<(), Error> {
-        let tx_hash_status = match event {
-            IbcEvent::OpenInitConnection(event) => Some(CacheTxHashStatus::new_with_conn(
-                event.0.connection_id.unwrap(),
-            )),
-            IbcEvent::OpenTryConnection(event) => Some(CacheTxHashStatus::new_with_conn(
-                event.0.connection_id.unwrap(),
-            )),
-            IbcEvent::OpenAckConnection(event) => Some(CacheTxHashStatus::new_with_conn(
-                event.0.connection_id.unwrap(),
-            )),
-            IbcEvent::OpenConfirmConnection(event) => Some(CacheTxHashStatus::new_with_conn(
-                event.0.connection_id.unwrap(),
-            )),
-            IbcEvent::OpenInitChannel(event) => Some(CacheTxHashStatus::new_with_chan(
-                event.channel_id.unwrap(),
-                event.port_id,
-            )),
-            IbcEvent::OpenTryChannel(event) => Some(CacheTxHashStatus::new_with_chan(
-                event.channel_id.unwrap(),
-                event.port_id,
-            )),
-            IbcEvent::OpenAckChannel(event) => Some(CacheTxHashStatus::new_with_chan(
-                event.channel_id.unwrap(),
-                event.port_id,
-            )),
-            IbcEvent::OpenConfirmChannel(event) => Some(CacheTxHashStatus::new_with_chan(
-                event.channel_id.unwrap(),
-                event.port_id,
-            )),
-            IbcEvent::SendPacket(event) => Some(CacheTxHashStatus::new_with_packet(
-                event.packet.source_channel,
-                event.packet.source_port,
-                event.packet.sequence.into(),
-            )),
-            IbcEvent::ReceivePacket(event) => Some(CacheTxHashStatus::new_with_packet(
-                event.packet.destination_channel,
-                event.packet.destination_port,
-                event.packet.sequence.into(),
-            )),
-            _ => None,
-        };
-        if let Some(tx_hash_status) = tx_hash_status {
-            self.cache_ics_tx_hash(tx_hash_status, tx_hash)?;
-        }
-        Ok(())
-    }
 }
 
 macro_rules! convert {
@@ -1128,6 +1116,21 @@ impl AxonChain {
             acknowledgement::TYPE_URL => {
                 convert!(self, msg, MsgPacketAcknowledgement, acknowledge_packet)
             }
+            timeout::TYPE_URL => {
+                let msg = {
+                    let msg = timeout::MsgTimeout::from_any(msg.clone())
+                        .map_err(|e| Error::protobuf_decode(timeout::TYPE_URL.into(), e))?;
+                    // FIXME: add recv_timeout methond into solidity contract to handle this message type
+                    recv_packet::MsgRecvPacket {
+                        packet: msg.packet,
+                        proofs: msg.proofs,
+                        signer: msg.signer,
+                    }
+                };
+                self.rt.block_on(async {
+                    Ok(self.contract.recv_packet(msg.into()).send().await?.await?)
+                })
+            }
             url => {
                 return Err(Error::other_error(format!(
                     "non-support message type url: {url}"
@@ -1187,12 +1190,13 @@ impl AxonChain {
                 chan_close_confirm::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(CloseConfirmChannelFilter(_))))
                 }
-                recv_packet::TYPE_URL => {
+                recv_packet::TYPE_URL | timeout::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(ReceivePacketFilter(_))))
                 }
                 acknowledgement::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(AcknowledgePacketFilter(_))))
                 }
+
                 url => {
                     return Err(Error::send_tx(format!(
                         "non-support message type url: {url}"
@@ -1215,11 +1219,90 @@ impl AxonChain {
             })?;
             Height::from_noncosmos_height(block_height.as_u64())
         };
-        self.cache_ics_tx_hash_with_event(event.clone(), tx_hash)?;
+        cache_ics_tx_hash_with_event(self.id(), event.clone(), tx_hash);
         Ok(IbcEventWithHeight {
             event,
             height,
             tx_hash,
         })
+    }
+}
+
+fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
+    chain_id: ChainId,
+    cached_status: CacheTxHashStatus,
+    tx_hash: T,
+) {
+    let hash: [u8; 32] = tx_hash.into();
+    match cached_status {
+        CacheTxHashStatus::Connection(conn_id) => {
+            CONNECTION_TX_HASH
+                .lock()
+                .unwrap()
+                .insert((chain_id, conn_id), hash.into());
+        }
+        CacheTxHashStatus::Channel(chan_id, port_id) => {
+            CHANNEL_TX_HASH
+                .lock()
+                .unwrap()
+                .insert((chain_id, chan_id, port_id), hash.into());
+        }
+        CacheTxHashStatus::Packet(chan_id, port_id, sequence) => {
+            PACKET_TX_HASH
+                .lock()
+                .unwrap()
+                .insert((chain_id, chan_id, port_id, sequence), hash.into());
+        }
+    }
+}
+
+pub fn cache_ics_tx_hash_with_event<T: Into<[u8; 32]>>(
+    chain_id: ChainId,
+    event: IbcEvent,
+    tx_hash: T,
+) {
+    let tx_hash_status = match event {
+        IbcEvent::OpenInitConnection(event) => Some(CacheTxHashStatus::new_with_conn(
+            event.0.connection_id.unwrap(),
+        )),
+        IbcEvent::OpenTryConnection(event) => Some(CacheTxHashStatus::new_with_conn(
+            event.0.connection_id.unwrap(),
+        )),
+        IbcEvent::OpenAckConnection(event) => Some(CacheTxHashStatus::new_with_conn(
+            event.0.connection_id.unwrap(),
+        )),
+        IbcEvent::OpenConfirmConnection(event) => Some(CacheTxHashStatus::new_with_conn(
+            event.0.connection_id.unwrap(),
+        )),
+        IbcEvent::OpenInitChannel(event) => Some(CacheTxHashStatus::new_with_chan(
+            event.channel_id.unwrap(),
+            event.port_id,
+        )),
+        IbcEvent::OpenTryChannel(event) => Some(CacheTxHashStatus::new_with_chan(
+            event.channel_id.unwrap(),
+            event.port_id,
+        )),
+        IbcEvent::OpenAckChannel(event) => Some(CacheTxHashStatus::new_with_chan(
+            event.channel_id.unwrap(),
+            event.port_id,
+        )),
+        IbcEvent::OpenConfirmChannel(event) => Some(CacheTxHashStatus::new_with_chan(
+            event.channel_id.unwrap(),
+            event.port_id,
+        )),
+        IbcEvent::SendPacket(event) => Some(CacheTxHashStatus::new_with_packet(
+            event.packet.source_channel,
+            event.packet.source_port,
+            event.packet.sequence.into(),
+        )),
+        IbcEvent::ReceivePacket(event) => Some(CacheTxHashStatus::new_with_packet(
+            event.packet.destination_channel,
+            event.packet.destination_port,
+            event.packet.sequence.into(),
+        )),
+        _ => None,
+    };
+    if let Some(tx_hash_status) = tx_hash_status {
+        cache_ics_tx_hash(chain_id, tx_hash_status, tx_hash);
     }
 }

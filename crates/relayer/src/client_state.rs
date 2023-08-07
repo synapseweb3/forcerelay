@@ -100,9 +100,12 @@ impl AnyClientState {
     pub fn trust_threshold(&self) -> Option<TrustThreshold> {
         match self {
             AnyClientState::Tendermint(state) => Some(state.trust_threshold),
-            AnyClientState::Eth(_) => None,
-            AnyClientState::Ckb(_) => None,
-            AnyClientState::Axon(_) => TrustThreshold::new(1, 2).ok(),
+
+            // `ONE_THRID` of TrustThreshold is just a mock value to pass runtime check
+            // for non-cosmos chains
+            AnyClientState::Eth(_) => Some(TrustThreshold::ONE_THIRD),
+            AnyClientState::Ckb(_) => Some(TrustThreshold::ONE_THIRD),
+            AnyClientState::Axon(_) => Some(TrustThreshold::ONE_THIRD),
 
             #[cfg(test)]
             AnyClientState::Mock(_) => None,

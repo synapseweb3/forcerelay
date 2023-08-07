@@ -39,9 +39,7 @@ use crate::{
     misbehaviour::MisbehaviourEvidence,
 };
 
-use super::{
-    reply_channel, CacheTxHashStatus, ChainHandle, ChainRequest, HealthCheck, ReplyTo, Subscription,
-};
+use super::{reply_channel, ChainHandle, ChainRequest, HealthCheck, ReplyTo, Subscription};
 
 /// A basic chain handle implementation.
 /// For use in interactive CLIs, e.g., `query`, `tx`, etc.
@@ -516,17 +514,5 @@ impl ChainHandle for BaseChainHandle {
         request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error> {
         self.send(|reply_to| ChainRequest::QueryIncentivizedPacket { request, reply_to })
-    }
-
-    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
-        &mut self,
-        cached_status: CacheTxHashStatus,
-        tx_hash: T,
-    ) -> Result<(), Error> {
-        self.send(|reply_to| ChainRequest::CacheIcsTxHash {
-            cached_status,
-            tx_hash: tx_hash.into(),
-            reply_to,
-        })
     }
 }

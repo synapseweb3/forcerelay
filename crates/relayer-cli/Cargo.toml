@@ -18,7 +18,7 @@ default-run = "forcerelay"
 name = "forcerelay"
 
 [features]
-default     = ["telemetry", "rest-server", "std", "eyre_tracer",]
+default     = ["rest-server", "std", "eyre_tracer"]
 std         = ["flex-error/std"]
 eyre_tracer = ["flex-error/eyre_tracer"]
 profiling   = ["ibc-relayer/profiling"]
@@ -30,7 +30,7 @@ ibc-relayer-types  = { version = "0.23.0", path = "../relayer-types", features =
 ibc-relayer        = { version = "0.23.0", path = "../relayer" }
 ibc-telemetry      = { version = "0.23.0", path = "../telemetry", optional = true }
 ibc-relayer-rest   = { version = "0.23.0", path = "../relayer-rest", optional = true }
-ibc-chain-registry = { version = "0.23.0" , path = "../chain-registry" }
+ibc-chain-registry = { version = "0.23.0", path = "../chain-registry" }
 
 atty                     = "0.2.14"
 clap                     = { version = "3.2", features = ["cargo"] }

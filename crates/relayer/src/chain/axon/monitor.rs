@@ -1,18 +1,15 @@
 use std::sync::Arc;
 
 use super::contract::*;
-// use super::ibc::*;
+use crate::chain::axon::cache_ics_tx_hash_with_event;
 use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
-use axon_tools::types::AxonHeader;
 use crossbeam_channel as channel;
 use ethers::contract::LogMeta;
 use ethers::prelude::*;
 use ethers::providers::Middleware;
 use ethers::types::Address;
-use ibc_relayer_types::core::ics02_client::events;
 use ibc_relayer_types::Height;
-use tokio::sync::mpsc::Receiver;
 use OwnableIBCHandler as Contract;
 use OwnableIBCHandlerEvents as ContractEvents;
 
@@ -24,8 +21,6 @@ use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error, info, instrument};
 
 type Client = Provider<Ws>;
-// abigen!(IBC, "./crates/relayer/src/chain/axon/IBC.json");
-// use IBCEvents as ContractIBCEvents;
 
 // #[derive(Clone, Debug)]
 pub struct AxonEventMonitor {
@@ -35,7 +30,6 @@ pub struct AxonEventMonitor {
     contract_address: Address,
     start_block_number: u64,
     rx_cmd: channel::Receiver<MonitorCmd>,
-    header_receiver: Receiver<AxonHeader>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
 }
 
@@ -51,22 +45,21 @@ impl AxonEventMonitor {
         chain_id: ChainId,
         websocket_addr: WebSocketClientUrl,
         contract_address: Address,
-        header_receiver: Receiver<AxonHeader>,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
 
-        // let ws_addr = websocket_addr.clone();
         let client = rt
             .block_on(Provider::<Ws>::connect(websocket_addr.to_string()))
             .map_err(|_| Error::client_creation_failed(chain_id.clone(), websocket_addr))?;
 
-        // here should consider recovering from long-time-crash
+        // FIXME: here should consider recovering from long-time-crash
         let start_block_number = rt
             .block_on(client.get_block_number())
             .map_err(|e| Error::others(e.to_string()))?
             .as_u64();
 
+        info!("listen IBC events from block {start_block_number}");
         let event_bus = EventBus::new();
         let monitor = Self {
             client: Arc::new(client),
@@ -75,7 +68,6 @@ impl AxonEventMonitor {
             contract_address,
             start_block_number,
             rx_cmd,
-            header_receiver,
             event_bus,
         };
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
@@ -89,103 +81,148 @@ impl AxonEventMonitor {
         fields(chain = %self.chain_id)
     )]
     pub fn run(mut self) {
-        debug!("starting Axon event monitor");
-        let rt = self.rt.clone();
-        rt.block_on(async {
+        if let Next::Continue = self.update_subscribe(false) {
+            info!("start Axon event monitor for {}", self.chain_id);
             loop {
-                match self.run_loop().await {
-                    Next::Continue => continue,
-                    Next::Abort => break,
+                if let Next::Abort = self.run_loop() {
+                    break;
                 }
             }
-        });
-        debug!("event monitor is shutting down");
+            debug!("event monitor is shutting down");
+        }
         // TODO: close client
     }
 
-    fn update_subscribe(&mut self) -> Next {
-        if let Ok(cmd) = self.rx_cmd.try_recv() {
+    pub fn restore_event_tx_hashes(
+        &self,
+        latest_block_count: u64,
+    ) -> Result<Vec<IbcEventWithHeight>> {
+        let contract = Arc::new(Contract::new(
+            self.contract_address,
+            Arc::clone(&self.client),
+        ));
+        let restore_block_number = self
+            .start_block_number
+            .checked_sub(latest_block_count)
+            .ok_or(Error::others(format!(
+                "latest_block_count {latest_block_count} exceeds start_block_number {}",
+                self.start_block_number
+            )))?;
+        let events = self
+            .rt
+            .block_on(
+                contract
+                    .events()
+                    .from_block(restore_block_number)
+                    .to_block(self.start_block_number)
+                    .query_with_meta(),
+            )
+            .map_err(|e| Error::others(e.to_string()))?
+            .into_iter()
+            .map(|(event, meta)| {
+                IbcEventWithHeight::new_with_tx_hash(
+                    event.into(),
+                    Height::from_noncosmos_height(meta.block_number.as_u64()),
+                    meta.transaction_hash.into(),
+                )
+            })
+            .collect::<Vec<_>>();
+        debug!(
+            "restored {} events on contract {}",
+            events.len(),
+            self.contract_address
+        );
+        Ok(events)
+    }
+
+    fn update_subscribe(&mut self, use_try: bool) -> Next {
+        let result = if use_try {
+            self.rx_cmd.try_recv().ok()
+        } else {
+            self.rx_cmd.recv().ok()
+        };
+        if let Some(cmd) = result {
             match cmd {
                 MonitorCmd::Shutdown => return Next::Abort,
-                MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
+                MonitorCmd::Subscribe(tx) => {
+                    if let Err(e) = tx.send(self.event_bus.subscribe()) {
+                        error!("failed to send back subscription: {e}");
+                    }
+                }
             }
         }
         Next::Continue
     }
 
-    async fn run_loop(&mut self) -> Next {
+    fn run_loop(&mut self) -> Next {
         let contract = Arc::new(Contract::new(
             self.contract_address,
             Arc::clone(&self.client),
         ));
         let events = contract.events().from_block(self.start_block_number);
-        if let Ok(stream) = events.stream().await {
+        if let Ok(stream) = self.rt.block_on(events.stream()) {
             let mut meta_stream = stream.with_meta();
+            debug!("setup IBC contract events streaming process");
             loop {
-                tokio::select! {
-                    Some(header) = self.header_receiver.recv() => {
-                        if let Next::Abort = self.update_subscribe() {
-                            return Next::Abort;
-                        }
-                        let height = Height::new(0u64, header.number).expect("axon header height");
-                        let event = IbcEventWithHeight::new(
-                            events::NewBlock::new(height).into(),
-                            height,
-                        );
-                        let batch = EventBatch {
-                            chain_id: self.chain_id.clone(),
-                            tracking_id: TrackingId::new_uuid(),
-                            height,
-                            events: vec![event],
-                        };
-                        self.process_batch(batch);
-                    },
+                if let Next::Abort = self.update_subscribe(true) {
+                    return Next::Abort;
+                }
 
-                    Some(ret) = meta_stream.next() => {
-                        if let Next::Abort = self.update_subscribe() {
-                            return Next::Abort;
+                if let Some(ret) = self.rt.block_on(meta_stream.next()) {
+                    match ret {
+                        Ok((event, meta)) => {
+                            self.process_event(event, meta).unwrap_or_else(|e| {
+                                error!("error while process event: {:?}", e);
+                            });
                         }
-                        match ret {
-                            Ok((event, meta)) => {
-                                self.process_event(event, meta).unwrap_or_else(|e| {
-                                    error!("error while process event: {:?}", e);
-                                });
-                            }
-                            Err(err) => {
-                                error!("error when monitoring axon events, reason: {:?}", err);
-                                return Next::Continue;
-                                // TODO: reconnect
-                            }
+                        Err(err) => {
+                            error!("error when monitoring axon events, reason: {:?}", err);
+                            return Next::Continue;
+                            // TODO: reconnect
                         }
                     }
                 }
+
+                // Some(header) = self.header_receiver.recv() => {
+                //     if let Next::Abort = self.update_subscribe() {
+                //         return Next::Abort;
+                //     }
+                //     let height = Height::new(0u64, header.number).expect("axon header height");
+                //     let event = IbcEventWithHeight::new(
+                //         events::NewBlock::new(height).into(),
+                //         height,
+                //     );
+                //     let batch = EventBatch {
+                //         chain_id: self.chain_id.clone(),
+                //         tracking_id: TrackingId::new_uuid(),
+                //         height,
+                //         events: vec![event],
+                //     };
+                //     self.process_batch(batch);
+                // },
             }
         }
         Next::Abort
     }
 
     fn process_event(&mut self, event: ContractEvents, meta: LogMeta) -> Result<()> {
-        info!("[event] = {:?}", event);
-        info!("[event_meta] = {:?}\n", meta);
+        println!("\n{}\n[event] = {:?}", self.chain_id, event);
+        println!("[event_meta] = {:?}\n", meta);
         self.start_block_number = meta.block_number.as_u64();
+        let event = IbcEventWithHeight::new_with_tx_hash(
+            event.into(),
+            Height::from_noncosmos_height(meta.block_number.as_u64()),
+            meta.transaction_hash.into(),
+        );
+        cache_ics_tx_hash_with_event(self.chain_id.clone(), event.event.clone(), event.tx_hash);
         let batch = EventBatch {
             chain_id: self.chain_id.clone(),
-            tracking_id: TrackingId::new_uuid(),
-            height: Height::new(0, meta.block_number.as_u64()).unwrap(),
-            events: vec![self.to_ibc_event(event, meta)],
+            tracking_id: TrackingId::Static("Axon solidity event streaming"),
+            height: Height::from_noncosmos_height(meta.block_number.as_u64()),
+            events: vec![event],
         };
         self.process_batch(batch);
         Ok(())
-    }
-
-    fn to_ibc_event(&self, event: ContractEvents, meta: LogMeta) -> IbcEventWithHeight {
-        let height = meta.block_number.as_u64();
-        let tx_hash = meta.transaction_hash;
-        IbcEventWithHeight::new_with_tx_hash(
-            event.into(),
-            Height::new(0, height).unwrap(),
-            tx_hash.0,
-        )
     }
 
     fn process_batch(&mut self, batch: EventBatch) {

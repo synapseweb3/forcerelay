@@ -7,18 +7,14 @@ use ibc_relayer_types::{
     },
     core::{
         ics02_client::{
-            client_type::ClientType,
-            events as client_events,
-            msgs::create_client::{self, MsgCreateClient},
+            client_type::ClientType, events as client_events, msgs::create_client::MsgCreateClient,
         },
         ics03_connection::{
             self,
             connection::{self, ConnectionEnd, IdentifiedConnectionEnd},
             msgs::{
-                conn_open_ack::{self, MsgConnectionOpenAck},
-                conn_open_confirm::{self, MsgConnectionOpenConfirm},
-                conn_open_init::{self, MsgConnectionOpenInit},
-                conn_open_try::{self, MsgConnectionOpenTry},
+                conn_open_ack::MsgConnectionOpenAck, conn_open_confirm::MsgConnectionOpenConfirm,
+                conn_open_init::MsgConnectionOpenInit, conn_open_try::MsgConnectionOpenTry,
             },
         },
         ics04_channel::{
@@ -26,14 +22,10 @@ use ibc_relayer_types::{
             channel::ChannelEnd,
             channel::{self, IdentifiedChannelEnd},
             msgs::{
-                acknowledgement::{self, MsgAcknowledgement},
-                chan_close_confirm::{self, MsgChannelCloseConfirm},
-                chan_close_init::{self, MsgChannelCloseInit},
-                chan_open_ack::{self, MsgChannelOpenAck},
-                chan_open_confirm::{self, MsgChannelOpenConfirm},
-                chan_open_init::{self, MsgChannelOpenInit},
-                chan_open_try::{self, MsgChannelOpenTry},
-                recv_packet::{self, MsgRecvPacket},
+                acknowledgement::MsgAcknowledgement, chan_close_confirm::MsgChannelCloseConfirm,
+                chan_close_init::MsgChannelCloseInit, chan_open_ack::MsgChannelOpenAck,
+                chan_open_confirm::MsgChannelOpenConfirm, chan_open_init::MsgChannelOpenInit,
+                chan_open_try::MsgChannelOpenTry, recv_packet::MsgRecvPacket,
             },
             packet::Packet,
             timeout::TimeoutHeight,
@@ -43,12 +35,14 @@ use ibc_relayer_types::{
     },
     events::IbcEvent,
     proofs::Proofs,
-    timestamp::Timestamp,
     tx_msg::Msg,
     Height,
 };
 
-use super::contract;
+use super::{
+    contract,
+    utils::{to_timestamp, SEC_TO_NANO},
+};
 use crate::error::Error;
 
 fn into_ethers_client_id(value: Option<ClientId>) -> String {
@@ -288,6 +282,11 @@ impl From<contract::IdentifiedConnectionEndData> for IdentifiedConnectionEnd {
 
 impl From<contract::PacketData> for Packet {
     fn from(value: contract::PacketData) -> Self {
+        let timeout_height = if value.timeout_height.revision_height == 0 {
+            TimeoutHeight::Never
+        } else {
+            TimeoutHeight::At(value.timeout_height.into())
+        };
         Self {
             sequence: value.sequence.into(),
             source_port: value.source_port.as_str().parse().unwrap(),
@@ -295,8 +294,8 @@ impl From<contract::PacketData> for Packet {
             destination_port: value.destination_port.as_str().parse().unwrap(),
             destination_channel: value.destination_channel.as_str().parse().unwrap(),
             data: value.data.as_ref().to_vec(),
-            timeout_height: TimeoutHeight::At(value.timeout_height.into()),
-            timeout_timestamp: Timestamp::from_nanoseconds(value.timeout_timestamp).unwrap(),
+            timeout_height,
+            timeout_timestamp: to_timestamp(value.timeout_timestamp).unwrap(),
         }
     }
 }
@@ -314,7 +313,7 @@ impl From<Packet> for contract::PacketData {
                 TimeoutHeight::At(h) => h.into(),
                 TimeoutHeight::Never => Default::default(),
             },
-            timeout_timestamp: value.timeout_timestamp.nanoseconds(),
+            timeout_timestamp: value.timeout_timestamp.nanoseconds() / SEC_TO_NANO,
         }
     }
 }
@@ -344,8 +343,9 @@ impl TryFrom<Any> for contract::MsgCreateClient {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         MsgCreateClient::from_any(value)
-            .map_err(|e| Error::protobuf_decode(create_client::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .try_into()
     }
 }
@@ -364,8 +364,9 @@ impl TryFrom<Any> for contract::MsgConnectionOpenInit {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgConnectionOpenInit::from_any(value)
-            .map_err(|e| Error::protobuf_decode(conn_open_init::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -398,8 +399,9 @@ impl TryFrom<Any> for contract::MsgConnectionOpenTry {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgConnectionOpenTry::from_any(value)
-            .map_err(|e| Error::protobuf_decode(conn_open_try::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -426,8 +428,9 @@ impl TryFrom<Any> for contract::MsgConnectionOpenAck {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgConnectionOpenAck::from_any(value)
-            .map_err(|e| Error::protobuf_decode(conn_open_ack::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -447,8 +450,9 @@ impl TryFrom<Any> for contract::MsgConnectionOpenConfirm {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgConnectionOpenConfirm::from_any(value)
-            .map_err(|e| Error::protobuf_decode(conn_open_confirm::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -466,8 +470,9 @@ impl TryFrom<Any> for contract::MsgChannelOpenInit {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgChannelOpenInit::from_any(value)
-            .map_err(|e| Error::protobuf_decode(chan_open_init::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -490,8 +495,9 @@ impl TryFrom<Any> for contract::MsgChannelOpenTry {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgChannelOpenTry::from_any(value)
-            .map_err(|e| Error::protobuf_decode(chan_open_try::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -514,8 +520,9 @@ impl TryFrom<Any> for contract::MsgChannelOpenAck {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgChannelOpenAck::from_any(value)
-            .map_err(|e| Error::protobuf_decode(chan_open_ack::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -536,8 +543,9 @@ impl TryFrom<Any> for contract::MsgChannelOpenConfirm {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgChannelOpenConfirm::from_any(value)
-            .map_err(|e| Error::protobuf_decode(chan_open_confirm::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -555,8 +563,9 @@ impl TryFrom<Any> for contract::MsgChannelCloseInit {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgChannelCloseInit::from_any(value)
-            .map_err(|e| Error::protobuf_decode(chan_close_init::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -577,8 +586,9 @@ impl TryFrom<Any> for contract::MsgChannelCloseConfirm {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgChannelCloseConfirm::from_any(value)
-            .map_err(|e| Error::protobuf_decode(chan_close_confirm::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -598,8 +608,9 @@ impl TryFrom<Any> for contract::MsgPacketRecv {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgRecvPacket::from_any(value)
-            .map_err(|e| Error::protobuf_decode(recv_packet::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -620,8 +631,9 @@ impl TryFrom<Any> for contract::MsgPacketAcknowledgement {
     type Error = Error;
 
     fn try_from(value: Any) -> Result<Self, Self::Error> {
+        let type_url = value.type_url.clone();
         Ok(MsgAcknowledgement::from_any(value)
-            .map_err(|e| Error::protobuf_decode(acknowledgement::TYPE_URL.into(), e))?
+            .map_err(|e| Error::protobuf_decode(type_url, e))?
             .into())
     }
 }
@@ -782,7 +794,13 @@ impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
                 };
                 IbcEvent::AcknowledgePacket(event)
             }
-            WriteAcknowledgementFilter(_) => todo!(),
+            WriteAcknowledgementFilter(event) => {
+                let event = channel_events::WriteAcknowledgement {
+                    packet: event.packet.into(),
+                    ack: event.acknowledgement.to_vec(),
+                };
+                IbcEvent::WriteAcknowledgement(event)
+            }
             CreateClientFilter(event) => {
                 let client_id: ClientId = event.client_id.parse().unwrap();
                 let client_type = client_id.clone().into();
@@ -808,7 +826,11 @@ impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
                 };
                 IbcEvent::UpdateClient(event)
             }
-            OwnershipTransferredFilter(_) => todo!(),
+            OwnershipTransferredFilter(_) => {
+                IbcEvent::ChainError("unsupported event: OwnershipTransferredFilter".to_owned())
+            }
+            RegisterCellEmitterFilterFilter(_) => todo!(),
+            RemoveCellEmitterFilterFilter(_) => todo!(),
         };
         event
     }
