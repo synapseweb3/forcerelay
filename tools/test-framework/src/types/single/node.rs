@@ -179,6 +179,7 @@ impl FullNode {
             channel_type_args,
             packet_type_args,
             onchain_light_clients,
+            packet_filter: Default::default(),
         };
         Ok(config::ChainConfig::Ckb4Ibc(ckb_config))
     }
