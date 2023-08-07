@@ -2288,7 +2288,7 @@ version = "0.4.1"
 source = "git+https://github.com/synapseweb3/lighthouse?rev=2c246d6#2c246d68011f14a9ee959b8d75b1dcb5d30b2993"
 dependencies = [
  "ethereum-types",
- "itertools",
+ "itertools 0.10.5",
  "smallvec",
 ]
 
@@ -3573,7 +3573,7 @@ dependencies = [
  "ibc-relayer-storage",
  "ibc-relayer-types",
  "ibc-telemetry",
- "itertools",
+ "itertools 0.11.0",
  "jsonrpc-core",
  "moka",
  "num-bigint",
@@ -3642,7 +3642,7 @@ dependencies = [
  "ibc-relayer-rest",
  "ibc-relayer-types",
  "ibc-telemetry",
- "itertools",
+ "itertools 0.11.0",
  "once_cell",
  "oneline-eyre",
  "regex",
@@ -3700,7 +3700,7 @@ dependencies = [
  "hex",
  "ibc-proto",
  "ics23",
- "itertools",
+ "itertools 0.11.0",
  "num-rational",
  "primitive-types",
  "prost",
@@ -3756,7 +3756,7 @@ dependencies = [
  "ibc-relayer",
  "ibc-relayer-cli",
  "ibc-relayer-types",
- "itertools",
+ "itertools 0.11.0",
  "prost",
  "rand 0.8.5",
  "semver",
@@ -3976,6 +3976,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4080,7 +4089,7 @@ dependencies = [
  "bit-set",
  "diff",
  "ena",
- "itertools",
+ "itertools 0.10.5",
  "lalrpop-util",
  "petgraph",
  "pico-args",
@@ -4359,7 +4368,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ded15e7570c2a507a23e6c3a1c8d74507b779476e43afe93ddfc261d44173d"
 dependencies = [
  "darling",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "smallvec",
@@ -5366,7 +5375,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ea9b0f8cbe5e15a8a042d030bd96668db28ecb567ec37d691971ff5731d2b1b"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -5420,7 +5429,7 @@ version = "0.1.0"
 dependencies = [
  "clap 3.2.23",
  "futures",
- "itertools",
+ "itertools 0.11.0",
  "tendermint",
  "tendermint-rpc",
  "tokio",
@@ -6578,7 +6587,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff87dae6cdccacdbf3b19e99b271083556e808de0f59c74a01482f64fdbc61fc"
 dependencies = [
- "itertools",
+ "itertools 0.10.5",
  "lalrpop",
  "lalrpop-util",
  "phf 0.11.1",
@@ -6700,7 +6709,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b9e5728aa1a87141cefd4e7509903fc01fa0dcb108022b1e841a67c5159fc5"
 dependencies = [
  "darling",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "smallvec",
@@ -6722,7 +6731,7 @@ dependencies = [
  "hex",
  "home",
  "indicatif",
- "itertools",
+ "itertools 0.10.5",
  "once_cell",
  "rand 0.8.5",
  "reqwest",
@@ -7647,7 +7656,7 @@ dependencies = [
  "ethereum-types",
  "hex",
  "int_to_bytes",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "maplit",
