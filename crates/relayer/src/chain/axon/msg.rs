@@ -35,12 +35,14 @@ use ibc_relayer_types::{
     },
     events::IbcEvent,
     proofs::Proofs,
-    timestamp::Timestamp,
     tx_msg::Msg,
     Height,
 };
 
-use super::contract;
+use super::{
+    contract,
+    utils::{to_timestamp, SEC_TO_NANO},
+};
 use crate::error::Error;
 
 fn into_ethers_client_id(value: Option<ClientId>) -> String {
@@ -293,8 +295,7 @@ impl From<contract::PacketData> for Packet {
             destination_channel: value.destination_channel.as_str().parse().unwrap(),
             data: value.data.as_ref().to_vec(),
             timeout_height,
-            timeout_timestamp: Timestamp::from_nanoseconds(value.timeout_timestamp * 100000)
-                .unwrap(),
+            timeout_timestamp: to_timestamp(value.timeout_timestamp).unwrap(),
         }
     }
 }
@@ -312,7 +313,7 @@ impl From<Packet> for contract::PacketData {
                 TimeoutHeight::At(h) => h.into(),
                 TimeoutHeight::Never => Default::default(),
             },
-            timeout_timestamp: value.timeout_timestamp.nanoseconds() / 100000,
+            timeout_timestamp: value.timeout_timestamp.nanoseconds() / SEC_TO_NANO,
         }
     }
 }

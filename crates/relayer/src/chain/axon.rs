@@ -24,7 +24,7 @@ use ethers::{
     prelude::{k256::ecdsa::SigningKey, EthLogDecode, SignerMiddleware},
     providers::{Middleware, Provider, Ws},
     signers::{Signer as _, Wallet},
-    types::{TransactionRequest, TxHash, U64},
+    types::{BlockNumber, TransactionRequest, TxHash, U64},
     utils::rlp,
 };
 use ibc_proto::google::protobuf::Any;
@@ -277,7 +277,8 @@ impl ChainEndpoint for AxonChain {
         _key_name: Option<&str>,
         _denom: Option<&str>,
     ) -> Result<Balance, Error> {
-        // use mock coin to eliminate warns in wallet worker
+        // TODO: implement the real `query_balance` function later
+        warn!("axon query_balance() cannot implement");
         Ok(Balance {
             amount: "100".to_owned(),
             denom: "AT".to_owned(),
@@ -285,11 +286,13 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn query_all_balances(&self, _key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
+        // TODO: implement the real `query_all_balances` function later
         warn!("axon query_all_balances() cannot implement");
         Ok(vec![])
     }
 
     fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {
+        // TODO: implement the real `query_denom_trace` function later
         warn!("axon query_denom_trace() cannot implement");
         Ok(DenomTrace {
             path: "".to_owned(),
@@ -303,23 +306,23 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn query_application_status(&self) -> Result<ChainStatus, Error> {
-        let tip_block_number = self
-            .rt
-            .block_on(self.client.get_block_number())
-            .map_err(|e| Error::rpc_response(e.to_string()))?
-            .as_u64();
         let tip_block = self
             .rt
-            .block_on(self.client.get_block(tip_block_number))
+            .block_on(self.client.get_block(BlockNumber::Latest))
             .map_err(|e| Error::rpc_response(e.to_string()))?;
         if let Some(block) = tip_block {
+            let height = if let Some(number) = block.number {
+                Height::from_noncosmos_height(number.as_u64())
+            } else {
+                Height::default()
+            };
             Ok(ChainStatus {
-                height: Height::from_noncosmos_height(tip_block_number),
-                timestamp: Timestamp::from_nanoseconds(block.timestamp.as_u64() * 100000).unwrap(),
+                height,
+                timestamp: to_timestamp(block.timestamp.as_u64())?,
             })
         } else {
             Ok(ChainStatus {
-                height: Height::from_noncosmos_height(tip_block_number),
+                height: Height::default(),
                 timestamp: Timestamp::now(),
             })
         }
@@ -509,6 +512,7 @@ impl ChainEndpoint for AxonChain {
         _include_proof: IncludeProof,
     ) -> Result<(ChannelEnd, Option<MerkleProof>), Error> {
         if matches!(request.height, QueryHeight::Specific(_)) {
+            // TODO: no implemention for specific channel query
             warn!("query channel at specific height will fallback to latest");
         }
         let (channel_end, _) = self
@@ -640,6 +644,7 @@ impl ChainEndpoint for AxonChain {
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
         if matches!(request.height, QueryHeight::Specific(_)) {
+            // TODO: no implemention for specific acknowledgement query
             warn!("search packet acknoledgement at specific height will fallback to latest");
         }
         let (commitment, _) = self
@@ -727,6 +732,7 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn query_txs(&self, _request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
+        // TODO
         warn!("axon query_txs() not support");
         Ok(vec![])
     }
@@ -735,6 +741,7 @@ impl ChainEndpoint for AxonChain {
         &self,
         _request: QueryPacketEventDataRequest,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
+        // TODO
         warn!("axon query_packet_events() not support");
         Ok(vec![])
     }
@@ -789,6 +796,7 @@ impl ChainEndpoint for AxonChain {
         _port_id: &PortId,
         _counterparty_payee: &Signer,
     ) -> Result<(), Error> {
+        // TODO
         warn!("axon maybe_register_counterparty_payee() not support");
         Ok(())
     }
@@ -797,6 +805,7 @@ impl ChainEndpoint for AxonChain {
         &self,
         _requests: Vec<CrossChainQueryRequest>,
     ) -> Result<Vec<CrossChainQueryResponse>, Error> {
+        // TODO
         warn!("axon cross_chain_query() not support");
         Ok(vec![])
     }

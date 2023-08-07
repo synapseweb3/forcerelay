@@ -144,7 +144,11 @@ impl AxonEventMonitor {
         if let Some(cmd) = result {
             match cmd {
                 MonitorCmd::Shutdown => return Next::Abort,
-                MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
+                MonitorCmd::Subscribe(tx) => {
+                    if let Err(e) = tx.send(self.event_bus.subscribe()) {
+                        error!("failed to send back subscription: {e}");
+                    }
+                }
             }
         }
         Next::Continue

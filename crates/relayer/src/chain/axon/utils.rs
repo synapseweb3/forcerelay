@@ -18,7 +18,14 @@ use ibc_relayer_types::{
         ics07_ckb::{client_state::CkbClientState, consensus_state::CkbConsensusState},
     },
     core::{ics02_client::client_type::ClientType, ics24_host::identifier::ClientId},
+    timestamp::Timestamp,
 };
+
+pub const SEC_TO_NANO: u64 = 1_000_000_000;
+
+pub fn to_timestamp(seconds: u64) -> Result<Timestamp, Error> {
+    Timestamp::from_nanoseconds(seconds * SEC_TO_NANO).map_err(convert_err)
+}
 
 pub fn convert_err<T: ToString>(err: T) -> Error {
     Error::other_error(err.to_string())
