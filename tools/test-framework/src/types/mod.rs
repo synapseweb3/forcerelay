@@ -8,6 +8,7 @@
    probably does not belong to here.
 */
 
+pub mod axon;
 pub mod binary;
 pub mod config;
 pub mod env;
