@@ -52,13 +52,7 @@ impl BinaryChannelTest for CKB4IbcChannelTest {
         let a_connection = fetch_ibc_connections(rpc_port_a);
         let b_connection = fetch_ibc_connections(rpc_port_b);
 
-        // FIXME @jjy
-        // node_a contains exactly 1 connection, but node_b contains two connections.
-        // the reason is a and b both initialize connection to counter party at the test beginning.
-        // node a's init connection has been correctly handled,
-        // but node b's init connection is failed, then b receives connection from a,
-        // in `convert_conn_open_init_to_tx` function, the second connection is appended to vector,
-        // but the first one is still exist.
+        // IBC test-framework will open a dummy connection on chain B before the test started, so chain B has two connections
         if !check_ibc_connection(a_connection, 1) || !check_ibc_connection(b_connection, 2) {
             panic!("create connection failed");
         }
@@ -67,18 +61,15 @@ impl BinaryChannelTest for CKB4IbcChannelTest {
         let port_a = H256::from_str(channel.port_a.into_value().to_string().as_str())
             .unwrap()
             .into();
-        // let port_b = H256::from_str(channel.port_b.into_value().to_string().as_str())
-        //     .unwrap()
-        //     .into();
-        let a_channel = fetch_ibc_channel_cell(rpc_port_a, port_a);
-        // FIXME @jjy this function panick because can't find a channel cell.
-        // notice the changes here, after we switched to ibc test framework
-        // the channel is opened both from a side and b side, seems this behavior caused a hidden bug
-        // let b_channel = fetch_ibc_channel_cell(rpc_port_b, port_b);
+        let port_b = H256::from_str(channel.port_b.into_value().to_string().as_str())
+            .unwrap()
+            .into();
+        let a_channel =
+            fetch_ibc_channel_cell(rpc_port_a, port_a, &channel.channel_id_a.into_value());
+        let b_channel =
+            fetch_ibc_channel_cell(rpc_port_b, port_b, &channel.channel_id_b.into_value());
 
-        if !check_channel(&a_channel)
-        // || !check_channel(&b_channel)
-        {
+        if !check_channel(&a_channel) || !check_channel(&b_channel) {
             panic!("create channel failed")
         }
 

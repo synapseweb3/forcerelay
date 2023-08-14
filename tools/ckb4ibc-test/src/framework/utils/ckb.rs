@@ -15,7 +15,7 @@ use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::{h256, H256};
 use futures::Future;
-use ibc_test_framework::prelude::Wallet;
+use ibc_test_framework::prelude::{ChannelId, Wallet};
 use ibc_test_framework::types::process::ChildProcess;
 use relayer::chain::ckb::prelude::CkbReader;
 use relayer::chain::ckb4ibc::extractor::{
@@ -338,7 +338,16 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
     }
 }
 
-pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32]) -> IbcChannel {
+fn channel_id_to_u16(channel_id: &ChannelId) -> u16 {
+    let channel_str = channel_id.to_string();
+    let mut parts = channel_str.split('-');
+    assert_eq!(parts.next().unwrap(), "channel", "expect prefix channel");
+    let channel_id_num = parts.next().unwrap().parse().unwrap();
+    assert!(parts.next().is_none(), "unknown parts in the string");
+    channel_id_num
+}
+
+pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &ChannelId) -> IbcChannel {
     let rpc_client = get_client(port);
     let mut loop_count = 0;
     loop {
@@ -350,7 +359,7 @@ pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32]) -> IbcChannel {
                         ChannelArgs {
                             client_id: CLIENT_TYPE_ARGS.into(),
                             open: true,
-                            channel_id: 0,
+                            channel_id: channel_id_to_u16(channel_id),
                             port_id,
                         }
                         .to_args()
