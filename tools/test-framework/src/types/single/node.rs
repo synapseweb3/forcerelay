@@ -14,6 +14,7 @@ use ibc_relayer::keyring::Store;
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tendermint_rpc::Url;
 use tendermint_rpc::WebSocketClientUrl;
@@ -21,6 +22,7 @@ use tendermint_rpc::WebSocketClientUrl;
 use crate::chain::chain_type::ChainType as TestedChainType;
 use crate::chain::driver::ChainDriver;
 use crate::ibc::denom::Denom;
+use crate::types::axon::DeployedContracts;
 use crate::types::env::{prefix_writer, EnvWriter, ExportEnv};
 use crate::types::process::ChildProcess;
 use crate::types::tagged::*;
@@ -135,6 +137,7 @@ impl FullNode {
     ) -> Result<config::ChainConfig, Error> {
         match chain_type {
             TestedChainType::Ckb => self.generate_ckb_chain_config(chain_type),
+            TestedChainType::Axon => self.generate_axon_chain_config(chain_type),
             _ => self.generate_cosmos_chain_config(chain_type),
         }
     }
@@ -182,6 +185,44 @@ impl FullNode {
             packet_filter: Default::default(),
         };
         Ok(config::ChainConfig::Ckb4Ibc(ckb_config))
+    }
+
+    fn generate_axon_chain_config(
+        &self,
+        chain_type: &TestedChainType,
+    ) -> Result<config::ChainConfig, Error> {
+        let rpc_addr = Url::from_str(self.chain_driver.rpc_address().as_str())?;
+        let websocket_addr = WebSocketClientUrl::from_str(
+            format!("ws://localhost:{}", self.chain_driver.rpc_port + 1).as_str(),
+        )?;
+        let restore_block_count = 42;
+
+        let deployed_contracts: DeployedContracts = {
+            let mut path: PathBuf = self.chain_driver.home_path.clone().into();
+            path.push("deployed_contracts.toml");
+            let content = std::fs::read_to_string(path)?;
+            toml::from_str(content.as_str())?
+        };
+
+        let DeployedContracts {
+            contract_address,
+            image_cell_contract_address,
+            ckb_light_client_contract_address,
+        } = deployed_contracts;
+
+        let axon_config = config::axon::AxonChainConfig {
+            id: self.chain_driver.chain_id.clone(),
+            key_name: "relayer".to_string(),
+            store_prefix: "forcerelay".to_string(),
+            packet_filter: Default::default(),
+            websocket_addr,
+            rpc_addr,
+            contract_address,
+            restore_block_count,
+            ckb_light_client_contract_address,
+            image_cell_contract_address,
+        };
+        Ok(config::ChainConfig::Axon(axon_config))
     }
 
     fn generate_cosmos_chain_config(

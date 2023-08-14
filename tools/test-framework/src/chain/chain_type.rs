@@ -15,6 +15,7 @@ pub enum ChainType {
     Cosmos,
     Evmos,
     Ckb,
+    Axon,
 }
 
 impl ChainType {
@@ -23,6 +24,7 @@ impl ChainType {
             Self::Cosmos => COSMOS_HD_PATH,
             Self::Evmos => EVMOS_HD_PATH,
             Self::Ckb => CKB_HD_PATH,
+            Self::Axon => COSMOS_HD_PATH,
         }
     }
 
@@ -37,6 +39,7 @@ impl ChainType {
             }
             Self::Evmos => ChainId::from_string(&format!("evmos_9000-{prefix}")),
             Self::Ckb => ChainId::from_string(&format!("ckb4ibc-{prefix}")),
+            Self::Axon => ChainId::from_string(&format!("axon-{prefix}")),
         }
     }
 
@@ -51,6 +54,7 @@ impl ChainType {
                 res.push(format!("localhost:{json_rpc_port}"));
             }
             Self::Ckb => {}
+            Self::Axon => {}
         }
         res
     }
@@ -62,6 +66,9 @@ impl ChainType {
                 pk_type: "/ethermint.crypto.v1.ethsecp256k1.PubKey".to_string(),
             },
             Self::Ckb => AddressType::Ckb { is_mainnet: false },
+            Self::Axon => AddressType::Axon {
+                pk_type: "/axon.crypto.v1.ethsecp256k1.PubKey".to_string(),
+            },
         }
     }
 }
@@ -77,6 +84,7 @@ impl FromStr for ChainType {
             name if name.contains("icad") => Ok(ChainType::Cosmos),
             name if name.contains("evmosd") => Ok(ChainType::Evmos),
             name if name.contains("ckb") => Ok(ChainType::Ckb),
+            name if name.contains("axon") => Ok(ChainType::Axon),
             _ => Ok(ChainType::Cosmos),
         }
     }

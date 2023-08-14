@@ -1241,6 +1241,7 @@ dependencies = [
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
+ "ethers",
  "futures",
  "hex",
  "ibc-relayer",
@@ -3769,6 +3770,7 @@ version = "0.23.0"
 dependencies = [
  "color-eyre",
  "crossbeam-channel 0.5.7",
+ "ethers",
  "eyre",
  "flex-error",
  "hdpath",
