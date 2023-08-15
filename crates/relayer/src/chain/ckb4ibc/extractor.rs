@@ -26,7 +26,7 @@ use ibc_relayer_types::core::ics04_channel::version::Version as ChanVersion;
 use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
 
-use super::utils::{generate_connection_id, get_channel_id};
+use super::utils::{generate_channel_id, generate_connection_id};
 
 pub fn extract_channel_end_from_tx(
     tx: TransactionView,
@@ -192,7 +192,7 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
 
     let port_id =
         PortId::from_str(&ckb_channel_end.port_id).map_err(|_| Error::convert_channel_end())?;
-    let channel_id = get_channel_id(ckb_channel_end.number);
+    let channel_id = generate_channel_id(ckb_channel_end.number);
 
     let result = IdentifiedChannelEnd {
         port_id,

@@ -1,4 +1,5 @@
 use crate::consts::{CHANNEL_CODE_HASH, CLIENT_TYPE_ARGS, CONNECTION_CODE_HASH};
+use crate::generator::GENESIS_TXHASH;
 use crate::rpc_client::RpcClient;
 
 use anyhow::Result;
@@ -13,7 +14,7 @@ use ckb_sdk::*;
 use ckb_types::core::ScriptHashType;
 use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
-use ckb_types::{h256, H256};
+use ckb_types::H256;
 use futures::Future;
 use ibc_test_framework::prelude::{ChannelId, Wallet};
 use ibc_test_framework::types::process::ChildProcess;
@@ -173,9 +174,7 @@ pub fn prepare_ckb_chain(
         fs::write(dev_spec_path, content).unwrap();
     }
 
-    if port != 8114 {
-        modify_ckb_config_port(Path::new(ckb_path), port).unwrap();
-    }
+    modify_ckb_config_port(Path::new(ckb_path), port).unwrap();
 
     let ckb_process = ChildProcess::new(
         Command::new("ckb")
@@ -200,17 +199,14 @@ pub fn prepare_ckb_chain(
     );
 
     // check transaction in genesis
-    check_and_wait_ckb_transaction(
-        h256!("0x227de871ce6ab120a67960f831b04148bf79b4e56349dde7a8001f93191736ed"),
-        port,
-    );
+    check_and_wait_ckb_transaction(GENESIS_TXHASH, port);
 
     let output = send_tx(
         fs::read_to_string("txs/deploy_conn_chan.json").unwrap(),
         port,
     )
     .unwrap();
-    print!("deploying conn and channel: {output}");
+    println!("deploying conn and channel: {output}");
 
     // check `txs/deploy_conn_chan.json`
     check_and_wait_ckb_transaction(output.result, port);
@@ -220,7 +216,7 @@ pub fn prepare_ckb_chain(
         port,
     )
     .unwrap();
-    print!("deploying packet and metadata: {output}");
+    println!("deploying packet and metadata: {output}");
 
     // check `txs/deploy_packet_metadata.json`
     check_and_wait_ckb_transaction(output.result, port);
@@ -230,7 +226,7 @@ pub fn prepare_ckb_chain(
         port,
     )
     .unwrap();
-    print!("deploying create connection: {output}");
+    println!("deploying create connection: {output}");
 
     // check `txs/create_connection.json`
     check_and_wait_ckb_transaction(output.result, port);

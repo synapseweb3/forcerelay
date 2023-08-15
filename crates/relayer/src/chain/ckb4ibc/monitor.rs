@@ -120,16 +120,14 @@ impl Ckb4IbcEventMonitor {
 
     async fn fetch_connection_events(&self) -> Result<EventBatch> {
         let connection_code_hash = get_script_hash(&self.config.connection_type_args);
+        let client_id = self
+            .config
+            .lc_client_type_args(self.counterparty_client_type)
+            .map_err(|e| Error::collect_events_failed(e.to_string()))?;
         let script = Script::new_builder()
             .code_hash(connection_code_hash)
             .hash_type(ScriptHashType::Type.into())
-            .args(
-                self.config
-                    .lc_client_type_args(self.counterparty_client_type)
-                    .unwrap()
-                    .as_slice()
-                    .pack(),
-            )
+            .args(client_id.as_slice().pack())
             .build();
         let key = get_search_key(script);
         let (ibc_connection_cell, tx_hash) = self

@@ -72,10 +72,6 @@ pub fn get_script_hash(type_args: &H256) -> Byte32 {
     script.calc_script_hash()
 }
 
-pub fn get_channel_id(idx: u16) -> ChannelId {
-    ChannelId::from_str(&format!("{CHANNEL_ID_PREFIX}-{idx}")).unwrap()
-}
-
 pub fn get_channel_idx(id: &ChannelId) -> Result<u16, Error> {
     let s = id.as_str();
     let result = s
@@ -93,6 +89,10 @@ pub fn get_connection_id_prefix(client_id: &str) -> String {
 
 pub fn generate_connection_id(idx: u16, client_id: &str) -> ConnectionId {
     ConnectionId::from_str(&format!("{}{idx}", get_connection_id_prefix(client_id))).unwrap()
+}
+
+pub fn generate_channel_id(idx: u16) -> ChannelId {
+    ChannelId::from_str(&format!("{CHANNEL_ID_PREFIX}{idx}")).unwrap()
 }
 
 pub fn get_connection_index_by_id(id: &ConnectionId) -> Result<u16, Error> {

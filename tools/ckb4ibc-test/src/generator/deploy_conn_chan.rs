@@ -117,8 +117,8 @@ pub fn generate_deploy_conn_chan() -> ConnChanAttribute {
         .output(connection_output)
         .output(channel_output)
         .output(change_output)
-        .output_data(std::fs::read("./contracts/ics-conn").unwrap().pack())
-        .output_data(std::fs::read("./contracts/ics-chan").unwrap().pack())
+        .output_data(std::fs::read("./contracts/ics-connection").unwrap().pack())
+        .output_data(std::fs::read("./contracts/ics-channel").unwrap().pack())
         .output_data(empty_data)
         .build();
 
