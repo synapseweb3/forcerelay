@@ -1069,6 +1069,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok(vec![])
     }
 
+    // FIXME: acknowledgement is NOT tx_hash
     fn query_packet_acknowledgement(
         &self,
         request: QueryPacketAcknowledgementRequest,
@@ -1079,7 +1080,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             &request.port_id,
             request.sequence,
         )?;
-        if ibc_packet.status != PacketStatus::InboxAck {
+        if ibc_packet.status != PacketStatus::WriteAck {
             Ok((vec![], None))
         } else {
             Ok((ibc_packet.tx_hash.unwrap().as_bytes().to_vec(), None))
@@ -1096,7 +1097,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .packet_commitment_sequences
             .into_iter()
             .flat_map(|seq| self.fetch_packet_cell_and_extract(&channel_id, &port_id, seq))
-            .filter(|(packet, _)| packet.status == PacketStatus::InboxAck)
+            .filter(|(packet, _)| packet.status == PacketStatus::WriteAck)
             .map(|(p, _)| Sequence::from(p.packet.sequence as u64))
             .collect::<Vec<_>>();
         Ok((result, Height::default()))

@@ -320,14 +320,13 @@ impl Ckb4IbcEventMonitor {
                     height: Height::default(),
                     tx_hash: item.1.into(),
                 },
-                PacketStatus::InboxAck => IbcEventWithHeight {
+                PacketStatus::WriteAck => IbcEventWithHeight {
                     event: IbcEvent::AcknowledgePacket(AcknowledgePacket {
                         packet: convert_packet(item.0),
                     }),
                     height: Height::default(),
                     tx_hash: item.1.into(),
                 },
-                PacketStatus::OutboxAck => todo!(),
                 PacketStatus::Ack => unreachable!(),
             })
             .collect::<Vec<_>>();

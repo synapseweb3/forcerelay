@@ -72,9 +72,9 @@ pub fn get_script_hash(type_args: &H256) -> Byte32 {
     script.calc_script_hash()
 }
 
-// pub fn get_channel_id(idx: u16) -> ChannelId {
-//     ChannelId::from_str(&format!("{CHANNEL_ID_PREFIX}{idx}")).unwrap()
-// }
+pub fn get_channel_id(idx: u16) -> ChannelId {
+    ChannelId::from_str(&format!("{CHANNEL_ID_PREFIX}-{idx}")).unwrap()
+}
 
 pub fn get_channel_idx(id: &ChannelId) -> Result<u16, Error> {
     let s = id.as_str();

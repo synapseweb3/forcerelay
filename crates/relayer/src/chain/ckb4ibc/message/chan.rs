@@ -3,15 +3,16 @@ use std::str::FromStr;
 use super::{CkbTxInfo, MsgToTxConverter};
 use crate::chain::ckb4ibc::utils::{
     convert_port_id_to_array, convert_proof, extract_client_id_by_connection_id,
-    get_channel_capacity, get_channel_idx, get_client_id_from_channel, get_client_outpoint,
-    get_connection_capacity, get_connection_lock_script, get_encoded_object, get_packet_capacity,
+    get_channel_capacity, get_channel_id, get_channel_idx, get_client_id_from_channel,
+    get_client_outpoint, get_connection_capacity, get_connection_lock_script, get_encoded_object,
+    get_packet_capacity,
 };
 use crate::error::Error;
 use ckb_ics_axon::consts::{CHANNEL_CELL_CAPACITY, CONNECTION_CELL_CAPACITY, PACKET_CELL_CAPACITY};
 
+use ckb_ics_axon::handler::IbcChannel;
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::handler::PacketStatus;
-use ckb_ics_axon::handler::{get_channel_id_str, IbcChannel};
 use ckb_ics_axon::message::Envelope;
 use ckb_ics_axon::message::MsgAckPacket as CkbMsgAckPacket;
 use ckb_ics_axon::message::MsgChannelOpenAck as CkbMsgChannelOpenAck;
@@ -132,7 +133,7 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
         .build();
     let event = IbcEvent::OpenInitChannel(OpenInit {
         port_id: msg.port_id,
-        channel_id: Some(get_channel_id_str(next_channel_num).parse().unwrap()),
+        channel_id: Some(get_channel_id(next_channel_num)),
         connection_id: msg.channel.connection_hops[0].clone(),
         counterparty_port_id: msg.channel.remote.port_id,
         counterparty_channel_id: msg.channel.remote.channel_id,
@@ -233,7 +234,7 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
         .build();
     let event = IbcEvent::OpenTryChannel(OpenTry {
         port_id: msg.port_id,
-        channel_id: Some(ChannelId::from_str(&get_channel_id_str(next_channel_num)).unwrap()),
+        channel_id: Some(get_channel_id(next_channel_num)),
         connection_id: msg.channel.connection_hops[0].clone(),
         counterparty_port_id: msg.channel.remote.port_id,
         counterparty_channel_id: msg.channel.remote.channel_id,
