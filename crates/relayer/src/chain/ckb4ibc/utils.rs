@@ -128,6 +128,7 @@ pub fn get_connection_lock_script(
     config: &ChainConfig,
     client_id: Option<String>,
 ) -> Result<Script, Error> {
+    // fetch specific (concrete client cell) or all (prefix search)
     let mut client_cell_type_args = vec![];
     if let Some(client_id) = client_id {
         let client_type = config.lc_client_type(&client_id)?;
@@ -135,11 +136,26 @@ pub fn get_connection_lock_script(
     }
     let script = Script::new_builder()
         .code_hash(get_script_hash(&config.connection_type_args))
-        // fetch specific (concrete client cell) or all (prefix search)
         .args(client_cell_type_args.pack())
         .hash_type(ScriptHashType::Type.into())
         .build();
     Ok(script)
+}
+
+pub fn get_channel_lock_script(converter: &impl MsgToTxConverter, args: Vec<u8>) -> Script {
+    Script::new_builder()
+        .code_hash(converter.get_channel_code_hash())
+        .args(args.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .build()
+}
+
+pub fn get_packet_lock_script(converter: &impl MsgToTxConverter, args: Vec<u8>) -> Script {
+    Script::new_builder()
+        .code_hash(converter.get_packet_code_hash())
+        .args(args.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .build()
 }
 
 pub fn get_search_key(script: Script) -> SearchKey {
@@ -152,17 +168,14 @@ pub fn get_search_key(script: Script) -> SearchKey {
     }
 }
 
-#[inline]
 pub fn get_connection_capacity() -> Capacity {
     Capacity::bytes(CONNECTION_CELL_CAPACITY as usize).unwrap()
 }
 
-#[inline]
 pub fn get_channel_capacity() -> Capacity {
     Capacity::bytes(CHANNEL_CELL_CAPACITY as usize).unwrap()
 }
 
-#[inline]
 pub fn get_packet_capacity() -> Capacity {
     Capacity::bytes(PACKET_CELL_CAPACITY as usize).unwrap()
 }

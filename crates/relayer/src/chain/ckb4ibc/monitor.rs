@@ -28,6 +28,7 @@ use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, Conne
 use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::timestamp::Timestamp;
 use tokio::runtime::Runtime as TokioRuntime;
+use tracing::error;
 
 use crate::chain::ckb::prelude::CkbReader;
 use crate::chain::ckb::rpc_client::RpcClient;
@@ -101,15 +102,9 @@ impl Ckb4IbcEventMonitor {
         }
         let result = async {
             tokio::select! {
-                Ok(batch) = self.fetch_channel_events() => {
-                    batch
-                },
-                Ok(batch) = self.fetch_connection_events() => {
-                    batch
-                },
-                Ok(batch) = self.fetch_packet_events() => {
-                    batch
-                }
+                batch = self.fetch_channel_events() => batch,
+                batch = self.fetch_connection_events() => batch,
+                batch = self.fetch_packet_events() => batch,
             }
         }
         .await;
@@ -379,8 +374,11 @@ impl Ckb4IbcEventMonitor {
         Ok(result)
     }
 
-    fn process_batch(&mut self, batch: EventBatch) {
-        self.event_bus.broadcast(Arc::new(Ok(batch)));
+    fn process_batch(&mut self, batch: Result<EventBatch>) {
+        match batch {
+            Ok(events) => self.event_bus.broadcast(Arc::new(Ok(events))),
+            Err(error) => error!("{error}"),
+        }
     }
 }
 

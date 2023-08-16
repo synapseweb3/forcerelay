@@ -1,19 +1,23 @@
 mod chan;
 mod client;
 mod conn;
+mod packet;
 
 use std::{cell::Ref, collections::HashMap};
-
-use chan::*;
-use conn::*;
 
 use crate::{config::ckb4ibc::ChainConfig, error::Error, keyring::Secp256k1KeyPair};
 use ckb_ics_axon::{
     handler::{IbcChannel, IbcConnections},
     message::Envelope,
 };
-use ckb_types::core::TransactionView;
-use ckb_types::packed::{Byte32, CellInput, OutPoint};
+use ckb_types::{
+    core::{Capacity, DepType, TransactionBuilder, TransactionView},
+    packed::{
+        Byte32, Bytes as PackedBytes, BytesOpt, CellDep, CellInput, CellOutput, OutPoint, Script,
+        WitnessArgs,
+    },
+    prelude::{Builder, Entity, Pack},
+};
 use ibc_proto::google::protobuf::Any;
 use ibc_relayer_types::{
     core::ics02_client::msgs::{
@@ -32,18 +36,17 @@ use ibc_relayer_types::{
         ics03_connection::connection::IdentifiedConnectionEnd,
         ics04_channel::{
             msgs::{
-                acknowledgement::MsgAcknowledgement,
-                acknowledgement::TYPE_URL as ACK_TYPE_URL,
-                chan_close_init::MsgChannelCloseInit,
-                chan_close_init::TYPE_URL as CHAN_CLOSE_INIT_TYPE_URL,
-                chan_open_ack::MsgChannelOpenAck,
-                chan_open_ack::TYPE_URL as CHAN_OPEN_ACK_TYPE_URL,
-                chan_open_confirm::MsgChannelOpenConfirm,
-                chan_open_confirm::TYPE_URL as CHAN_OPEN_CONFIRM_TYPE_URL,
-                chan_open_init::MsgChannelOpenInit,
-                chan_open_init::TYPE_URL as CHAN_OPEN_INIT_TYPE_URL,
-                chan_open_try::MsgChannelOpenTry,
-                chan_open_try::TYPE_URL as CHAN_OPEN_TRY_TYPE_URL,
+                acknowledgement::{MsgAcknowledgement, TYPE_URL as ACK_PACKET_TYPE_URL},
+                chan_close_confirm::{
+                    MsgChannelCloseConfirm, TYPE_URL as CHANN_CLOSE_CONFIRM_TYPE_URL,
+                },
+                chan_close_init::{MsgChannelCloseInit, TYPE_URL as CHAN_CLOSE_INIT_TYPE_URL},
+                chan_open_ack::{MsgChannelOpenAck, TYPE_URL as CHAN_OPEN_ACK_TYPE_URL},
+                chan_open_confirm::{
+                    MsgChannelOpenConfirm, TYPE_URL as CHAN_OPEN_CONFIRM_TYPE_URL,
+                },
+                chan_open_init::{MsgChannelOpenInit, TYPE_URL as CHAN_OPEN_INIT_TYPE_URL},
+                chan_open_try::{MsgChannelOpenTry, TYPE_URL as CHAN_OPEN_TRY_TYPE_URL},
                 recv_packet::{MsgRecvPacket, TYPE_URL as RECV_PACKET_TYPE_URL},
             },
             packet::Sequence,
@@ -55,9 +58,12 @@ use ibc_relayer_types::{
     tx_msg::Msg,
 };
 
-use self::client::{convert_create_client, convert_update_client};
-
 use super::utils::{generate_connection_id, get_script_hash};
+use client::{convert_create_client, convert_update_client};
+
+use chan::*;
+use conn::*;
+use packet::*;
 
 macro_rules! convert {
     ($msg:ident, $conval:ident, $msgty:ty, $conv:ident) => {{
@@ -318,9 +324,82 @@ pub fn convert_msg_to_ckb_tx<C: MsgToTxConverter>(
             MsgChannelCloseInit,
             convert_chan_close_init_to_tx
         ),
+        CHANN_CLOSE_CONFIRM_TYPE_URL => convert!(
+            msg,
+            converter,
+            MsgChannelCloseConfirm,
+            convert_chan_close_confirm_to_tx
+        ),
         // packet
         RECV_PACKET_TYPE_URL => convert!(msg, converter, MsgRecvPacket, convert_recv_packet_to_tx),
-        ACK_TYPE_URL => convert!(msg, converter, MsgAcknowledgement, convert_ack_packet_to_tx),
-        _ => todo!(),
+        ACK_PACKET_TYPE_URL => {
+            convert!(msg, converter, MsgAcknowledgement, convert_ack_packet_to_tx)
+        }
+        _ => Err(Error::other(format!(
+            "cannot convert ibc_msg: {}",
+            msg.type_url
+        ))),
+    }
+}
+
+pub struct TxBuilder {
+    builder: TransactionBuilder,
+}
+
+impl From<TransactionBuilder> for TxBuilder {
+    fn from(builder: TransactionBuilder) -> TxBuilder {
+        TxBuilder { builder }
+    }
+}
+
+impl Default for TxBuilder {
+    fn default() -> Self {
+        TransactionView::new_advanced_builder().into()
+    }
+}
+
+impl TxBuilder {
+    pub fn cell_dep(self, outpoint: OutPoint) -> Self {
+        self.builder
+            .cell_dep(
+                CellDep::new_builder()
+                    .dep_type(DepType::Code.into())
+                    .out_point(outpoint)
+                    .build(),
+            )
+            .into()
+    }
+
+    pub fn input(self, input: CellInput) -> Self {
+        self.builder.input(input).into()
+    }
+
+    pub fn output(self, lock: Script, capacity: Capacity, data: PackedBytes) -> Self {
+        self.builder
+            .output(
+                CellOutput::new_builder()
+                    .lock(lock)
+                    .capacity(capacity.pack())
+                    .build(),
+            )
+            .output_data(data)
+            .into()
+    }
+
+    pub fn witness(self, input_type: BytesOpt, output_type: BytesOpt) -> Self {
+        self.builder
+            .witness(
+                WitnessArgs::new_builder()
+                    .input_type(input_type)
+                    .output_type(output_type)
+                    .build()
+                    .as_bytes()
+                    .pack(),
+            )
+            .into()
+    }
+
+    pub fn build(self) -> TransactionView {
+        self.builder.build()
     }
 }
