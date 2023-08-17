@@ -18,7 +18,7 @@ use crate::generator::{
     PRIVKEY,
 };
 
-use super::deploy_conn_chan::ConnChanAttribute;
+use super::deploy_channel::ChannelAttribute;
 
 pub struct PacketMetataAttribute {
     pub tx_hash: H256,
@@ -30,7 +30,7 @@ pub struct PacketMetataAttribute {
     pub balance_index: usize,
 }
 
-pub fn generate_deploy_packet_metadata(attribute: &ConnChanAttribute) -> PacketMetataAttribute {
+pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMetataAttribute {
     let input = CellInput::new_builder()
         .previous_output(
             OutPoint::new_builder()
@@ -45,18 +45,18 @@ pub fn generate_deploy_packet_metadata(attribute: &ConnChanAttribute) -> PacketM
     let mut blake_2b = new_blake2b();
     blake_2b.update(input.as_slice());
     blake_2b.update(0u64.to_le_bytes().as_slice());
-    let mut type_args = [0; 32];
-    blake_2b.finalize(&mut type_args);
-    println!("packet type args: {:?}", hex::encode(type_args));
-    let packet_type_args: H256 = type_args.into();
+    let mut type_0_args = [0; 32];
+    blake_2b.finalize(&mut type_0_args);
+    println!("packet type args: {:?}", hex::encode(type_0_args));
+    let packet_type_args: H256 = type_0_args.into();
 
     let mut blake_2b = new_blake2b();
     blake_2b.update(input.as_slice());
     blake_2b.update(1u64.to_le_bytes().as_slice());
-    let mut type_2_args = [0; 32];
-    blake_2b.finalize(&mut type_2_args);
-    println!("client type args: {:?}", hex::encode(type_2_args));
-    let metadata_type_args: H256 = type_2_args.into();
+    let mut type_1_args = [0; 32];
+    blake_2b.finalize(&mut type_1_args);
+    println!("client type args: {:?}", hex::encode(type_1_args));
+    let metadata_type_args: H256 = type_1_args.into();
     // let metadata_type_args: H256 = type_2_args.into();
 
     let packet_type_script = Script::new_builder()
@@ -64,7 +64,7 @@ pub fn generate_deploy_packet_metadata(attribute: &ConnChanAttribute) -> PacketM
             h256!("0x00000000000000000000000000000000000000000000000000545950455f4944").pack(),
         )
         .hash_type(ScriptHashType::Type.into())
-        .args(type_args.as_slice().pack())
+        .args(type_0_args.as_slice().pack())
         .build();
 
     println!(
@@ -88,7 +88,7 @@ pub fn generate_deploy_packet_metadata(attribute: &ConnChanAttribute) -> PacketM
             h256!("0x00000000000000000000000000000000000000000000000000545950455f4944").pack(),
         )
         .hash_type(ScriptHashType::Type.into())
-        .args(type_2_args.as_slice().pack())
+        .args(type_1_args.as_slice().pack())
         .build();
 
     let metadata = Metadata::new_builder()
@@ -107,7 +107,7 @@ pub fn generate_deploy_packet_metadata(attribute: &ConnChanAttribute) -> PacketM
 
     let change_output = CellOutput::new_builder()
         .lock(lock_script.clone())
-        .capacity(700_000_000_000_000u64.pack())
+        .capacity(500_000_000_000_000u64.pack())
         .build();
 
     let signer =

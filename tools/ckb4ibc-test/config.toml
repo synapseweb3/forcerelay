@@ -27,10 +27,10 @@ ckb_indexer_rpc = "http://127.0.0.1:8114"
 key_name = "relayer_ckb_wallet"
 store_prefix = "forcerelay"
 connection_type_args = "0xf49ce32397c6741998b04d7548c5ed372007424daf67ee5bfadaefec3c865781"
-channel_type_args = "0xfbe09e8ff3e5f3d0fab7cc7431feed2131846184d356a9626639f55e7f471846"
-packet_type_args = "0xdf9cf8784debfcf67cf33b13c368f44191b9835b40521187610bb3931ea34b4d"
+channel_type_args = "0xc60c112ee956a59da3573461a9ac36f89751429ef18cdbd933abbe3429a5cbfc"
+packet_type_args = "0xd05a8e287021a09e0588112393bb64cdb3e27bf9d0a1afb6f776f4db624fe760"
 [chains.onchain_light_clients]
-Ckb4Ibc = { chain_id = "ckb4ibc-1", client_cell_type_args = "0xa582fb062c7f02b476ee29188c773053ea1a40ba8784130afce2c31eee823932" }
+Ckb4Ibc = { chain_id = "ckb4ibc-1", client_cell_type_args = "0x7a87354efeb3b8bec0771ca94928348d0395d54ae188844b3e04db0a72103ebb" }
 
 [[chains]]
 id = "ckb4ibc-1"
@@ -39,7 +39,7 @@ ckb_indexer_rpc = "http://127.0.0.1:8214"
 key_name = "relayer_ckb_wallet"
 store_prefix = "forcerelay"
 connection_type_args = "0xf49ce32397c6741998b04d7548c5ed372007424daf67ee5bfadaefec3c865781"
-channel_type_args = "0xfbe09e8ff3e5f3d0fab7cc7431feed2131846184d356a9626639f55e7f471846"
-packet_type_args = "0xdf9cf8784debfcf67cf33b13c368f44191b9835b40521187610bb3931ea34b4d"
+channel_type_args = "0xc60c112ee956a59da3573461a9ac36f89751429ef18cdbd933abbe3429a5cbfc"
+packet_type_args = "0xd05a8e287021a09e0588112393bb64cdb3e27bf9d0a1afb6f776f4db624fe760"
 [chains.onchain_light_clients]
-Ckb4Ibc = { chain_id = "ckb4ibc-0", client_cell_type_args = "0xa582fb062c7f02b476ee29188c773053ea1a40ba8784130afce2c31eee823932" }
+Ckb4Ibc = { chain_id = "ckb4ibc-0", client_cell_type_args = "0x7a87354efeb3b8bec0771ca94928348d0395d54ae188844b3e04db0a72103ebb" }

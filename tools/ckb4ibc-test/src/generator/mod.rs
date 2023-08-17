@@ -1,12 +1,14 @@
 use ckb_types::{h256, H256};
 use create_connection::generate_create_connection;
-use deploy_conn_chan::generate_deploy_conn_chan;
+use deploy_channel::generate_deploy_channel;
+use deploy_connection::generate_deploy_connection;
 use deploy_packet_metadata::generate_deploy_packet_metadata;
 
 use self::test_config::{generate_consts_file, generate_test_config};
 
 mod create_connection;
-mod deploy_conn_chan;
+mod deploy_channel;
+mod deploy_connection;
 mod deploy_packet_metadata;
 mod test_config;
 mod utils;
@@ -18,9 +20,10 @@ pub const GENESIS_TXHASH: H256 =
 #[ignore]
 #[test]
 fn generate() {
-    let conn_chan_attr = generate_deploy_conn_chan();
-    let packet_metadata_attr = generate_deploy_packet_metadata(&conn_chan_attr);
-    let (_, _) = generate_create_connection(&conn_chan_attr, &packet_metadata_attr);
-    generate_test_config(&conn_chan_attr, &packet_metadata_attr);
-    generate_consts_file(&conn_chan_attr, &packet_metadata_attr);
+    let connetion_attr = generate_deploy_connection();
+    let channel_attr = generate_deploy_channel(&connetion_attr);
+    let packet_metadata_attr = generate_deploy_packet_metadata(&channel_attr);
+    let (_, _) = generate_create_connection(&connetion_attr, &packet_metadata_attr);
+    generate_test_config(&connetion_attr, &channel_attr, &packet_metadata_attr);
+    generate_consts_file(&connetion_attr, &channel_attr, &packet_metadata_attr);
 }

@@ -147,11 +147,11 @@ impl FullNode {
         let connection_type_args =
             hex_to_h256(b"f49ce32397c6741998b04d7548c5ed372007424daf67ee5bfadaefec3c865781").into();
         let channel_type_args =
-            hex_to_h256(b"fbe09e8ff3e5f3d0fab7cc7431feed2131846184d356a9626639f55e7f471846").into();
+            hex_to_h256(b"c60c112ee956a59da3573461a9ac36f89751429ef18cdbd933abbe3429a5cbfc").into();
         let packet_type_args =
-            hex_to_h256(b"df9cf8784debfcf67cf33b13c368f44191b9835b40521187610bb3931ea34b4d").into();
+            hex_to_h256(b"d05a8e287021a09e0588112393bb64cdb3e27bf9d0a1afb6f776f4db624fe760").into();
         let client_cell_type_args =
-            hex_to_h256(b"a582fb062c7f02b476ee29188c773053ea1a40ba8784130afce2c31eee823932").into();
+            hex_to_h256(b"7a87354efeb3b8bec0771ca94928348d0395d54ae188844b3e04db0a72103ebb").into();
         let mut onchain_light_clients = HashMap::default();
         onchain_light_clients.insert(
             ClientType::Ckb4Ibc,

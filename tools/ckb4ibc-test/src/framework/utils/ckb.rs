@@ -2,7 +2,7 @@ use crate::consts::{CHANNEL_CODE_HASH, CLIENT_TYPE_ARGS, CONNECTION_CODE_HASH};
 use crate::generator::GENESIS_TXHASH;
 use crate::rpc_client::RpcClient;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ckb_chain_spec::ChainSpec;
 
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections};
@@ -75,8 +75,11 @@ fn send_tx(request_body: String, port: u32) -> Result<RpcResponse> {
         .error_for_status()?;
 
     // Deserialize the response JSON into RpcResponse
-    let rpc_response = response.json::<RpcResponse>()?;
-    Ok(rpc_response)
+    let response = response.text().unwrap();
+    match serde_json::from_str::<RpcResponse>(&response) {
+        Ok(value) => Ok(value),
+        Err(_) => Err(anyhow!("{}", response)),
+    }
 }
 
 fn modify_ckb_config_port(ckb_path: &Path, port: u32) -> Result<()> {
@@ -202,13 +205,19 @@ pub fn prepare_ckb_chain(
     check_and_wait_ckb_transaction(GENESIS_TXHASH, port);
 
     let output = send_tx(
-        fs::read_to_string("txs/deploy_conn_chan.json").unwrap(),
+        fs::read_to_string("txs/deploy_connection.json").unwrap(),
         port,
     )
     .unwrap();
-    println!("deploying conn and channel: {output}");
+    println!("deploying connection: {output}");
 
-    // check `txs/deploy_conn_chan.json`
+    // check `txs/deploy_connection.json`
+    check_and_wait_ckb_transaction(output.result, port);
+
+    let output = send_tx(fs::read_to_string("txs/deploy_channel.json").unwrap(), port).unwrap();
+    println!("deploying channel: {output}");
+
+    // check `txs/deploy_channel.json`
     check_and_wait_ckb_transaction(output.result, port);
 
     let output = send_tx(

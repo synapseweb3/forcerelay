@@ -23,17 +23,19 @@ use crate::generator::{
     PRIVKEY,
 };
 
-use super::{deploy_conn_chan::ConnChanAttribute, deploy_packet_metadata::PacketMetataAttribute};
+use super::{
+    deploy_connection::ConnectionAttribute, deploy_packet_metadata::PacketMetataAttribute,
+};
 
 pub fn generate_create_connection(
-    conn_chan_attr: &ConnChanAttribute,
+    connection_attr: &ConnectionAttribute,
     packet_metadata_attr: &PacketMetataAttribute,
 ) -> (H256, usize) {
     let tx_hash = packet_metadata_attr.tx_hash.clone();
     let change_idx: usize = packet_metadata_attr.balance_index;
     let metadata_idx: usize = packet_metadata_attr.metadata_index;
-    let connection_idx: usize = conn_chan_attr.connection_index;
-    let connection_code_hash = conn_chan_attr.connection_code_hash.clone();
+    let connection_idx: usize = connection_attr.connection_index;
+    let connection_code_hash = connection_attr.connection_code_hash.clone();
     let metadata_args = packet_metadata_attr.metadata_type_args.clone();
 
     let metadata_dep = CellDep::new_builder()
@@ -94,7 +96,7 @@ pub fn generate_create_connection(
     let lock_script = Script::from(&addr);
     let change_output = CellOutput::new_builder()
         .lock(lock_script.clone())
-        .capacity(80_000_000_000_000u64.pack())
+        .capacity(400_000_000_000_000u64.pack())
         .build();
     let empty_data = "0x".as_bytes().to_vec().pack();
 
