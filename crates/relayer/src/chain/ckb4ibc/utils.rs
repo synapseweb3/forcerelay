@@ -72,7 +72,7 @@ pub fn get_script_hash(type_args: &H256) -> Byte32 {
     script.calc_script_hash()
 }
 
-pub fn get_channel_idx(id: &ChannelId) -> Result<u16, Error> {
+pub fn get_channel_number(id: &ChannelId) -> Result<u16, Error> {
     let s = id.as_str();
     let result = s
         .strip_prefix(CHANNEL_ID_PREFIX)

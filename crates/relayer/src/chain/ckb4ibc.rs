@@ -72,7 +72,7 @@ use self::extractor::{extract_connections_from_tx, extract_ibc_packet_from_tx};
 use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverter};
 use self::monitor::Ckb4IbcEventMonitor;
 use self::utils::{
-    convert_port_id_to_array, get_channel_idx, get_dummy_merkle_proof, get_encoded_object,
+    convert_port_id_to_array, get_channel_number, get_dummy_merkle_proof, get_encoded_object,
     get_search_key,
 };
 
@@ -227,7 +227,7 @@ impl Ckb4IbcChain {
             .hash_type(ScriptHashType::Type.into())
             .args(
                 PacketArgs {
-                    channel_id: get_channel_idx(channel_id)?,
+                    channel_id: get_channel_number(channel_id)?,
                     port_id: port_id.as_str().as_bytes().try_into().unwrap(),
                     sequence,
                 }
@@ -281,7 +281,7 @@ impl Ckb4IbcChain {
         let channel_args = ChannelArgs {
             client_id,
             open: is_open,
-            channel_id: get_channel_idx(&channel_id)?,
+            channel_id: get_channel_number(&channel_id)?,
             port_id: convert_port_id_to_array(&port_id)?,
         };
         let script = Script::new_builder()
@@ -1004,7 +1004,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         } else {
             Ok((
                 PacketArgs {
-                    channel_id: get_channel_idx(&request.channel_id)?,
+                    channel_id: get_channel_number(&request.channel_id)?,
                     port_id: ibc_packet
                         .packet
                         .source_port_id
@@ -1046,7 +1046,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         } else {
             Ok((
                 PacketArgs {
-                    channel_id: get_channel_idx(&request.channel_id)?,
+                    channel_id: get_channel_number(&request.channel_id)?,
                     port_id: ibc_packet
                         .packet
                         .source_port_id

@@ -23,7 +23,7 @@ use std::str::FromStr;
 use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 use crate::chain::ckb4ibc::utils::{
     convert_port_id_to_array, convert_proof, extract_client_id_by_connection_id,
-    generate_channel_id, get_channel_capacity, get_channel_idx, get_channel_lock_script,
+    generate_channel_id, get_channel_capacity, get_channel_lock_script, get_channel_number,
     get_client_id_from_channel, get_client_outpoint, get_connection_capacity,
     get_connection_lock_script, get_encoded_object,
 };
@@ -217,7 +217,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelOpenAck,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let channel_idx = get_channel_idx(&msg.channel_id)?;
+    let channel_idx = get_channel_number(&msg.channel_id)?;
     let old_channel = converter.get_ibc_channel(&msg.channel_id);
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id).unwrap();
     let mut new_channel = old_channel.clone();
@@ -298,7 +298,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     let channel_args = ChannelArgs {
         client_id: client_cell_type_args,
         open: true,
-        channel_id: get_channel_idx(&msg.channel_id)?,
+        channel_id: get_channel_number(&msg.channel_id)?,
         port_id: convert_port_id_to_array(&msg.port_id)?,
     };
 
