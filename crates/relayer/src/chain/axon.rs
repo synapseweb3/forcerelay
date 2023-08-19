@@ -120,10 +120,23 @@ pub struct AxonChain {
     config: AxonChainConfig,
     light_client: AxonLightClient,
     tx_monitor_cmd: Option<TxMonitorCmd>,
-    contract: Contract,
     rpc_client: rpc::AxonRpcClient,
-    client: Arc<ContractProvider>,
+    client: Provider<Ws>,
     keybase: KeyRing<Secp256k1KeyPair>,
+    chain_id: u64,
+}
+
+impl AxonChain {
+    fn contract(&self) -> Result<Contract, Error> {
+        let key_entry = self
+            .keybase
+            .get_key(&self.config.key_name)
+            .map_err(Error::key_base)?;
+        let wallet = key_entry.into_ether_wallet().with_chain_id(self.chain_id);
+        let client = Arc::new(SignerMiddleware::new(self.client.clone(), wallet));
+        let contract = Contract::new(self.config.contract_address, Arc::clone(&client));
+        Ok(contract)
+    }
 }
 
 impl ChainEndpoint for AxonChain {
@@ -147,15 +160,10 @@ impl ChainEndpoint for AxonChain {
         let client = rt
             .block_on(Provider::<Ws>::connect(url.to_string()))
             .map_err(|_| Error::web_socket(url.into()))?;
-        let axon_chain_id = rt
+        let chain_id = rt
             .block_on(client.get_chainid())
-            .map_err(|e| Error::other_error(e.to_string()))?;
-        let key_entry = keybase.get_key(&config.key_name).map_err(Error::key_base)?;
-        let wallet = key_entry
-            .into_ether_wallet()
-            .with_chain_id(axon_chain_id.as_u64());
-        let client = Arc::new(SignerMiddleware::new(client, wallet));
-        let contract = Contract::new(config.contract_address, Arc::clone(&client));
+            .map_err(|e| Error::other_error(e.to_string()))?
+            .as_u64();
         let light_client = AxonLightClient::from_config(&config, rt.clone())?;
 
         // TODO: since Ckb endpoint uses Axon metadata cell as its light client, Axon
@@ -171,7 +179,7 @@ impl ChainEndpoint for AxonChain {
             keybase,
             light_client,
             tx_monitor_cmd: None,
-            contract,
+            chain_id,
             rpc_client,
             client,
         })
@@ -334,7 +342,7 @@ impl ChainEndpoint for AxonChain {
     ) -> Result<Vec<IdentifiedAnyClientState>, Error> {
         let client_states: Vec<_> = self
             .rt
-            .block_on(self.contract.get_client_states().call())
+            .block_on(self.contract()?.get_client_states().call())
             .map_err(convert_err)?;
         let client_states = client_states
             .iter()
@@ -354,7 +362,7 @@ impl ChainEndpoint for AxonChain {
         let (client_state, _) = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_client_state(request.client_id.to_string())
                     .call(),
             )
@@ -380,7 +388,11 @@ impl ChainEndpoint for AxonChain {
         };
         let (consensus_state, _) = self
             .rt
-            .block_on(self.contract.get_consensus_state(client_id, height).call())
+            .block_on(
+                self.contract()?
+                    .get_consensus_state(client_id, height)
+                    .call(),
+            )
             .map_err(convert_err)?;
         Ok((to_any_consensus_state(&consensus_state)?, None))
     }
@@ -393,7 +405,7 @@ impl ChainEndpoint for AxonChain {
         let heights: Vec<_> = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_consensus_heights(client_id.to_string())
                     .call(),
             )
@@ -426,7 +438,7 @@ impl ChainEndpoint for AxonChain {
     ) -> Result<Vec<IdentifiedConnectionEnd>, Error> {
         let connections: Vec<_> = self
             .rt
-            .block_on(self.contract.get_connections().call())
+            .block_on(self.contract()?.get_connections().call())
             .map_err(convert_err)?;
         let connections = connections
             .into_iter()
@@ -442,7 +454,7 @@ impl ChainEndpoint for AxonChain {
         let connection_ids: Vec<_> = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_client_connections(request.client_id.to_string())
                     .call(),
             )
@@ -463,7 +475,7 @@ impl ChainEndpoint for AxonChain {
         let (connection_end, _) = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_connection(request.connection_id.to_string())
                     .call(),
             )
@@ -479,7 +491,7 @@ impl ChainEndpoint for AxonChain {
         let channels: Vec<_> = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_connection_channels(request.connection_id.to_string())
                     .call(),
             )
@@ -497,7 +509,7 @@ impl ChainEndpoint for AxonChain {
     ) -> Result<Vec<IdentifiedChannelEnd>, Error> {
         let channels: Vec<_> = self
             .rt
-            .block_on(self.contract.get_channels().call())
+            .block_on(self.contract()?.get_channels().call())
             .map_err(convert_err)?;
         let channels = channels
             .into_iter()
@@ -518,7 +530,7 @@ impl ChainEndpoint for AxonChain {
         let (channel_end, _) = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_channel(request.port_id.to_string(), request.channel_id.to_string())
                     .call(),
             )
@@ -534,7 +546,7 @@ impl ChainEndpoint for AxonChain {
         let (client_state, found) = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_channel_client_state(
                         request.port_id.to_string(),
                         request.channel_id.to_string(),
@@ -558,7 +570,7 @@ impl ChainEndpoint for AxonChain {
         let (commitment, _) = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_hashed_packet_commitment(
                         request.port_id.to_string(),
                         request.channel_id.to_string(),
@@ -577,7 +589,7 @@ impl ChainEndpoint for AxonChain {
         let commitment_sequences = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_hashed_packet_commitment_sequences(
                         request.port_id.to_string(),
                         request.channel_id.to_string(),
@@ -601,7 +613,7 @@ impl ChainEndpoint for AxonChain {
         let has_receipt = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .has_packet_receipt(
                         request.port_id.to_string(),
                         request.channel_id.to_string(),
@@ -622,7 +634,7 @@ impl ChainEndpoint for AxonChain {
             let has_receipt = self
                 .rt
                 .block_on(
-                    self.contract
+                    self.contract()?
                         .has_packet_receipt(
                             request.port_id.to_string(),
                             request.channel_id.to_string(),
@@ -650,7 +662,7 @@ impl ChainEndpoint for AxonChain {
         let (commitment, _) = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_hashed_packet_acknowledgement_commitment(
                         request.port_id.to_string(),
                         request.channel_id.to_string(),
@@ -671,7 +683,7 @@ impl ChainEndpoint for AxonChain {
             let (_, found) = self
                 .rt
                 .block_on(
-                    self.contract
+                    self.contract()?
                         .get_hashed_packet_acknowledgement_commitment(
                             request.port_id.to_string(),
                             request.channel_id.to_string(),
@@ -696,7 +708,7 @@ impl ChainEndpoint for AxonChain {
             let (_, found) = self
                 .rt
                 .block_on(
-                    self.contract
+                    self.contract()?
                         .get_hashed_packet_acknowledgement_commitment(
                             request.port_id.to_string(),
                             request.channel_id.to_string(),
@@ -720,7 +732,7 @@ impl ChainEndpoint for AxonChain {
         let sequence = self
             .rt
             .block_on(
-                self.contract
+                self.contract()?
                     .get_next_sequence_recvs(
                         request.port_id.to_string(),
                         request.channel_id.to_string(),
@@ -1046,7 +1058,7 @@ macro_rules! convert {
         let msg: $eventy = $msg.try_into()?;
         $self
             .rt
-            .block_on(async { Ok($self.contract.$method(msg.clone()).send().await?.await?) })
+            .block_on(async { Ok($self.contract()?.$method(msg.clone()).send().await?.await?) })
     }};
 }
 
@@ -1054,6 +1066,7 @@ impl AxonChain {
     fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
         use contract::*;
         let msg = message.clone();
+        dbg!("Axon#send_message", &message);
         let tx_receipt: eyre::Result<_> = match msg.type_url.as_str() {
             // client
             create_client::TYPE_URL => {
@@ -1128,7 +1141,12 @@ impl AxonChain {
                     }
                 };
                 self.rt.block_on(async {
-                    Ok(self.contract.recv_packet(msg.into()).send().await?.await?)
+                    Ok(self
+                        .contract()?
+                        .recv_packet(msg.into())
+                        .send()
+                        .await?
+                        .await?)
                 })
             }
             url => {
@@ -1142,11 +1160,18 @@ impl AxonChain {
             .ok_or(Error::send_tx(String::from("fail to send tx")))?;
         let event: IbcEvent = {
             use contract::OwnableIBCHandlerEvents::*;
+
+            dbg!("receipt", &tx_receipt);
             let mut events = tx_receipt
                 .logs
                 .into_iter()
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
+            dbg!(
+                "message type_url",
+                message.type_url.as_str(),
+                events.clone().collect::<Vec<_>>(),
+            );
             match message.type_url.as_str() {
                 create_client::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(CreateClientFilter(_))))
@@ -1205,7 +1230,7 @@ impl AxonChain {
             }
         }
         .ok_or_else(|| {
-            Error::send_tx("not find right event from Axon transaction receipt".to_owned())
+            Error::send_tx("not find right event from Axon transaction receipt.".to_owned())
         })?
         .unwrap()
         .into();
