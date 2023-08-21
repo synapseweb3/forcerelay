@@ -149,23 +149,43 @@ pub fn prepare_axon_chain(
             .env("AXON_HTTP_RPC_URL", format!("http://localhost:{}", port))
             .current_dir(&ibc_contracts_src_path)
             .output()?;
-        if !output.status.success() {
+        // get contract address from output
+        let contract_address: Option<ethers::types::H160> = if output.status.success() {
+            let output = String::from_utf8(output.stdout.clone())?;
+            output
+                .lines()
+                .filter(|line| line.starts_with("Done Deployment OwnableIBCHandler"))
+                .map(|line| {
+                    line.split("at").last().map(|s| {
+                        let s = s.trim().trim_start_matches("0x");
+                        let bytes = hex::decode(s).expect("decode hex address");
+                        ethers::types::H160::from_slice(&bytes)
+                    })
+                })
+                .flatten()
+                .next()
+        } else {
+            None
+        };
+
+        if contract_address.is_none() {
             let log_path = working_dir.join("deploy.log");
             let err_log_path = working_dir.join("deploy.err.log");
             fs::write(&log_path, output.stdout)?;
             fs::write(&err_log_path, output.stderr)?;
             bail!(
-                "deploy ibc contracts failed: {}, log: {}, err log: {}",
+                "failed to parse deployed contract address from logs: {}, log: {}, err log: {}",
                 output.status.to_string(),
                 log_path.to_string_lossy(),
                 err_log_path.to_string_lossy()
             );
         }
-        println!("ibc contracts deployed",);
+        let contract_address = contract_address.unwrap();
+        println!("ibc handler deployed at {:#x}", contract_address);
 
         // write deployment info
         let deployment = DeployedContracts {
-            contract_address: ethers::types::H160::default(),
+            contract_address,
             image_cell_contract_address: ethers::types::H160::default(),
             ckb_light_client_contract_address: ethers::types::H160::default(),
         };
