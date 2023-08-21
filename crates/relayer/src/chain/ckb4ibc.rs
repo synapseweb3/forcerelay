@@ -22,6 +22,7 @@ use crate::misbehaviour::MisbehaviourEvidence;
 
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections, IbcPacket, PacketStatus};
 use ckb_ics_axon::message::Envelope;
+use ckb_ics_axon::object::Ordering;
 use ckb_ics_axon::{ChannelArgs, PacketArgs};
 use ckb_jsonrpc_types::{JsonBytes, Status, TransactionView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
@@ -62,6 +63,7 @@ use ibc_relayer_types::proofs::Proofs;
 use ibc_relayer_types::signer::Signer;
 use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
+use rlp::Encodable;
 use semver::Version;
 use std::sync::RwLock;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
@@ -270,8 +272,8 @@ impl Ckb4IbcChain {
 
     fn fetch_channel_cell_and_extract(
         &self,
-        channel_id: ChannelId,
-        port_id: PortId,
+        channel_id: &ChannelId,
+        port_id: &PortId,
         is_open: bool,
     ) -> Result<(ChannelEnd, IbcChannel), Error> {
         let channel_code_hash = self.get_converter()?.get_channel_code_hash();
@@ -281,8 +283,8 @@ impl Ckb4IbcChain {
         let channel_args = ChannelArgs {
             client_id,
             open: is_open,
-            channel_id: get_channel_number(&channel_id)?,
-            port_id: convert_port_id_to_array(&port_id)?,
+            channel_id: get_channel_number(channel_id)?,
+            port_id: convert_port_id_to_array(port_id)?,
         };
         let script = Script::new_builder()
             .code_hash(channel_code_hash)
@@ -949,15 +951,13 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryChannelRequest,
         _include_proof: IncludeProof,
     ) -> Result<(ChannelEnd, Option<MerkleProof>), Error> {
-        if let Ok((channel, _)) = self.fetch_channel_cell_and_extract(
-            request.channel_id.clone(),
-            request.port_id.clone(),
-            false,
-        ) {
+        if let Ok((channel, _)) =
+            self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, false)
+        {
             Ok((channel, None))
         } else {
             let (channel, _) =
-                self.fetch_channel_cell_and_extract(request.channel_id, request.port_id, true)?;
+                self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
             Ok((channel, None))
         }
     }
@@ -1002,20 +1002,8 @@ impl ChainEndpoint for Ckb4IbcChain {
         if ibc_packet.status != PacketStatus::Send {
             Ok((vec![], None))
         } else {
-            Ok((
-                PacketArgs {
-                    channel_id: get_channel_number(&request.channel_id)?,
-                    port_id: ibc_packet
-                        .packet
-                        .source_port_id
-                        .as_bytes()
-                        .try_into()
-                        .unwrap(),
-                    sequence: ibc_packet.packet.sequence,
-                }
-                .get_search_args(false),
-                None,
-            ))
+            let commitment = keccak256(&ibc_packet.rlp_bytes()).to_vec();
+            Ok((commitment, None))
         }
     }
 
@@ -1023,6 +1011,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         request: QueryPacketCommitmentsRequest,
     ) -> Result<(Vec<Sequence>, Height), Error> {
+        // get all packets' commitment without pagination
         let sequences = self
             .fetch_packet_cells_and_extract(&request.channel_id, &request.port_id, None)?
             .into_iter()
@@ -1036,54 +1025,93 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryPacketReceiptRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        let (ibc_packet, _) = self.fetch_packet_cell_and_extract(
-            &request.channel_id,
-            &request.port_id,
-            request.sequence,
-        )?;
-        if ibc_packet.status != PacketStatus::Recv {
-            Ok((vec![], None))
+        let generate_receipt = |channel: IbcChannel| {
+            if channel.order == Ordering::Unordered {
+                Ok((vec![1u8], None))
+            } else {
+                Ok((vec![], None))
+            }
+        };
+        let (_, channel) =
+            self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
+        if channel.sequence.next_sequence_recvs as u64 > request.sequence.into() {
+            generate_receipt(channel)
         } else {
-            Ok((
-                PacketArgs {
-                    channel_id: get_channel_number(&request.channel_id)?,
-                    port_id: ibc_packet
-                        .packet
-                        .source_port_id
-                        .as_bytes()
-                        .try_into()
-                        .unwrap(),
-                    sequence: ibc_packet.packet.sequence,
-                }
-                .get_search_args(false),
-                None,
-            ))
+            let (ibc_packet, _) = self.fetch_packet_cell_and_extract(
+                &request.channel_id,
+                &request.port_id,
+                request.sequence,
+            )?;
+            if ibc_packet.status != PacketStatus::Recv {
+                Ok((vec![], None))
+            } else {
+                generate_receipt(channel)
+            }
         }
     }
 
     fn query_unreceived_packets(
         &self,
-        _request: QueryUnreceivedPacketsRequest,
+        request: QueryUnreceivedPacketsRequest,
     ) -> Result<Vec<Sequence>, Error> {
-        // TODO: fix it when Ckb4Ibc contract refactorred
-        Ok(vec![])
+        let (_, channel) =
+            self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
+        let sequences = request
+            .packet_commitment_sequences
+            .into_iter()
+            .filter(|sequence| {
+                if (channel.sequence.next_sequence_recvs as u64) < (*sequence).into() {
+                    return false;
+                }
+                let Ok((packet, _)) = self.fetch_packet_cell_and_extract(
+                    &request.channel_id,
+                    &request.port_id,
+                    *sequence,
+                ) else {
+                    return true;
+                };
+                if packet.status != PacketStatus::Recv {
+                    return true;
+                }
+                false
+            })
+            .collect();
+        Ok(sequences)
     }
 
-    // FIXME: acknowledgement is NOT tx_hash
     fn query_packet_acknowledgement(
         &self,
         request: QueryPacketAcknowledgementRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        let (ibc_packet, _) = self.fetch_packet_cell_and_extract(
+        let result = self.fetch_packet_cell_and_extract(
             &request.channel_id,
             &request.port_id,
             request.sequence,
-        )?;
-        if ibc_packet.status != PacketStatus::WriteAck {
-            Ok((vec![], None))
+        );
+        if let Ok((ibc_packet, _)) = result {
+            if ibc_packet.status != PacketStatus::WriteAck || ibc_packet.status != PacketStatus::Ack
+            {
+                Ok((vec![], None))
+            } else {
+                // no matter the `data` is empty or not, we recognize the acknowledge is committed
+                // if the `WriteAck` cell exists
+                let ack_commitment = keccak256(&ibc_packet.packet.data).to_vec();
+                Ok((ack_commitment, None))
+            }
         } else {
-            Ok((ibc_packet.tx_hash.unwrap().as_bytes().to_vec(), None))
+            // check the sequence status in channel if the packet cell under required sequence not found
+            let (_, channel) =
+                self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
+            if channel.sequence.next_sequence_recvs as u64 > request.sequence.into() {
+                // since the previous `WriteAck` cells are consumed and hard to fetch from CKB, we
+                // just use mock acknowledgement in return which in Hermes runtime is not sensitive
+                // with its real content but just used as Yes or No option
+                let ack_commitment = keccak256(b"unfetchable acknowledgement").to_vec();
+                Ok((ack_commitment, None))
+            } else {
+                Ok((vec![], None))
+            }
         }
     }
 
@@ -1091,37 +1119,57 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         request: QueryPacketAcknowledgementsRequest,
     ) -> Result<(Vec<Sequence>, Height), Error> {
-        let port_id = request.port_id;
-        let channel_id = request.channel_id;
-        let result = request
+        let sequences = request
             .packet_commitment_sequences
             .into_iter()
-            .flat_map(|seq| self.fetch_packet_cell_and_extract(&channel_id, &port_id, seq))
-            .filter(|(packet, _)| packet.status == PacketStatus::WriteAck)
-            .map(|(p, _)| Sequence::from(p.packet.sequence as u64))
-            .collect::<Vec<_>>();
-        Ok((result, Height::default()))
+            .filter(|sequence| {
+                let Ok((acknowledgement, _)) = self.query_packet_acknowledgement(
+                    QueryPacketAcknowledgementRequest {
+                        port_id: request.port_id.clone(),
+                        channel_id: request.channel_id.clone(),
+                        sequence: *sequence,
+                        height: QueryHeight::Latest,
+                    },
+                    IncludeProof::No,
+                ) else {
+                    return false;
+                };
+                if acknowledgement.is_empty() {
+                    return false;
+                }
+                true
+            })
+            .collect();
+        Ok((sequences, Height::default()))
     }
 
     fn query_unreceived_acknowledgements(
         &self,
         request: QueryUnreceivedAcksRequest,
     ) -> Result<Vec<Sequence>, Error> {
-        let port_id = request.port_id;
-        let channel_id = request.channel_id;
-        let mut data = self.packet_input_data.borrow_mut();
-        let result = request
+        let (_, channel) =
+            self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
+        let sequences = request
             .packet_ack_sequences
             .into_iter()
-            .flat_map(|seq| self.fetch_packet_cell_and_extract(&channel_id, &port_id, seq))
-            .filter(|(packet, _)| packet.status == PacketStatus::Send)
-            .map(|(p, cell_input)| {
-                let seq = Sequence::from(p.packet.sequence as u64);
-                data.insert((channel_id.clone(), port_id.clone(), seq), cell_input);
-                seq
+            .filter(|sequence| {
+                if channel.sequence.next_sequence_acks as u64 > (*sequence).into() {
+                    return false;
+                }
+                let Ok((packet, _)) = self.fetch_packet_cell_and_extract(
+                        &request.channel_id,
+                        &request.port_id,
+                        *sequence,
+                ) else {
+                    return true;
+                };
+                if packet.status != PacketStatus::Ack {
+                    return true;
+                }
+                false
             })
-            .collect::<Vec<_>>();
-        Ok(result)
+            .collect();
+        Ok(sequences)
     }
 
     fn query_next_sequence_receive(
@@ -1130,7 +1178,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _include_proof: IncludeProof,
     ) -> Result<(Sequence, Option<MerkleProof>), Error> {
         let (_, ibc_channel) =
-            self.fetch_channel_cell_and_extract(request.channel_id, request.port_id, true)?;
+            self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
         let sequence = (ibc_channel.sequence.next_sequence_recvs as u64).into();
         Ok((sequence, None))
     }
