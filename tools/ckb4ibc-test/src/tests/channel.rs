@@ -4,41 +4,47 @@ use std::str::FromStr;
 
 use crate::framework::utils::ckb::*;
 
-/// CKB only allow h256 as portId
-fn transfer_port_id() -> PortId {
-    let mut buf = [0u8; 32];
-    buf[..8].copy_from_slice(b"transfer");
-    PortId::from_str(H256::from(buf).to_string().as_str()).unwrap()
+pub struct CKB4IbcChannelTest<'a, Test> {
+    /// Inner test
+    pub test: &'a Test,
 }
 
-pub struct CKB4IbcChannelTest;
-
-impl TestOverrides for CKB4IbcChannelTest {
-    fn channel_port_a(&self) -> PortId {
-        transfer_port_id()
-    }
-
-    fn channel_port_b(&self) -> PortId {
-        transfer_port_id()
+impl<'a, Test> CKB4IbcChannelTest<'a, Test> {
+    pub fn new(test: &'a Test) -> Self {
+        Self { test }
     }
 }
 
-impl BinaryChannelTest for CKB4IbcChannelTest {
+impl<'a, Test, Overrides> HasOverrides for CKB4IbcChannelTest<'a, Test>
+where
+    Test: HasOverrides<Overrides = Overrides>,
+{
+    type Overrides = Overrides;
+
+    fn get_overrides(&self) -> &Self::Overrides {
+        self.test.get_overrides()
+    }
+}
+
+impl<'a, Test> BinaryChannelTest for CKB4IbcChannelTest<'a, Test>
+where
+    Test: BinaryChannelTest,
+{
     fn run<ChainA: ChainHandle, ChainB: ChainHandle>(
         &self,
-        _config: &TestConfig,
-        _relayer: RelayerDriver,
+        config: &TestConfig,
+        relayer: RelayerDriver,
         chains: ConnectedChains<ChainA, ChainB>,
-        channel: ConnectedChannel<ChainA, ChainB>,
+        channels: ConnectedChannel<ChainA, ChainB>,
     ) -> Result<(), Error> {
         info!(
-            "successfully create channel from chain {} conn {} port {} to chain {} conn {} port {}",
+            "check conneciton and channel on-chain status ({}: {}/{}, {}: {}/{})",
             chains.chain_id_a(),
-            channel.channel_id_a,
-            channel.port_a,
+            channels.connection.connection_id_a,
+            channels.channel_id_a,
             chains.chain_id_b(),
-            channel.channel_id_b,
-            channel.port_b,
+            channels.connection.connection_id_b,
+            channels.channel_id_b,
         );
         let rpc_port_a = chains.node_a.chain_driver().value().rpc_port.into();
         let rpc_port_b = chains.node_b.chain_driver().value().rpc_port.into();
@@ -53,21 +59,19 @@ impl BinaryChannelTest for CKB4IbcChannelTest {
         }
 
         // check channel
-        let port_a = H256::from_str(channel.port_a.into_value().to_string().as_str())
+        let port_a = H256::from_str(channels.port_a.value().to_string().as_str())
             .unwrap()
             .into();
-        let port_b = H256::from_str(channel.port_b.into_value().to_string().as_str())
+        let port_b = H256::from_str(channels.port_b.value().to_string().as_str())
             .unwrap()
             .into();
-        let a_channel =
-            fetch_ibc_channel_cell(rpc_port_a, port_a, &channel.channel_id_a.into_value());
-        let b_channel =
-            fetch_ibc_channel_cell(rpc_port_b, port_b, &channel.channel_id_b.into_value());
+        let a_channel = fetch_ibc_channel_cell(rpc_port_a, port_a, channels.channel_id_a.value());
+        let b_channel = fetch_ibc_channel_cell(rpc_port_b, port_b, channels.channel_id_b.value());
 
         if !check_channel(&a_channel) || !check_channel(&b_channel) {
             panic!("create channel failed")
         }
 
-        Ok(())
+        self.test.run(config, relayer, chains, channels)
     }
 }
