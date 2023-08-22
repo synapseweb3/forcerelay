@@ -39,11 +39,8 @@ use ibc_relayer_types::{
     Height,
 };
 
-use super::{
-    contract,
-    utils::{to_timestamp, SEC_TO_NANO},
-};
-use crate::error::Error;
+use super::{contract, utils::to_timestamp};
+use crate::{chain::SEC_TO_NANO, error::Error};
 
 fn into_ethers_client_id(value: Option<ClientId>) -> String {
     match value {

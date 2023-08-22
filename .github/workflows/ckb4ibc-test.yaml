@@ -1,7 +1,7 @@
 name: Ckb4ibc
 on:
   pull_request:
-    path:
+    paths:
       - .github/workflows/ckb4ibc-test.yaml
       - Cargo.toml
       - Cargo.lock
@@ -21,9 +21,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-
 jobs:
-  integration-test:
+  ckb4ibc-test:
     runs-on: ubuntu-20.04
     timeout-minutes: 60
     steps:
@@ -48,10 +47,10 @@ jobs:
         with:
           python-version: '3.10'
       - uses: actions-rs/cargo@v1
-      - env:
-          CHAIN_COMMAND_PATHS=ckb
-          ACCOUNT_PREFIXES=ckb
-          RUST_LOG=info
+        env:
+          CHAIN_COMMAND_PATHS: ckb
+          ACCOUNT_PREFIXES: ckb
+          RUST_LOG: info
         with:
           command: test
           args: -p ckb4ibc-test --all-features -- --nocapture

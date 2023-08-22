@@ -7,6 +7,7 @@ use ckb_ics_axon::proof::{
 use rlp::Encodable;
 
 use crate::{
+    chain::SEC_TO_NANO,
     client_state::{AnyClientState, IdentifiedAnyClientState},
     consensus_state::AnyConsensusState,
     error::Error,
@@ -20,8 +21,6 @@ use ibc_relayer_types::{
     core::{ics02_client::client_type::ClientType, ics24_host::identifier::ClientId},
     timestamp::Timestamp,
 };
-
-pub const SEC_TO_NANO: u64 = 1_000_000_000;
 
 pub fn to_timestamp(seconds: u64) -> Result<Timestamp, Error> {
     Timestamp::from_nanoseconds(seconds * SEC_TO_NANO).map_err(convert_err)

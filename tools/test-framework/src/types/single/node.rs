@@ -144,22 +144,14 @@ impl FullNode {
         _chain_type: &TestedChainType,
     ) -> Result<config::ChainConfig, Error> {
         let ckb_rpc = Url::from_str(self.chain_driver.rpc_address().as_str())?;
-        let connection_type_args = hex_to_h256(
-            &b"0xf49ce32397c6741998b04d7548c5ed372007424daf67ee5bfadaefec3c865781"[2..],
-        )
-        .into();
-        let channel_type_args = hex_to_h256(
-            &b"0xfbe09e8ff3e5f3d0fab7cc7431feed2131846184d356a9626639f55e7f471846"[2..],
-        )
-        .into();
-        let packet_type_args = hex_to_h256(
-            &b"0x2b0faaa9a508ccb5a276f36e8116d70f2ace8b714a8bd07aa4f6839393e1d8c2"[2..],
-        )
-        .into();
-        let client_cell_type_args = hex_to_h256(
-            &b"0xccffb188453b890936c3b1ba81743d6c48a26216d57cf9f19f735af9d4eefbed"[2..],
-        )
-        .into();
+        let connection_type_args =
+            hex_to_h256(b"f49ce32397c6741998b04d7548c5ed372007424daf67ee5bfadaefec3c865781").into();
+        let channel_type_args =
+            hex_to_h256(b"b407c3b93dee611b2e65248254c28012a8d227c53803e5842d4a81934179adfc").into();
+        let packet_type_args =
+            hex_to_h256(b"63b3d51df3884cc649135a51ad2a1ae1a8c2dfeca37c8b16220b26716fb3b4c4").into();
+        let client_cell_type_args =
+            hex_to_h256(b"7ede7d98985de2f464e737b8e177ede186c50d3d584d1bd9b2399330c2187e61").into();
         let mut onchain_light_clients = HashMap::default();
         onchain_light_clients.insert(
             ClientType::Ckb4Ibc,

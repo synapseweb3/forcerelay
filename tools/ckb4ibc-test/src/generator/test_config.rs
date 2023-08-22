@@ -1,4 +1,7 @@
-use super::{deploy_conn_chan::ConnChanAttribute, deploy_packet_metadata::PacketMetataAttribute};
+use super::{
+    deploy_channel::ChannelAttribute, deploy_connection::ConnectionAttribute,
+    deploy_packet_metadata::PacketMetataAttribute,
+};
 
 const PREFIX: &str = r#"[global]
 log_level = 'info'
@@ -24,7 +27,8 @@ tx_confirmation = true
 "#;
 
 pub fn generate_test_config(
-    conn_chan_attr: &ConnChanAttribute,
+    connection_attr: &ConnectionAttribute,
+    channel_attr: &ChannelAttribute,
     packet_metadata_attr: &PacketMetataAttribute,
 ) {
     let chain_a = format!(
@@ -44,8 +48,8 @@ Ckb4Ibc = {{ chain_id = "{}", client_cell_type_args = "0x{}" }}
         "ckb4ibc-0",
         8114,
         8114,
-        conn_chan_attr.connection_type_args,
-        conn_chan_attr.channel_type_args,
+        connection_attr.connection_type_args,
+        channel_attr.channel_type_args,
         packet_metadata_attr.packet_type_args,
         "ckb4ibc-1",
         packet_metadata_attr.metadata_type_args,
@@ -67,8 +71,8 @@ Ckb4Ibc = {{ chain_id = "{}", client_cell_type_args = "0x{}" }}
         "ckb4ibc-1",
         8214,
         8214,
-        conn_chan_attr.connection_type_args,
-        conn_chan_attr.channel_type_args,
+        connection_attr.connection_type_args,
+        channel_attr.channel_type_args,
         packet_metadata_attr.packet_type_args,
         "ckb4ibc-0",
         packet_metadata_attr.metadata_type_args,
@@ -79,7 +83,8 @@ Ckb4Ibc = {{ chain_id = "{}", client_cell_type_args = "0x{}" }}
 }
 
 pub fn generate_consts_file(
-    conn_chan_attr: &ConnChanAttribute,
+    connection_attr: &ConnectionAttribute,
+    channel_attr: &ChannelAttribute,
     packet_metadata_attr: &PacketMetataAttribute,
 ) {
     let consts_rs = format!(
@@ -92,8 +97,8 @@ pub const CHANNEL_CODE_HASH: H256 =
 pub const CLIENT_TYPE_ARGS: H256 =
     h256!("0x{}");
 "#,
-        conn_chan_attr.connection_code_hash,
-        conn_chan_attr.channel_code_hash,
+        connection_attr.connection_code_hash,
+        channel_attr.channel_code_hash,
         packet_metadata_attr.metadata_type_args
     );
     std::fs::write("./src/consts.rs", consts_rs).unwrap();

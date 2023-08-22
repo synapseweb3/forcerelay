@@ -15,11 +15,6 @@ use ckb_ics_axon::{
     },
     object::{ConnectionCounterparty, ConnectionEnd as CkbConnectionEnd, State},
 };
-use ckb_types::{
-    core::{DepType, TransactionView},
-    packed::{CellDep, CellOutput, WitnessArgs},
-    prelude::{Builder, Entity, Pack},
-};
 use ibc_relayer_types::{
     core::ics03_connection::{
         events::{Attributes, OpenAck, OpenConfirm, OpenInit, OpenTry},
@@ -31,7 +26,7 @@ use ibc_relayer_types::{
     events::IbcEvent,
 };
 
-use super::{CkbTxInfo, MsgToTxConverter};
+use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 
 pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
     msg: MsgConnectionOpenInit,
@@ -43,6 +38,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
     let counterparty = ConnectionCounterparty {
         client_id: remote_client_id,
         connection_id: None,
+        commitment_prefix: converter.get_commitment_prefix(),
     };
 
     let connection_end = CkbConnectionEnd {
@@ -50,6 +46,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         client_id: client_id.clone(),
         counterparty,
         delay_period: msg.delay_period.as_secs(),
+        versions: vec![Default::default()],
     };
     let old_ibc_connection_cell = converter.get_ibc_connections(&client_id)?;
     let this_conn_idx = old_ibc_connection_cell.next_connection_number;
@@ -62,47 +59,30 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         content: rlp::encode(&CkbMsgConnectionOpenInit {}).to_vec(),
     };
 
-    let old_connection_encoded = get_encoded_object(old_ibc_connection_cell);
-    let new_connection_encoded = get_encoded_object(new_ibc_connection_cell);
+    let old_connection = get_encoded_object(old_ibc_connection_cell);
+    let new_connection = get_encoded_object(new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
 
-    let packed_tx = TransactionView::new_advanced_builder()
-        .cell_dep(
-            CellDep::new_builder()
-                .dep_type(DepType::Code.into())
-                .out_point(get_client_outpoint(converter, &client_id)?)
-                .build(),
-        )
-        .cell_dep(
-            CellDep::new_builder()
-                .dep_type(DepType::Code.into())
-                .out_point(converter.get_conn_contract_outpoint())
-                .build(),
-        )
+    let packed_tx = TxBuilder::default()
+        .cell_dep(get_client_outpoint(converter, &client_id)?)
+        .cell_dep(converter.get_conn_contract_outpoint())
         .input(converter.get_ibc_connections_input(&client_id)?)
         .output(
-            CellOutput::new_builder()
-                .lock(connection_lock)
-                .capacity(get_connection_capacity().pack())
-                .build(),
+            connection_lock,
+            get_connection_capacity(),
+            new_connection.data,
         )
-        .output_data(new_connection_encoded.data)
-        .witness(
-            WitnessArgs::new_builder()
-                .input_type(old_connection_encoded.witness)
-                .output_type(new_connection_encoded.witness)
-                .build()
-                .as_bytes()
-                .pack(),
-        )
+        .witness(old_connection.witness, new_connection.witness)
         .build();
+
     let event = IbcEvent::OpenInitConnection(OpenInit(Attributes {
         connection_id: Some(generate_connection_id(this_conn_idx, &client_id)),
         client_id: msg.client_id,
         counterparty_connection_id: None,
         counterparty_client_id: msg.counterparty.client_id().clone(),
     }));
+
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
@@ -116,7 +96,6 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let client_id = msg.client_id.to_string();
-
     let remote_client_id = msg.counterparty.client_id().to_string();
 
     let remote_conn_id = msg.counterparty.connection_id.clone().unwrap();
@@ -125,6 +104,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
     let counterparty = ConnectionCounterparty {
         client_id: remote_client_id,
         connection_id: Some(remote_conn_id),
+        commitment_prefix: converter.get_commitment_prefix(),
     };
 
     let connection_end = CkbConnectionEnd {
@@ -132,6 +112,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
         client_id: client_id.clone(),
         counterparty,
         delay_period: msg.delay_period.as_secs(),
+        versions: vec![Default::default()],
     };
     let old_ibc_connection_cell = converter.get_ibc_connections(&client_id)?;
     let this_conn_idx = old_ibc_connection_cell.next_connection_number;
@@ -147,47 +128,30 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
         .to_vec(),
     };
 
-    let old_connection_encoded = get_encoded_object(old_ibc_connection_cell);
-    let new_connection_encoded = get_encoded_object(new_ibc_connection_cell);
+    let old_connection = get_encoded_object(old_ibc_connection_cell);
+    let new_connection = get_encoded_object(new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
 
-    let packed_tx = TransactionView::new_advanced_builder()
-        .cell_dep(
-            CellDep::new_builder()
-                .dep_type(DepType::Code.into())
-                .out_point(get_client_outpoint(converter, &client_id)?)
-                .build(),
-        )
-        .cell_dep(
-            CellDep::new_builder()
-                .dep_type(DepType::Code.into())
-                .out_point(converter.get_conn_contract_outpoint())
-                .build(),
-        )
+    let packed_tx = TxBuilder::default()
+        .cell_dep(get_client_outpoint(converter, &client_id)?)
+        .cell_dep(converter.get_conn_contract_outpoint())
         .input(converter.get_ibc_connections_input(&client_id)?)
         .output(
-            CellOutput::new_builder()
-                .lock(connection_lock)
-                .capacity(get_connection_capacity().pack())
-                .build(),
+            connection_lock,
+            get_connection_capacity(),
+            new_connection.data,
         )
-        .output_data(new_connection_encoded.data)
-        .witness(
-            WitnessArgs::new_builder()
-                .input_type(old_connection_encoded.witness)
-                .output_type(new_connection_encoded.witness)
-                .build()
-                .as_bytes()
-                .pack(),
-        )
+        .witness(old_connection.witness, new_connection.witness)
         .build();
+
     let event = IbcEvent::OpenTryConnection(OpenTry(Attributes {
         connection_id: Some(generate_connection_id(this_conn_idx, &client_id)),
         client_id: msg.client_id,
         counterparty_connection_id: msg.counterparty.connection_id.clone(),
         counterparty_client_id: msg.counterparty.client_id().clone(),
     }));
+
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
@@ -221,47 +185,30 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
     let counterparty_client_id = connection_end.counterparty.client_id.clone();
     let client_id = connection_end.client_id.clone();
 
-    let old_connection_encoded = get_encoded_object(old_ibc_connection_cell);
-    let new_connection_encoded = get_encoded_object(new_ibc_connection_cell);
+    let old_connection = get_encoded_object(old_ibc_connection_cell);
+    let new_connection = get_encoded_object(new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
 
-    let packed_tx = TransactionView::new_advanced_builder()
-        .cell_dep(
-            CellDep::new_builder()
-                .dep_type(DepType::Code.into())
-                .out_point(get_client_outpoint(converter, &client_id)?)
-                .build(),
-        )
-        .cell_dep(
-            CellDep::new_builder()
-                .dep_type(DepType::Code.into())
-                .out_point(converter.get_conn_contract_outpoint())
-                .build(),
-        )
+    let packed_tx = TxBuilder::default()
+        .cell_dep(get_client_outpoint(converter, &client_id)?)
+        .cell_dep(converter.get_conn_contract_outpoint())
         .input(converter.get_ibc_connections_input(&client_id)?)
         .output(
-            CellOutput::new_builder()
-                .lock(connection_lock)
-                .capacity(get_connection_capacity().pack())
-                .build(),
+            connection_lock,
+            get_connection_capacity(),
+            new_connection.data,
         )
-        .output_data(new_connection_encoded.data)
-        .witness(
-            WitnessArgs::new_builder()
-                .input_type(old_connection_encoded.witness)
-                .output_type(new_connection_encoded.witness)
-                .build()
-                .as_bytes()
-                .pack(),
-        )
+        .witness(old_connection.witness, new_connection.witness)
         .build();
+
     let event = IbcEvent::OpenAckConnection(OpenAck(Attributes {
         connection_id: Some(msg.connection_id),
         client_id: client_id.parse().unwrap(),
         counterparty_connection_id: Some(msg.counterparty_connection_id),
         counterparty_client_id: counterparty_client_id.parse().unwrap(),
     }));
+
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
@@ -299,47 +246,30 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
         .map(|v| v.parse().unwrap());
     let client_id = connection_end.client_id.clone();
 
-    let old_connection_encoded = get_encoded_object(old_ibc_connection_cell);
-    let new_connection_encoded = get_encoded_object(new_ibc_connection_cell);
+    let old_connection = get_encoded_object(old_ibc_connection_cell);
+    let new_connection = get_encoded_object(new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
 
-    let packed_tx = TransactionView::new_advanced_builder()
-        .cell_dep(
-            CellDep::new_builder()
-                .dep_type(DepType::Code.into())
-                .out_point(get_client_outpoint(converter, &client_id)?)
-                .build(),
-        )
-        .cell_dep(
-            CellDep::new_builder()
-                .dep_type(DepType::Code.into())
-                .out_point(converter.get_conn_contract_outpoint())
-                .build(),
-        )
+    let packed_tx = TxBuilder::default()
+        .cell_dep(get_client_outpoint(converter, &client_id)?)
+        .cell_dep(converter.get_conn_contract_outpoint())
         .input(converter.get_ibc_connections_input(&client_id)?)
         .output(
-            CellOutput::new_builder()
-                .lock(connection_lock)
-                .capacity(get_connection_capacity().pack())
-                .build(),
+            connection_lock,
+            get_connection_capacity(),
+            new_connection.data,
         )
-        .output_data(new_connection_encoded.data)
-        .witness(
-            WitnessArgs::new_builder()
-                .input_type(old_connection_encoded.witness)
-                .output_type(new_connection_encoded.witness)
-                .build()
-                .as_slice()
-                .pack(),
-        )
+        .witness(old_connection.witness, new_connection.witness)
         .build();
+
     let event = IbcEvent::OpenConfirmConnection(OpenConfirm(Attributes {
         connection_id: Some(msg.connection_id),
         client_id: client_id.parse().unwrap(),
         counterparty_connection_id,
         counterparty_client_id: counterparty_client_id.parse().unwrap(),
     }));
+
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,

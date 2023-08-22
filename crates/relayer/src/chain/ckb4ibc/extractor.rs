@@ -3,9 +3,7 @@ use std::time::Duration;
 
 use crate::error::Error;
 
-use ckb_ics_axon::handler::{
-    get_channel_id_str, IbcChannel as CkbIbcChannel, IbcConnections, IbcPacket,
-};
+use ckb_ics_axon::handler::{IbcChannel as CkbIbcChannel, IbcConnections, IbcPacket};
 use ckb_ics_axon::message::{Envelope, MsgType};
 use ckb_ics_axon::object::{
     ConnectionEnd as CkbConnectionEnd, Ordering as CkbOrdering, State as CkbState,
@@ -28,7 +26,7 @@ use ibc_relayer_types::core::ics04_channel::version::Version as ChanVersion;
 use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
 
-use super::utils::generate_connection_id;
+use super::utils::{generate_channel_id, generate_connection_id};
 
 pub fn extract_channel_end_from_tx(
     tx: TransactionView,
@@ -100,9 +98,7 @@ fn navigate(t: MsgType, object_type: ObjectType) -> usize {
         (MsgType::MsgSendPacket, ObjectType::ChannelEnd) => 0,
         (MsgType::MsgRecvPacket, ObjectType::ChannelEnd) => 0,
         (MsgType::MsgAckPacket, ObjectType::ChannelEnd) => 0,
-        (MsgType::MsgAckOutboxPacket, ObjectType::ChannelEnd) => 0, // only input
-        (MsgType::MsgAckInboxPacket, ObjectType::ChannelEnd) => 0,  // only input
-        (MsgType::MsgFinishPacket, ObjectType::ChannelEnd) => todo!(),
+        (MsgType::MsgWriteAckPacket, ObjectType::ChannelEnd) => 0, // only input
         (MsgType::MsgTimeoutPacket, ObjectType::ChannelEnd) => todo!(),
         (MsgType::MsgSendPacket, ObjectType::IbcPacket) => 1,
         (MsgType::MsgRecvPacket, ObjectType::IbcPacket) => 1,
@@ -196,10 +192,7 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
 
     let port_id =
         PortId::from_str(&ckb_channel_end.port_id).map_err(|_| Error::convert_channel_end())?;
-
-    let channel_id = get_channel_id_str(ckb_channel_end.num);
-    let channel_id =
-        ChannelId::from_str(&channel_id).map_err(|_| Error::ckb_chan_id_invalid(channel_id))?;
+    let channel_id = generate_channel_id(ckb_channel_end.number);
 
     let result = IdentifiedChannelEnd {
         port_id,

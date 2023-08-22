@@ -27,7 +27,10 @@ use ethers::{
     types::{BlockNumber, TransactionRequest, TxHash, U64},
     utils::rlp,
 };
-use ibc_proto::google::protobuf::Any;
+use ibc_proto::{
+    google::protobuf::Any,
+    ibc::apps::fee::v1::{QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse},
+};
 use ibc_relayer_types::{
     applications::ics31_icq::response::CrossChainQueryResponse,
     clients::ics07_axon::{
@@ -47,7 +50,7 @@ use ibc_relayer_types::{
             msgs::{conn_open_ack, conn_open_confirm, conn_open_init, conn_open_try},
         },
         ics04_channel::{
-            channel::{ChannelEnd, IdentifiedChannelEnd},
+            channel::{ChannelEnd, IdentifiedChannelEnd, Order},
             msgs::{
                 acknowledgement, chan_close_confirm, chan_close_init, chan_open_ack,
                 chan_open_confirm, chan_open_init, chan_open_try, recv_packet, timeout,
@@ -610,29 +613,57 @@ impl ChainEndpoint for AxonChain {
                     .call(),
             )
             .map_err(convert_err)?;
-        Ok((vec![has_receipt as u8], None))
+        if has_receipt {
+            Ok((vec![1u8], None))
+        } else {
+            Ok((vec![], None))
+        }
     }
 
     fn query_unreceived_packets(
         &self,
         request: QueryUnreceivedPacketsRequest,
     ) -> Result<Vec<Sequence>, Error> {
+        let (channel, _) = self.query_channel(
+            QueryChannelRequest {
+                port_id: request.port_id.clone(),
+                channel_id: request.channel_id.clone(),
+                height: QueryHeight::Latest,
+            },
+            IncludeProof::No,
+        )?;
         let mut sequences: Vec<Sequence> = vec![];
-        for seq in request.packet_commitment_sequences {
-            let has_receipt = self
-                .rt
-                .block_on(
-                    self.contract
-                        .has_packet_receipt(
-                            request.port_id.to_string(),
-                            request.channel_id.to_string(),
-                            seq.into(),
-                        )
-                        .call(),
-                )
-                .map_err(convert_err)?;
-            if !has_receipt {
-                sequences.push(seq);
+        if channel.ordering == Order::Ordered {
+            let (max_recv_seq, _) = self.query_next_sequence_receive(
+                QueryNextSequenceReceiveRequest {
+                    port_id: request.port_id,
+                    channel_id: request.channel_id,
+                    height: QueryHeight::Latest,
+                },
+                IncludeProof::No,
+            )?;
+            sequences = request
+                .packet_commitment_sequences
+                .into_iter()
+                .filter(|seq| *seq >= max_recv_seq)
+                .collect();
+        } else if channel.ordering == Order::Unordered {
+            for seq in request.packet_commitment_sequences {
+                let has_receipt = self
+                    .rt
+                    .block_on(
+                        self.contract
+                            .has_packet_receipt(
+                                request.port_id.to_string(),
+                                request.channel_id.to_string(),
+                                seq.into(),
+                            )
+                            .call(),
+                    )
+                    .map_err(convert_err)?;
+                if !has_receipt {
+                    sequences.push(seq);
+                }
             }
         }
         Ok(sequences)
@@ -643,10 +674,6 @@ impl ChainEndpoint for AxonChain {
         request: QueryPacketAcknowledgementRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        if matches!(request.height, QueryHeight::Specific(_)) {
-            // TODO: no implemention for specific acknowledgement query
-            warn!("search packet acknoledgement at specific height will fallback to latest");
-        }
         let (commitment, _) = self
             .rt
             .block_on(
@@ -750,14 +777,20 @@ impl ChainEndpoint for AxonChain {
         &self,
         _request: QueryHostConsensusStateRequest,
     ) -> Result<Self::ConsensusState, Error> {
-        todo!()
+        // TODO
+        warn!("axon query_host_consensus_state() not support");
+        Ok(AxonConsensusState {})
     }
 
     fn query_incentivized_packet(
         &self,
-        _request: ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketRequest,
-    ) -> Result<ibc_proto::ibc::apps::fee::v1::QueryIncentivizedPacketResponse, Error> {
-        todo!()
+        _request: QueryIncentivizedPacketRequest,
+    ) -> Result<QueryIncentivizedPacketResponse, Error> {
+        // TODO
+        warn!("axon query_incentivized_packet() not support");
+        Ok(QueryIncentivizedPacketResponse {
+            incentivized_packet: None,
+        })
     }
 
     fn build_client_state(
