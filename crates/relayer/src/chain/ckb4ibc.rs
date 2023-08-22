@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,7 +27,6 @@ use ckb_ics_axon::object::Ordering;
 use ckb_ics_axon::{ChannelArgs, PacketArgs};
 use ckb_jsonrpc_types::{JsonBytes, Status, TransactionView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
 use ckb_sdk::traits::SecpCkbRawKeySigner;
 use ckb_sdk::unlock::{ScriptSigner, SecpSighashScriptSigner};
 use ckb_sdk::{Address, AddressPayload, NetworkType, ScriptGroup, ScriptGroupType};
@@ -75,7 +75,7 @@ use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverte
 use self::monitor::Ckb4IbcEventMonitor;
 use self::utils::{
     convert_port_id_to_array, get_channel_number, get_dummy_merkle_proof, get_encoded_object,
-    get_search_key,
+    get_search_key, get_search_key_with_sudt,
 };
 
 use super::ckb::rpc_client::RpcClient;
@@ -714,37 +714,54 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok(None)
     }
 
-    fn query_balance(
-        &self,
-        _key_name: Option<&str>,
-        _denom: Option<&str>,
-    ) -> Result<Balance, Error> {
-        let address = self.tx_assembler_address()?;
-        let lock_script: Script = address.payload().into();
-        let search_key = SearchKey {
-            script: lock_script.into(),
-            script_type: ScriptType::Lock,
-            filter: None,
-            with_data: None,
-            group_by_transaction: None,
+    fn query_balance(&self, address: Option<&str>, symbol: Option<&str>) -> Result<Balance, Error> {
+        let lock_script: Script = match address {
+            Some(address) => Address::from_str(address)
+                .map_err(|e| {
+                    Error::invalid_key_address(
+                        address.to_string(),
+                        tendermint::Error::invalid_key(e.to_string()),
+                    )
+                })?
+                .payload()
+                .into(),
+            None => self.tx_assembler_address()?.payload().into(),
         };
-        let resp = self.rpc_client.fetch_live_cells(search_key, u32::MAX, None);
-        let cells = self.rt.block_on(resp)?;
-        let capacity = cells
+        let search_key = match symbol {
+            Some(symbol) => get_search_key_with_sudt(lock_script, symbol, self.network()?)?,
+            None => get_search_key(lock_script),
+        };
+        let asset_cells =
+            self.rt
+                .block_on(self.rpc_client.fetch_live_cells(search_key, u32::MAX, None))?;
+        let balance: u128 = asset_cells
             .objects
             .into_iter()
-            .filter(|c| c.output.type_.is_none())
-            .map(|c| c.output.capacity)
-            .fold(0, |prev, curr| curr.value() + prev);
+            .filter_map(|cell| {
+                if symbol.is_some() {
+                    let data: [u8; 16] = cell
+                        .output_data
+                        .unwrap()
+                        .as_bytes()
+                        .try_into()
+                        .expect("sudt capacity");
+                    Some(u128::from_le_bytes(data))
+                } else if cell.output.type_.is_some() {
+                    None
+                } else {
+                    Some(cell.output.capacity.value() as u128)
+                }
+            })
+            .sum();
         Ok(Balance {
-            amount: capacity.to_string(),
-            denom: String::from("ckb"),
+            amount: balance.to_string(),
+            denom: symbol.unwrap_or("ckb").to_owned(),
         })
     }
 
-    fn query_all_balances(&self, _key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
-        warn!("axon query_all_balances() cannot implement");
-        Ok(vec![])
+    fn query_all_balances(&self, address: Option<&str>) -> Result<Vec<Balance>, Error> {
+        let ckb_balance = self.query_balance(address, None)?;
+        Ok(vec![ckb_balance])
     }
 
     fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {

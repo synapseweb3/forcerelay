@@ -69,7 +69,7 @@ where
         let b_channel = fetch_ibc_channel_cell(rpc_port_b, port_b, channels.channel_id_b.value());
 
         if !check_channel(&a_channel) || !check_channel(&b_channel) {
-            panic!("create channel failed")
+            panic!("create channel failed");
         }
 
         self.test.run(config, relayer, chains, channels)

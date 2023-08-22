@@ -9,11 +9,12 @@ use ckb_ics_axon::consts::{
 use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
+use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey, SearchKeyFilter};
+use ckb_sdk::NetworkType;
 use ckb_types::core::{Capacity, ScriptHashType};
 use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script};
 use ckb_types::prelude::{Builder, Entity, Pack};
-use ckb_types::H256;
+use ckb_types::{h256, H256};
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics04_channel::channel::ChannelEnd;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ConnectionId, PortId};
@@ -22,6 +23,11 @@ use ibc_relayer_types::Height;
 use tiny_keccak::{Hasher, Keccak};
 
 use super::message::MsgToTxConverter;
+
+const SUDT_CODE_HASH_MAINNET: H256 =
+    h256!("0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5");
+const SUDT_CODE_HASH_TESTNET: H256 =
+    h256!("0xc5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4");
 
 pub fn keccak256(slice: &[u8]) -> [u8; 32] {
     let mut hasher = Keccak::v256();
@@ -121,6 +127,7 @@ pub fn get_connection_search_key(
         filter: None,
         with_data: None,
         group_by_transaction: None,
+        script_search_mode: None,
     })
 }
 
@@ -165,7 +172,43 @@ pub fn get_search_key(script: Script) -> SearchKey {
         filter: None,
         with_data: Some(true),
         group_by_transaction: None,
+        script_search_mode: None,
     }
+}
+
+pub fn get_search_key_with_sudt(
+    script: Script,
+    symbol: &str,
+    network: NetworkType,
+) -> Result<SearchKey, Error> {
+    let sudt_code_hash = match network {
+        NetworkType::Mainnet => SUDT_CODE_HASH_MAINNET,
+        NetworkType::Testnet => SUDT_CODE_HASH_TESTNET,
+        _ => {
+            return Err(Error::other_error(format!(
+                "unsupported network: {network}"
+            )))
+        }
+    };
+    let owner_lockhash =
+        H256::from_str(symbol).map_err(|_| Error::other_error("invalid sUDT symbol".to_owned()))?;
+    let sudt_script = Script::new_builder()
+        .code_hash(sudt_code_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(owner_lockhash.as_bytes().to_vec().pack())
+        .build();
+    let filter = SearchKeyFilter {
+        script: Some(sudt_script.into()),
+        ..Default::default()
+    };
+    Ok(SearchKey {
+        script: script.into(),
+        script_type: ScriptType::Lock,
+        filter: Some(filter),
+        with_data: Some(true),
+        group_by_transaction: None,
+        script_search_mode: None,
+    })
 }
 
 pub fn get_connection_capacity() -> Capacity {

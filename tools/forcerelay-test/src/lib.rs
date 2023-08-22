@@ -207,6 +207,7 @@ mod tests {
             filter: None,
             with_data: None,
             group_by_transaction: None,
+            script_search_mode: None,
         };
 
         let mut retry_time = 0;
