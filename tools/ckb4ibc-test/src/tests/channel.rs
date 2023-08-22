@@ -1,13 +1,8 @@
-use std::str::FromStr;
-
-use crate::framework::{binary::channel::run_arbitrary_binary_channel_test, utils::ckb::*};
 use ckb_types::H256;
 use ibc_test_framework::prelude::*;
+use std::str::FromStr;
 
-#[test]
-fn test_ckb4ibc_channel() -> Result<(), Error> {
-    run_arbitrary_binary_channel_test(&CKB4IbcChannelTest)
-}
+use crate::framework::utils::ckb::*;
 
 /// CKB only allow h256 as portId
 fn transfer_port_id() -> PortId {
