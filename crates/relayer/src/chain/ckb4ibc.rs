@@ -1200,7 +1200,9 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryHostConsensusStateRequest,
     ) -> Result<Self::ConsensusState, Error> {
-        todo!()
+        // TODO
+        warn!("axon query_host_consensus_state() not support");
+        Ok(CkbConsensusState {})
     }
 
     fn build_client_state(
@@ -1239,6 +1241,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _port_id: &PortId,
         _counterparty_payee: &Signer,
     ) -> Result<(), Error> {
+        warn!("ckb4ibc maybe_register_counterparty_payee() not support");
         Ok(())
     }
 
@@ -1254,7 +1257,10 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         _request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error> {
-        todo!()
+        warn!("ckb4ibc query_incentivized_packet() not support");
+        Ok(QueryIncentivizedPacketResponse {
+            incentivized_packet: None,
+        })
     }
 
     fn id(&self) -> ChainId {
