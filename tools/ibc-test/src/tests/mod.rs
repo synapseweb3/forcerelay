@@ -2,20 +2,15 @@ use ibc_test_framework::prelude::Error;
 
 use crate::consts::{CHANNEL_TYPE_ARGS, CLIENT_TYPE_ARGS, CONNECTION_TYPE_ARGS, PACKET_TYPE_ARGS};
 use crate::framework::binary::channel::run_arbitrary_binary_channel_test;
-use crate::tests::channel::CKB4IbcChannelTest;
+use crate::tests::{channel::CKB4IbcChannelTest, packet::CKB4IbcPacketTest};
 
-pub mod channel;
+mod channel;
+mod packet;
 
 macro_rules! env_vars {
     ($({$key:expr, $val:expr},)+) => {
         $(std::env::set_var($key, $val);)+
     };
-}
-
-#[test]
-fn test_config() {
-    let path = "config.toml";
-    relayer::config::load(path).unwrap();
 }
 
 #[test]
@@ -28,7 +23,7 @@ fn test_from_ckb_to_ckb() -> Result<(), Error> {
         {"PACKET_TYPE_ARGS", hex::encode(PACKET_TYPE_ARGS)},
         {"CLIENT_TYPE_ARGS", hex::encode(CLIENT_TYPE_ARGS)},
     );
-    run_arbitrary_binary_channel_test(&CKB4IbcChannelTest)
+    run_arbitrary_binary_channel_test(&CKB4IbcChannelTest::new(&CKB4IbcPacketTest {}))
 }
 
 #[ignore]
