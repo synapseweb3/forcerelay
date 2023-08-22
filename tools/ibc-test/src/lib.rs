@@ -1,4 +1,3 @@
-// TODO: refactor ckb and ckb4ibc rpc client
 #[cfg(test)]
 mod consts;
 #[cfg(test)]
