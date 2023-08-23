@@ -1230,38 +1230,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5445b62604e7ab2bf5abb37bf6cca7ac26b2e4a76fddb27ceb61850f24864d58"
 
 [[package]]
-name = "ckb4ibc-test"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axon-types",
- "ckb-chain-spec",
- "ckb-hash",
- "ckb-ics-axon",
- "ckb-jsonrpc-types",
- "ckb-sdk",
- "ckb-types",
- "ethers",
- "futures",
- "hex",
- "ibc-relayer",
- "ibc-test-framework",
- "jsonrpc-core",
- "lazy_static",
- "log",
- "reqwest",
- "rlp",
- "secp256k1",
- "serde",
- "serde_json",
- "tendermint-rpc",
- "tiny-keccak",
- "tokio",
- "toml 0.5.11",
- "toml_edit",
-]
-
-[[package]]
 name = "clang-sys"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3762,6 +3730,38 @@ dependencies = [
  "serde",
  "serde_json",
  "tendermint",
+]
+
+[[package]]
+name = "ibc-test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axon-types",
+ "ckb-chain-spec",
+ "ckb-hash",
+ "ckb-ics-axon",
+ "ckb-jsonrpc-types",
+ "ckb-sdk",
+ "ckb-types",
+ "ethers",
+ "futures",
+ "hex",
+ "ibc-relayer",
+ "ibc-test-framework",
+ "jsonrpc-core",
+ "lazy_static",
+ "log",
+ "reqwest",
+ "rlp",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "tendermint-rpc",
+ "tiny-keccak",
+ "tokio",
+ "toml 0.5.11",
+ "toml_edit",
 ]
 
 [[package]]
