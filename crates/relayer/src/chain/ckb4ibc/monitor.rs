@@ -117,12 +117,12 @@ impl Ckb4IbcEventMonitor {
         let connection_code_hash = get_script_hash(&self.config.connection_type_args);
         let client_id = self
             .config
-            .lc_client_type_args(self.counterparty_client_type)
+            .lc_client_type_hash(self.counterparty_client_type)
             .map_err(|e| Error::collect_events_failed(e.to_string()))?;
         let script = Script::new_builder()
             .code_hash(connection_code_hash)
             .hash_type(ScriptHashType::Type.into())
-            .args(client_id.as_slice().pack())
+            .args(client_id.as_bytes().pack())
             .build();
         let key = get_search_key(script);
         let (ibc_connection_cell, tx_hash) = self
@@ -202,10 +202,10 @@ impl Ckb4IbcEventMonitor {
     async fn fetch_channel_events(&self) -> Result<EventBatch> {
         let client_id = self
             .config
-            .lc_client_type_args(self.counterparty_client_type)
+            .lc_client_type_hash(self.counterparty_client_type)
             .map_err(|e| Error::collect_events_failed(e.to_string()))?;
         let channel_args = ChannelArgs {
-            client_id,
+            client_id: client_id.into(),
             open: false,
             channel_id: Default::default(),
             port_id: Default::default(),

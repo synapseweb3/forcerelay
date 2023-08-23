@@ -46,7 +46,7 @@ pub fn generate_deploy_channel(attribute: &ConnectionAttribute) -> ChannelAttrib
     println!("channel type args: {:?}", hex::encode(type_0_args));
     let channel_type_args: H256 = type_0_args.into();
 
-    let (lock_script, secret_key) = get_lock_script(PRIVKEY);
+    let (lock_script, secret_key, _) = get_lock_script(PRIVKEY);
 
     let channel_type_script = Script::new_builder()
         .code_hash(

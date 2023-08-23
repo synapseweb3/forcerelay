@@ -1,3 +1,4 @@
+use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ibc_test_framework::prelude::Error;
 
 use crate::consts::{CHANNEL_TYPE_ARGS, CLIENT_TYPE_ARGS, CONNECTION_TYPE_ARGS, PACKET_TYPE_ARGS};
@@ -18,6 +19,7 @@ fn test_from_ckb_to_ckb() -> Result<(), Error> {
     env_vars!(
         {"CHAIN_COMMAND_PATHS", "ckb"},
         {"ACCOUNT_PREFIXES", "ckb"},
+        {"CLIENT_CODE_HASH", hex::encode(TYPE_ID_CODE_HASH)},
         {"CONNECTION_TYPE_ARGS", hex::encode(CONNECTION_TYPE_ARGS)},
         {"CHANNEL_TYPE_ARGS", hex::encode(CHANNEL_TYPE_ARGS)},
         {"PACKET_TYPE_ARGS", hex::encode(PACKET_TYPE_ARGS)},

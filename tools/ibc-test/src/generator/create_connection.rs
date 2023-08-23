@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use ckb_ics_axon::{
     handler::IbcConnections,
     message::{Envelope, MsgClientCreate, MsgType},
@@ -8,7 +6,7 @@ use ckb_ics_axon::{
 use ckb_sdk::{
     traits::SecpCkbRawKeySigner,
     unlock::{ScriptSigner, SecpSighashScriptSigner},
-    Address, AddressPayload, NetworkType, ScriptGroup, ScriptGroupType,
+    ScriptGroup, ScriptGroupType,
 };
 use ckb_types::{
     core::{DepType, ScriptHashType, TransactionView},
@@ -16,10 +14,10 @@ use ckb_types::{
     prelude::{Builder, Entity, Pack},
     H256,
 };
-use secp256k1::{Secp256k1, SecretKey};
 
 use crate::generator::{
-    utils::{get_secp256k1_cell_dep, keccak256, wrap_rpc_request_and_save},
+    calc_script_hash,
+    utils::{get_lock_script, get_secp256k1_cell_dep, keccak256, wrap_rpc_request_and_save},
     PRIVKEY,
 };
 
@@ -36,7 +34,8 @@ pub fn generate_create_connection(
     let metadata_idx: usize = packet_metadata_attr.metadata_index;
     let connection_idx: usize = connection_attr.connection_index;
     let connection_code_hash = connection_attr.connection_code_hash.clone();
-    let metadata_args = packet_metadata_attr.metadata_type_args.clone();
+    let metadata_code_hash = packet_metadata_attr.metadata_code_hash.clone();
+    let metadata_args = packet_metadata_attr.metadata_type_args.as_bytes();
 
     let metadata_dep = CellDep::new_builder()
         .dep_type(DepType::Code.into())
@@ -68,7 +67,7 @@ pub fn generate_create_connection(
         )
         .build();
     let connection_lock_args = ConnectionArgs {
-        client_id: metadata_args.into(),
+        client_id: calc_script_hash(&metadata_code_hash, metadata_args).into(),
     }
     .client_id
     .as_slice()
@@ -89,11 +88,7 @@ pub fn generate_create_connection(
     let connection_data = rlp::encode(&connection);
     let hash = keccak256(&connection_data);
 
-    let secret_key = SecretKey::from_str(PRIVKEY).unwrap();
-    let public_key = secret_key.public_key(&Secp256k1::signing_only());
-    let address_payload = AddressPayload::from_pubkey(&public_key);
-    let addr = Address::new(NetworkType::Dev, address_payload, true);
-    let lock_script = Script::from(&addr);
+    let (lock_script, secret_key, _) = get_lock_script(PRIVKEY);
     let change_output = CellOutput::new_builder()
         .lock(lock_script.clone())
         .capacity(400_000_000_000_000u64.pack())

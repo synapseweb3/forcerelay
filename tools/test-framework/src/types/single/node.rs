@@ -163,6 +163,7 @@ impl FullNode {
             ckb_indexer_rpc: ckb_rpc,
             key_name: "relayer_ckb_wallet".to_string(),
             store_prefix: "forcerelay".to_string(),
+            client_code_hash: h256_env("CLIENT_CODE_HASH").into(),
             connection_type_args: h256_env("CONNECTION_TYPE_ARGS").into(),
             channel_type_args: h256_env("CHANNEL_TYPE_ARGS").into(),
             packet_type_args: h256_env("PACKET_TYPE_ARGS").into(),

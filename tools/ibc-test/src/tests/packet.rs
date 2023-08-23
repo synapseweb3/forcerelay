@@ -1,121 +1,9 @@
-use ckb_chain_spec::consensus::TYPE_ID_CODE_HASH;
-use ckb_jsonrpc_types::OutputsValidator;
-use ckb_jsonrpc_types::TransactionView as JsonTxView;
-use ckb_sdk::CkbRpcClient;
-use ckb_sdk::{Address, AddressPayload, NetworkType};
-use ckb_types::core::{ScriptHashType, TransactionView};
-use ckb_types::packed::Script;
-use ckb_types::prelude::{Builder, Entity, Pack};
-use ckb_types::H256;
-use eyre::{eyre, Result as EyreResult};
-use forcerelay_ckb_sdk::ckb_ics_axon::handler::{IbcPacket, PacketStatus};
-use forcerelay_ckb_sdk::ckb_ics_axon::object::Packet;
-use forcerelay_ckb_sdk::ckb_rpc_client::CkbRpcClient as SdkRpcClient;
-use forcerelay_ckb_sdk::config::{AddressOrScript, AddressString, Config as SdkConfig};
-use forcerelay_ckb_sdk::search::{
-    get_axon_metadata_cell_dep, get_channel_contract_cell_dep, IbcChannelCell,
-};
-use forcerelay_ckb_sdk::transaction::assemble_send_packet_partial_transaction;
 use ibc_test_framework::prelude::*;
-use log::info;
-use relayer::config::ChainConfig;
-use relayer::keyring::{KeyRing, Secp256k1KeyPair};
-use std::str::FromStr;
+use log::{debug, info};
 use tokio::runtime::Runtime;
 
-/// CKB only allow h256 as portId
-fn transfer_port_id() -> PortId {
-    let mut buf = [0u8; 32];
-    buf[..8].copy_from_slice(b"transfer");
-    PortId::from_str(H256::from(buf).to_string().as_str()).unwrap()
-}
-
-fn error_cast<T: ToString>(error: T) -> eyre::Error {
-    eyre!("{}", error.to_string())
-}
-
-fn generate_ckb_sdk_config(
-    config: &Config,
-    chain: &impl ChainHandle,
-    channel_id: &ChannelId,
-) -> EyreResult<(SdkConfig, String)> {
-    let chain_id = chain.id();
-    let generic_config = config
-        .find_chain(&chain_id)
-        .ok_or(eyre!("{chain_id} not found"))?;
-    let ckb4ibc_config = if let ChainConfig::Ckb4Ibc(config) = generic_config {
-        config
-    } else {
-        return Err(eyre!("{chain_id} is not ckb4ibc type"));
-    };
-    let relayer_address = {
-        let key_base: KeyRing<Secp256k1KeyPair> =
-            KeyRing::new(Default::default(), "ckb", &chain_id)?;
-        let relayer_pubkey = key_base.get_key(&ckb4ibc_config.key_name)?.public_key;
-        let payload = AddressPayload::from_pubkey(&relayer_pubkey);
-        Address::new(NetworkType::Testnet, payload, true)
-    };
-    let metadata_type_args = ckb4ibc_config.lc_client_type_args(5u64.try_into()?)?;
-    let metadata_script = Script::new_builder()
-        .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
-        .args(metadata_type_args.to_vec().pack())
-        .build();
-    let channel_number = u16::from_str(
-        channel_id
-            .to_string()
-            .split('-')
-            .last()
-            .expect("channel id"),
-    )?;
-    let sdk_config = SdkConfig {
-        user_lock_script: AddressOrScript::Address(AddressString(relayer_address)),
-        axon_metadata_type_script: AddressOrScript::Script(metadata_script.into()),
-        channel_contract_type_id_args: ckb4ibc_config.channel_type_args.clone(),
-        packet_contract_type_id_args: ckb4ibc_config.packet_type_args.clone(),
-        channel_id: channel_number,
-        confirmations: 1,
-    };
-    Ok((sdk_config, ckb4ibc_config.ckb_rpc.to_string()))
-}
-
-fn generate_send_packet_transaction(
-    rt: &Runtime,
-    sdk_config: &SdkConfig,
-    ckb_rpc: &SdkRpcClient,
-    target_port_id: String,
-    target_channel_id: String,
-    payload: Vec<u8>,
-) -> EyreResult<TransactionView> {
-    let metadata_celldep = rt
-        .block_on(get_axon_metadata_cell_dep(ckb_rpc, sdk_config))
-        .map_err(error_cast)?;
-    let channel_contract_celldep = rt
-        .block_on(get_channel_contract_cell_dep(ckb_rpc, sdk_config))
-        .map_err(error_cast)?;
-    let ibc_channel = rt
-        .block_on(IbcChannelCell::get_latest(ckb_rpc, sdk_config))
-        .map_err(error_cast)?;
-    let send_packet = IbcPacket {
-        packet: Packet {
-            destination_port_id: target_port_id,
-            destination_channel_id: target_channel_id,
-            data: payload,
-            ..Default::default()
-        },
-        tx_hash: None,
-        status: PacketStatus::Send,
-    };
-    let (send_packet_tx, _) = assemble_send_packet_partial_transaction(
-        metadata_celldep,
-        channel_contract_celldep,
-        sdk_config,
-        ibc_channel,
-        send_packet,
-    )
-    .map_err(error_cast)?;
-    Ok(send_packet_tx.build())
-}
+mod utils;
+use utils::*;
 
 pub struct CKB4IbcPacketTest {}
 
@@ -137,8 +25,9 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         chains: ConnectedChains<ChainA, ChainB>,
         channels: ConnectedChannel<ChainA, ChainB>,
     ) -> Result<(), Error> {
+        println!("\n============== Start Packet Test Over Channel ============\n");
         info!(
-            "send sUDT packets over the channel ({}: {}/{}, {}: {}/{})",
+            "send sudt packets over channel (chain_a {}: {}/{}, chain_b {}: {}/{})",
             chains.chain_id_a(),
             channels.port_a,
             channels.channel_id_a,
@@ -148,41 +37,95 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         );
         let rt = Runtime::new()?;
 
-        // trigger SendPacket event on ChainA
-        let (chain_a_config, chain_a_url) = generate_ckb_sdk_config(
+        // 1. prepare essential variables and check wallet balances
+        let (chain_a_config, chain_a_url, chain_a_signer) = prepare_artificials(
             &relayer.config,
             chains.handle_a(),
             channels.channel_id_a.value(),
         )?;
-        let chain_a_rpc = SdkRpcClient::new(chain_a_url.clone());
-        let message = b"hello world".to_vec();
+        let (chain_b_config, chain_b_url, chain_b_signer) = prepare_artificials(
+            &relayer.config,
+            chains.handle_b(),
+            channels.channel_id_b.value(),
+        )?;
+        info!(
+            "relayer wallet balance: {} CKB on chain_a, {} CKB on chain_b",
+            wallet_balance(&rt, &chain_a_url, &chain_a_config.user_lock_script())?,
+            wallet_balance(&rt, &chain_b_url, &chain_b_config.user_lock_script())?
+        );
+
+        // 2. trigger SendPacket event on ChainA
+        debug!("send send_packet transaction to chain_a");
+        let message = b"ping".to_vec();
         let send_packet_tx = generate_send_packet_transaction(
             &rt,
             &chain_a_config,
-            &chain_a_rpc,
+            &chain_a_url,
+            &chain_a_signer,
             channels.port_b.to_string(),
             channels.channel_id_b.to_string(),
             message,
         )?;
-        let response = CkbRpcClient::new(&chain_a_url)
-            .send_transaction(
-                send_packet_tx.data().into(),
-                Some(OutputsValidator::Passthrough),
-            )
-            .map_err(|e| {
-                eyre!(
-                    "{}\n\ntransaction info: {}\n",
-                    e.to_string(),
-                    serde_json::to_string_pretty(&JsonTxView::from(send_packet_tx)).unwrap()
-                )
-            })?;
+        let hash = send_transaction(&chain_a_url, send_packet_tx)?;
         info!(
-            "successfully sent send_packet transaction to chain_a {}, hash = {}",
-            chains.chain_id_a(),
-            hex::encode(response)
+            "🍻 successfully sent send_packet transaction to chain_a, hash = {}",
+            hex::encode(hash)
         );
 
-        // TODO: fetch something from ChainB that indicates ChainB processed this SendPacket event
+        // 3. listen RecvPacket event on ChainB
+        debug!("wait recv_packet being found on chain_b");
+        let mut recv_packets =
+            listen_and_wait_packet_cells(&rt, &chain_b_url, &chain_b_config, |packet| {
+                packet.is_recv_packet()
+            })?;
+        if recv_packets.is_empty() {
+            return Err(eyre!("not found recv packet on chain_b {}", chains.chain_id_b()).into());
+        };
+        info!("🍻 successfully find recv_packet cell on chain_b");
+
+        // 4. trigger WriteAck event on ChainB
+        debug!("send write_ack transaction to chain_b");
+        let acknowledgemnt = b"pong".to_vec();
+        let write_ack_tx = generate_write_ack_transaction(
+            &rt,
+            &chain_b_config,
+            &chain_b_url,
+            &chain_b_signer,
+            recv_packets.remove(0),
+            acknowledgemnt,
+        )?;
+        let hash = send_transaction(&chain_b_url, write_ack_tx)?;
+        info!(
+            "🍻 successfully sent write_ack transaction to chain_b, hash = {}",
+            hex::encode(hash)
+        );
+
+        // 5. lisen AckPacket event on ChainA
+        debug!("wait ack_packet being found on chain_a");
+        let mut ack_packets =
+            listen_and_wait_packet_cells(&rt, &chain_a_url, &chain_a_config, |packet| {
+                packet.is_ack_packet()
+            })?;
+        if ack_packets.is_empty() {
+            return Err(eyre!("not found ack packet on chain_a {}", chains.chain_id_a()).into());
+        };
+        info!("🍻 successfully find ack_packet cell on chain_a");
+
+        // 6. comsune AckPacket cell on ChainA
+        debug!("send ack_packet consume transaction to chain_a");
+        let consume_ack_packet_tx = generate_consume_ack_packet_transaction(
+            &rt,
+            &chain_a_config,
+            &chain_a_url,
+            &chain_a_signer,
+            ack_packets.remove(0),
+        )?;
+        let hash = send_transaction(&chain_a_url, consume_ack_packet_tx)?;
+        info!(
+            "🍻 successfully consumed ack_packet on chain_a, hash = {}",
+            hex::encode(hash)
+        );
+
         Ok(())
     }
 }

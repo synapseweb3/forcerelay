@@ -1,5 +1,5 @@
 use crate::consts::{CHANNEL_CODE_HASH, CLIENT_TYPE_ARGS, CONNECTION_CODE_HASH};
-use crate::generator::GENESIS_TXHASH;
+use crate::generator::{calc_script_hash, GENESIS_TXHASH};
 use crate::rpc_client::RpcClient;
 
 use anyhow::{anyhow, Result};
@@ -9,6 +9,7 @@ use ckb_ics_axon::handler::{IbcChannel, IbcConnections};
 use ckb_ics_axon::object::State;
 use ckb_ics_axon::ChannelArgs;
 use ckb_jsonrpc_types::{Deserialize, JsonBytes, Status};
+use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
 use ckb_sdk::*;
 use ckb_types::core::ScriptHashType;
@@ -286,30 +287,30 @@ fn check_and_wait_ckb_transaction(hash: H256, port: u32) {
     }
 }
 
+fn get_test_client_id() -> H256 {
+    calc_script_hash(&TYPE_ID_CODE_HASH, CLIENT_TYPE_ARGS.as_bytes())
+}
+
 pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
-    let client = get_client(port);
+    let rpc_client = get_client(port);
+    let search_key = SearchKey {
+        script: Script::new_builder()
+            .code_hash(CONNECTION_CODE_HASH.pack())
+            .args(get_test_client_id().as_bytes().pack())
+            .hash_type(ScriptHashType::Type.into())
+            .build()
+            .into(),
+        script_type: ScriptType::Lock,
+        filter: None,
+        with_data: None,
+        group_by_transaction: None,
+        script_search_mode: None,
+    };
     let mut loop_count = 0;
     loop {
-        let search_connection_cell = client.fetch_live_cells(
-            SearchKey {
-                script: Script::new_builder()
-                    .code_hash(CONNECTION_CODE_HASH.pack())
-                    .args("".pack()) // FIXME: use prefix search
-                    .hash_type(ScriptHashType::Type.into())
-                    .build()
-                    .into(),
-                script_type: ScriptType::Lock,
-                filter: None,
-                with_data: None,
-                group_by_transaction: None,
-                script_search_mode: None,
-            },
-            1,
-            None,
-        );
-        let cells = wait_task(search_connection_cell).unwrap();
+        let cells = wait_task(rpc_client.fetch_live_cells(search_key.clone(), 1, None)).unwrap();
         if let Some(connection_cell) = cells.objects.into_iter().next() {
-            let tx = wait_task(client.get_transaction(&connection_cell.out_point.tx_hash))
+            let tx = wait_task(rpc_client.get_transaction(&connection_cell.out_point.tx_hash))
                 .unwrap()
                 .unwrap()
                 .transaction
@@ -345,35 +346,31 @@ fn channel_id_to_u16(channel_id: &ChannelId) -> u16 {
 
 pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &ChannelId) -> IbcChannel {
     let rpc_client = get_client(port);
+    let search_key = SearchKey {
+        script: Script::new_builder()
+            .code_hash(CHANNEL_CODE_HASH.pack())
+            .args(
+                ChannelArgs {
+                    client_id: get_test_client_id().into(),
+                    open: true,
+                    channel_id: channel_id_to_u16(channel_id),
+                    port_id,
+                }
+                .to_args()
+                .pack(),
+            )
+            .hash_type(ScriptHashType::Type.into())
+            .build()
+            .into(),
+        script_type: ScriptType::Lock,
+        filter: None,
+        with_data: None,
+        group_by_transaction: None,
+        script_search_mode: None,
+    };
     let mut loop_count = 0;
     loop {
-        let search_channel_cell = rpc_client.fetch_live_cells(
-            SearchKey {
-                script: Script::new_builder()
-                    .code_hash(CHANNEL_CODE_HASH.pack())
-                    .args(
-                        ChannelArgs {
-                            client_id: CLIENT_TYPE_ARGS.into(),
-                            open: true,
-                            channel_id: channel_id_to_u16(channel_id),
-                            port_id,
-                        }
-                        .to_args()
-                        .pack(),
-                    )
-                    .hash_type(ScriptHashType::Type.into())
-                    .build()
-                    .into(),
-                script_type: ScriptType::Lock,
-                filter: None,
-                with_data: None,
-                group_by_transaction: None,
-                script_search_mode: None,
-            },
-            1,
-            None,
-        );
-        let cells = wait_task(search_channel_cell).unwrap();
+        let cells = wait_task(rpc_client.fetch_live_cells(search_key.clone(), 1, None)).unwrap();
         if let Some(channel_cell) = cells.objects.first() {
             let tx_hash = &channel_cell.out_point.tx_hash;
             let tx = wait_task(rpc_client.get_transaction(tx_hash))

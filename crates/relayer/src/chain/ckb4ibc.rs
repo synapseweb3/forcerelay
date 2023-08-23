@@ -279,9 +279,9 @@ impl Ckb4IbcChain {
         let channel_code_hash = self.get_converter()?.get_channel_code_hash();
         let client_id = self
             .config
-            .lc_client_type_args(*self.counterparty_client_type.borrow())?;
+            .lc_client_type_hash(*self.counterparty_client_type.borrow())?;
         let channel_args = ChannelArgs {
-            client_id,
+            client_id: client_id.into(),
             open: is_open,
             channel_id: get_channel_number(channel_id)?,
             port_id: convert_port_id_to_array(port_id)?,
@@ -621,6 +621,8 @@ impl ChainEndpoint for Ckb4IbcChain {
                             &ScriptGroup {
                                 script: Script::from(&self.tx_assembler_address()?),
                                 group_type: ScriptGroupType::Lock,
+                                // TODO: here should be more indices in case of more than one Secp256k1 cells
+                                //       have been filled in the transaction
                                 input_indices: vec![last_input_idx],
                                 output_indices: vec![],
                             },
