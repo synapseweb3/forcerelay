@@ -664,7 +664,7 @@ impl ChainEndpoint for AxonChain {
                 let has_receipt = self
                     .rt
                     .block_on(
-                        self.contract
+                        self.contract()?
                             .has_packet_receipt(
                                 request.port_id.to_string(),
                                 request.channel_id.to_string(),
@@ -1102,14 +1102,6 @@ impl AxonChain {
         let tx_receipt: eyre::Result<_> = match msg.type_url.as_str() {
             // client
             create_client::TYPE_URL => {
-                let result = self.rt.block_on(async {
-                    self.contract()
-                        .unwrap()
-                        .create_client(MsgCreateClient::try_from(msg.clone()).unwrap())
-                        .call()
-                        .await
-                        .unwrap()
-                });
                 convert!(self, msg, MsgCreateClient, create_client)
             }
             // TODO: this update_client uses Hermes internal message to handle the Axon-specific function,
