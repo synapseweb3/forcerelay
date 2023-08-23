@@ -1099,11 +1099,9 @@ impl AxonChain {
     fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
         use contract::*;
         let msg = message.clone();
-        dbg!("Axon#send_message", &message.type_url);
         let tx_receipt: eyre::Result<_> = match msg.type_url.as_str() {
             // client
             create_client::TYPE_URL => {
-                dbg!("create client call");
                 let result = self.rt.block_on(async {
                     self.contract()
                         .unwrap()
@@ -1112,8 +1110,6 @@ impl AxonChain {
                         .await
                         .unwrap()
                 });
-                dbg!("complete call, result: {}", result);
-                dbg!("create client send");
                 convert!(self, msg, MsgCreateClient, create_client)
             }
             // TODO: this update_client uses Hermes internal message to handle the Axon-specific function,
@@ -1210,11 +1206,6 @@ impl AxonChain {
                 .into_iter()
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
-            dbg!(
-                "message type_url",
-                message.type_url.as_str(),
-                events.clone().collect::<Vec<_>>(),
-            );
             match message.type_url.as_str() {
                 create_client::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(CreateClientFilter(_))))
