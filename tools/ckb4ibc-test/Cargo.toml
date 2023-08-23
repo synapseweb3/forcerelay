@@ -7,7 +7,7 @@ edition = "2021"
 ckb-sdk = "=2.4.0"
 ckb-jsonrpc-types = "0.106.0"
 ckb-types = "0.106.0"
-ckb-chain-spec = "0.106.0"
+ckb-chain-spec = "0.110.1"
 hex = "0.4"
 
 relayer = { version = "*", package = "ibc-relayer", path = "../../crates/relayer" }
