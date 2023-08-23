@@ -1,4 +1,4 @@
-use std::{cell::RefCell, path::PathBuf, str::FromStr};
+use std::str::FromStr;
 
 use crate::framework::{binary::channel::run_arbitrary_binary_channel_test, utils::ckb::*};
 use ckb_types::H256;

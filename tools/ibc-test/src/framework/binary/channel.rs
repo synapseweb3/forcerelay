@@ -82,15 +82,15 @@ impl TestOverrides for ExtendedChannelOverrides {
     fn channel_port_a(&self) -> PortId {
         let config_opt = self.test_config.borrow();
         let config = config_opt.as_ref().unwrap();
-        let command = config.chain_command_paths.iter().next().unwrap();
-        get_default_port_id(get_chain_type(&command))
+        let command = config.chain_command_paths.first().unwrap();
+        get_default_port_id(get_chain_type(command))
     }
 
     fn channel_port_b(&self) -> PortId {
         let config_opt = self.test_config.borrow();
         let config = config_opt.as_ref().unwrap();
         let command = config.chain_command_paths.iter().last().unwrap();
-        get_default_port_id(get_chain_type(&command))
+        get_default_port_id(get_chain_type(command))
     }
 }
 
@@ -106,13 +106,13 @@ fn get_chain_type(command_path: &str) -> ChainType {
 fn get_default_port_id(chain_type: ChainType) -> PortId {
     match chain_type {
         ChainType::Ckb => {
-            /// CKB only allow h256 as portId
+            // CKB only allow h256 as portId
             let mut buf = [0u8; 32];
             buf[..8].copy_from_slice(b"transfer");
             PortId::from_str(H256::from(buf).to_string().as_str()).unwrap()
         }
         ChainType::Axon => {
-            /// Axon default port ID
+            // Axon default port ID
             PortId::from_str("port-0").unwrap()
         }
         _ => {

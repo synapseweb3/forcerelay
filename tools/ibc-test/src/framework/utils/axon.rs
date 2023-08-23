@@ -1,64 +1,31 @@
-use crate::consts::{CHANNEL_CODE_HASH, CLIENT_TYPE_ARGS, CONNECTION_CODE_HASH};
-use crate::rpc_client::RpcClient;
-
 use anyhow::{anyhow, bail, Result};
-use ckb_chain_spec::ChainSpec;
 
-use ckb_ics_axon::handler::{IbcChannel, IbcConnections};
-use ckb_ics_axon::object::State;
-use ckb_ics_axon::ChannelArgs;
-use ckb_jsonrpc_types::{Deserialize, JsonBytes, Status};
-use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
-use ckb_sdk::*;
-use ckb_types::core::ScriptHashType;
-use ckb_types::packed::Script;
-use ckb_types::prelude::{Builder, Entity, Pack};
-use ckb_types::{h256, H256};
-use ethers::providers::{Http, Middleware, Provider, Ws};
+use ethers::providers::{Http, Middleware, Provider};
 use ethers::signers::Signer;
-use futures::Future;
+
 use ibc_test_framework::prelude::*;
 use ibc_test_framework::types::axon::DeployedContracts;
 use ibc_test_framework::types::process::ChildProcess;
 use ibc_test_framework::util::random::random_u32;
-use relayer::chain::ckb::prelude::CkbReader;
-use relayer::chain::ckb4ibc::extractor::{
-    extract_channel_end_from_tx, extract_connections_from_tx,
-};
-use relayer::keyring::{KeyRing, Secp256k1AddressType, Secp256k1KeyPair, Store};
-use reqwest::blocking::Client;
-use secp256k1::rand::{thread_rng, Rng};
-use secp256k1::{rand, PublicKey, Secp256k1, SecretKey};
-use tokio::runtime::Runtime;
-use toml_edit::{value, Document, Item, Table};
 
-use std::path::{Path, PathBuf};
+use relayer::keyring::{Secp256k1AddressType, Secp256k1KeyPair};
+
+use secp256k1::{Secp256k1, SecretKey};
+
+use toml_edit::{value, Document, Table};
+
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::str::FromStr;
+
+use std::fs;
 use std::time::Duration;
-use std::time::{self, Instant};
-use std::{fs, thread};
-use tendermint_rpc::Url;
+use std::time::Instant;
 
 use super::common::{gen_secp256k1_private_key, wait_task};
 
 const AXON_CONTRACTS_CONFIG_PATH: &str = "deployed_contracts.toml";
 const AXON_SRC_PATH: &str = "AXON_SRC_PATH";
 const IBC_CONTRACTS_SRC_PATH: &str = "IBC_CONTRACTS_SRC_PATH";
-
-pub fn check_channel(channel: &IbcChannel) -> bool {
-    channel.state == State::Open
-}
-
-pub fn check_ibc_connection(connection: IbcConnections, count: u32) -> bool {
-    if connection.connections.len() != count as usize {
-        return false;
-    }
-    // FIXME @jjy in current implementation,
-    // a failed init conn is remained in the vector, so we must check last opened conn
-    let connection = connection.connections.into_iter().last().unwrap();
-    connection.state == State::Open
-}
 
 pub fn prepare_axon_chain(
     dir_path: &str,
@@ -155,14 +122,13 @@ pub fn prepare_axon_chain(
             output
                 .lines()
                 .filter(|line| line.starts_with("Done Deployment OwnableIBCHandler"))
-                .map(|line| {
+                .filter_map(|line| {
                     line.split("at").last().map(|s| {
                         let s = s.trim().trim_start_matches("0x");
                         let bytes = hex::decode(s).expect("decode hex address");
                         ethers::types::H160::from_slice(&bytes)
                     })
                 })
-                .flatten()
                 .next()
         } else {
             None
@@ -219,7 +185,7 @@ fn get_client(port: u32) -> Result<Provider<Http>> {
 }
 
 pub(crate) fn add_axon_wallet(
-    driver: &ibc_test_framework::prelude::ChainDriver,
+    _driver: &ibc_test_framework::prelude::ChainDriver,
     wallet_id: String,
 ) -> Result<Wallet, Error> {
     // generate random secp256k1 private key
@@ -243,7 +209,7 @@ pub(crate) fn add_axon_wallet(
 
 /// Add Axon devnet relayer wallet to the chain.
 pub(crate) fn add_axon_devnet_relayer_wallet(
-    driver: &ChainDriver,
+    _driver: &ChainDriver,
     prefix: &str,
     use_random_id: bool,
 ) -> Result<Wallet, Error> {

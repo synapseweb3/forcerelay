@@ -15,7 +15,7 @@ use ckb_types::core::ScriptHashType;
 use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
-use futures::Future;
+
 use ibc_test_framework::prelude::{ChannelId, Wallet};
 use ibc_test_framework::types::process::ChildProcess;
 use relayer::chain::ckb::prelude::CkbReader;
@@ -24,9 +24,9 @@ use relayer::chain::ckb4ibc::extractor::{
 };
 use relayer::keyring::{Secp256k1AddressType, Secp256k1KeyPair};
 use reqwest::blocking::Client;
-use secp256k1::rand::Rng;
-use secp256k1::{rand, PublicKey, Secp256k1, SecretKey};
-use tokio::runtime::Runtime;
+
+use secp256k1::{PublicKey, Secp256k1, SecretKey};
+
 use toml_edit::{value, Document};
 
 use super::common::{gen_secp256k1_private_key, wait_task};

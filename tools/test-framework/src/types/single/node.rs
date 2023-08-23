@@ -181,7 +181,7 @@ impl FullNode {
 
     fn generate_axon_chain_config(
         &self,
-        chain_type: &TestedChainType,
+        _chain_type: &TestedChainType,
     ) -> Result<config::ChainConfig, Error> {
         let rpc_addr = Url::from_str(self.chain_driver.rpc_address().as_str())?;
         let websocket_addr = WebSocketClientUrl::from_str(
