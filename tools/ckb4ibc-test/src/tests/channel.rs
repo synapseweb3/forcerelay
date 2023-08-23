@@ -59,12 +59,8 @@ where
         }
 
         // check channel
-        let port_a = H256::from_str(channels.port_a.value().to_string().as_str())
-            .unwrap()
-            .into();
-        let port_b = H256::from_str(channels.port_b.value().to_string().as_str())
-            .unwrap()
-            .into();
+        let port_a = H256::from_str(&channels.port_a.to_string()).unwrap().into();
+        let port_b = H256::from_str(&channels.port_b.to_string()).unwrap().into();
         let a_channel = fetch_ibc_channel_cell(rpc_port_a, port_a, channels.channel_id_a.value());
         let b_channel = fetch_ibc_channel_cell(rpc_port_b, port_b, channels.channel_id_b.value());
 

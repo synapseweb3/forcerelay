@@ -1,6 +1,7 @@
 use axon_types::metadata::{Metadata, ValidatorList};
 use ckb_hash::new_blake2b;
 use ckb_sdk::{
+    constants::TYPE_ID_CODE_HASH,
     traits::SecpCkbRawKeySigner,
     unlock::{ScriptSigner, SecpSighashScriptSigner},
     ScriptGroup, ScriptGroupType,
@@ -26,6 +27,7 @@ pub struct PacketMetataAttribute {
     pub packet_code_hash: H256,
     pub packet_index: usize,
     pub metadata_index: usize,
+    pub metadata_code_hash: H256,
     pub metadata_type_args: H256,
     pub balance_index: usize,
 }
@@ -40,7 +42,7 @@ pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMe
         )
         .build();
 
-    let (lock_script, secret_key) = get_lock_script(PRIVKEY);
+    let (lock_script, secret_key, _) = get_lock_script(PRIVKEY);
 
     let mut blake_2b = new_blake2b();
     blake_2b.update(input.as_slice());
@@ -84,9 +86,7 @@ pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMe
         .build();
 
     let mock_metadata_script = Script::new_builder()
-        .code_hash(
-            h256!("0x00000000000000000000000000000000000000000000000000545950455f4944").pack(),
-        )
+        .code_hash(TYPE_ID_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
         .args(type_1_args.as_slice().pack())
         .build();
@@ -144,6 +144,7 @@ pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMe
         tx_hash,
         packet_type_args,
         packet_code_hash,
+        metadata_code_hash: TYPE_ID_CODE_HASH.clone(),
         metadata_type_args,
         packet_index: 0,
         metadata_index: 1,

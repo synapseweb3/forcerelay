@@ -139,7 +139,8 @@ pub fn get_connection_lock_script(
     let mut client_cell_type_args = vec![];
     if let Some(client_id) = client_id {
         let client_type = config.lc_client_type(&client_id)?;
-        client_cell_type_args.append(&mut config.lc_client_type_args(client_type)?.to_vec());
+        client_cell_type_args
+            .append(&mut config.lc_client_type_hash(client_type)?.as_bytes().to_vec());
     }
     let script = Script::new_builder()
         .code_hash(get_script_hash(&config.connection_type_args))

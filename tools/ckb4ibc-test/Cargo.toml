@@ -44,4 +44,4 @@ log = "0.4.19"
 toml_edit = "0.19.14"
 lazy_static = "1.4.0"
 
-forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "1737ef3" }
+forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "264bcf7" }
