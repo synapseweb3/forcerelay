@@ -35,7 +35,6 @@ use ckb_types::core::TransactionView as CoreTransactionView;
 use ckb_types::molecule::prelude::Entity;
 use ckb_types::packed::{CellInput, OutPoint, Script, WitnessArgs};
 use ckb_types::prelude::{Builder, Pack, Unpack};
-use crossbeam_channel::Sender;
 use futures::TryFutureExt;
 use ibc_proto::ibc::apps::fee::v1::{
     QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse,
@@ -115,13 +114,13 @@ pub struct Ckb4IbcChain {
     cached_network: RwLock<Option<NetworkType>>,
 
     tx_monitor_cmd: Option<TxMonitorCmd>,
-    tx_internal_cmd: Option<Sender<ClientType>>,
 
     connection_outpoint: OutPoint,
     channel_outpoint: OutPoint,
     packet_outpoint: OutPoint,
 
-    counterparty_client_type: RefCell<ClientType>,
+    counterparty_client_type: tokio::sync::watch::Sender<Option<ClientType>>,
+
     client_outpoints: RefCell<HashMap<ClientType, OutPoint>>,
     channel_input_data: RefCell<HashMap<(ChannelId, PortId), CellInput>>,
     channel_cache: RefCell<HashMap<ChannelId, IbcChannel>>,
@@ -203,12 +202,12 @@ impl Ckb4IbcChain {
     }
 
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
-        let (monitor, monitor_tx, internal_tx) = Ckb4IbcEventMonitor::new(
+        let (monitor, monitor_tx) = Ckb4IbcEventMonitor::new(
             self.rt.clone(),
             self.rpc_client.clone(),
             self.config.clone(),
+            self.counterparty_client_type.subscribe(),
         );
-        self.tx_internal_cmd = Some(internal_tx);
         std::thread::spawn(move || monitor.run());
         Ok(monitor_tx)
     }
@@ -279,7 +278,7 @@ impl Ckb4IbcChain {
         let channel_code_hash = self.get_converter()?.get_channel_code_hash();
         let client_id = self
             .config
-            .lc_client_type_hash(*self.counterparty_client_type.borrow())?;
+            .lc_client_type_hash(self.counterparty_client_type())?;
         let channel_args = ChannelArgs {
             client_id: client_id.into(),
             open: is_open,
@@ -413,12 +412,21 @@ impl Ckb4IbcChain {
         Ok(result)
     }
 
+    fn counterparty_client_type(&self) -> ClientType {
+        self.counterparty_client_type
+            .borrow()
+            .unwrap_or(ClientType::Mock)
+    }
+
     fn sync_counterparty_client_type(&self, client_type: ClientType) {
-        *self.counterparty_client_type.borrow_mut() = client_type;
-        if let Some(cmd) = &self.tx_internal_cmd {
-            cmd.send(client_type)
-                .expect("send counterparty_client_type");
-        }
+        self.counterparty_client_type.send_if_modified(|prev| {
+            if *prev != Some(client_type) {
+                *prev = Some(client_type);
+                true
+            } else {
+                false
+            }
+        });
     }
 
     fn fetch_packet_cell_and_extract(
@@ -509,12 +517,11 @@ impl ChainEndpoint for Ckb4IbcChain {
             keybase,
             cached_network: RwLock::new(None),
             tx_monitor_cmd: None,
-            tx_internal_cmd: None,
             client_outpoints: RefCell::new(client_outpoints),
             connection_outpoint: conn_contract_cell.unwrap().out_point,
             channel_outpoint: chan_contract_cell.unwrap().out_point,
             packet_outpoint: packet_contract_cell.unwrap().out_point,
-            counterparty_client_type: RefCell::new(ClientType::Mock),
+            counterparty_client_type: tokio::sync::watch::channel(None).0,
             channel_input_data: RefCell::new(HashMap::new()),
             channel_cache: RefCell::new(HashMap::new()),
             connection_cache: RefCell::new(HashMap::new()),
