@@ -3768,6 +3768,7 @@ dependencies = [
 name = "ibc-test-framework"
 version = "0.23.0"
 dependencies = [
+ "ckb-fixed-hash",
  "color-eyre",
  "crossbeam-channel 0.5.7",
  "ethers",
