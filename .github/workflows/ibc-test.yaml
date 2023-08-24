@@ -1,0 +1,104 @@
+name: IBC test
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ibc-test.yaml
+      - Cargo.toml
+      - Cargo.lock
+      - ci/**
+      - crates/**
+      - tools/**
+  push:
+    branches: main
+      - .github/workflows/ibc-test.yaml
+      - Cargo.toml
+      - Cargo.lock
+      - ci/**
+      - crates/**
+      - tools/**
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ibc-test-ckb:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p ibc-relayer
+      - name: Prepare CKB
+        run: |
+          if [ ! -f "/tmp/ckb.tar.gz" ]; then
+            curl -L https://github.com/nervosnetwork/ckb/releases/download/v0.107.0/ckb_v0.107.0_x86_64-unknown-linux-gnu.tar.gz -o /tmp/ckb.tar.gz
+          fi
+          tar -zxf /tmp/ckb.tar.gz -C /tmp
+          echo "/tmp/ckb_v0.107.0_x86_64-unknown-linux-gnu" >> $GITHUB_PATH
+      - uses: actions-rs/cargo@v1
+        env:
+          CHAIN_COMMAND_PATHS: ckb
+          ACCOUNT_PREFIXES: ckb
+          RUST_LOG: info
+        with:
+          command: test
+          args: -p ibc-test --all-features -- --nocapture
+  ibc-test-axon:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    env:
+      SRC_DIR: ./tmp/ibc-test-src
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p ibc-relayer
+      - name: Create folder
+        run: mkdir -p $SRC_DIR
+      - name: Prepare Axon source
+        run: git clone -b forcerelay-tests --single-branch --recursive https://github.com/axonweb3/axon.git $SRC_DIR/axon
+      - name: Install Axon
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: --path ${{env.SRC_DIR}}/axon
+      - name: Prepare IBC contracts
+        run: git clone --recursive https://github.com/synapseweb3/ibc-solidity-contract.git $SRC_DIR/ibc-solidity-contract
+      - name: Set Node.js 16.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+      - name: Run install
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: install
+          dir: ${{env.SRC_DIR}}/ibc-solidity-contract
+      - name: Run install
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: compile
+          dir: ${{env.SRC_DIR}}/ibc-solidity-contract
+      - uses: actions-rs/cargo@v1
+        env:
+          CHAIN_COMMAND_PATHS: axon
+          ACCOUNT_PREFIXES: axon
+          AXON_SRC_PATH: ${{env.SRC_DIR}}/axon
+          IBC_CONTRACTS_SRC_PATH: ${{env.SRC_DIR}}/ibc-solidity-contract
+          RUST_LOG: info
+        with:
+          command: test
+          args: -p ibc-test --all-features -- --nocapture
