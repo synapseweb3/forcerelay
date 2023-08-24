@@ -11,7 +11,7 @@ use ckb_types::core::ScriptHashType;
 use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::Receiver;
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics02_client::height::Height;
 use ibc_relayer_types::core::ics03_connection::events::{
@@ -49,10 +49,10 @@ pub struct Ckb4IbcEventMonitor {
     rt: Arc<TokioRuntime>,
     rpc_client: Arc<RpcClient>,
     rx_cmd: Receiver<MonitorCmd>,
-    rx_internal: Receiver<ClientType>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
     config: ChainConfig,
     cache_set: RwLock<CacheSet<H256>>,
+    counterparty_client_type_rx: tokio::sync::watch::Receiver<Option<ClientType>>,
     counterparty_client_type: ClientType,
 }
 
@@ -61,24 +61,39 @@ impl Ckb4IbcEventMonitor {
         rt: Arc<TokioRuntime>,
         rpc_client: Arc<RpcClient>,
         config: ChainConfig,
-    ) -> (Self, TxMonitorCmd, Sender<ClientType>) {
+        counterparty_client_type_rx: tokio::sync::watch::Receiver<Option<ClientType>>,
+    ) -> (Self, TxMonitorCmd) {
         let (tx_cmd, rx_cmd) = crossbeam_channel::unbounded();
-        let (tx_internal, rx_internal) = crossbeam_channel::unbounded();
         let monitor = Ckb4IbcEventMonitor {
             rt,
             rpc_client,
             rx_cmd,
-            rx_internal,
             event_bus: EventBus::default(),
             config,
             cache_set: RwLock::new(CacheSet::new(512)),
+            counterparty_client_type_rx,
             counterparty_client_type: ClientType::Mock,
         };
-        (monitor, TxMonitorCmd::new(tx_cmd), tx_internal)
+        (monitor, TxMonitorCmd::new(tx_cmd))
     }
 
     pub fn run(mut self) {
         let rt = self.rt.clone();
+        // Block here until the counterparty is revealed.
+        tracing::info!("receiving counterparty client type");
+        rt.block_on(async {
+            self.counterparty_client_type = self
+                .counterparty_client_type_rx
+                .wait_for(|t| t.is_some())
+                .await
+                .expect("counterparty_client_type sender is closed")
+                // Unwrapping is OK because the value is Some.
+                .unwrap();
+        });
+        tracing::info!(
+            "received counterparty client type: {}",
+            self.counterparty_client_type
+        );
         loop {
             std::thread::sleep(Duration::from_secs(5));
             let result = rt.block_on(self.run_once());
@@ -95,10 +110,6 @@ impl Ckb4IbcEventMonitor {
                 MonitorCmd::Shutdown => return Next::Abort,
                 MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
             }
-        }
-        // block here until the counterparty is revealed
-        if let Ok(client_type) = self.rx_internal.recv() {
-            self.counterparty_client_type = client_type;
         }
         let result = async {
             tokio::select! {
