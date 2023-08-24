@@ -67,6 +67,7 @@ use semver::Version;
 use std::sync::RwLock;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime;
+use tokio::sync::watch::Sender as WatchSender;
 use tracing::log::{info, warn};
 
 use self::extractor::{extract_connections_from_tx, extract_ibc_packet_from_tx};
@@ -119,7 +120,7 @@ pub struct Ckb4IbcChain {
     channel_outpoint: OutPoint,
     packet_outpoint: OutPoint,
 
-    counterparty_client_type: tokio::sync::watch::Sender<Option<ClientType>>,
+    counterparty_client_type: WatchSender<Option<ClientType>>,
 
     client_outpoints: RefCell<HashMap<ClientType, OutPoint>>,
     channel_input_data: RefCell<HashMap<(ChannelId, PortId), CellInput>>,
@@ -298,20 +299,20 @@ impl Ckb4IbcChain {
                 let cell = resp
                     .objects
                     .first()
-                    .ok_or(Error::query("no channel cell is fetched".to_string()))?;
+                    .ok_or(Error::query("no channel cell".to_string()))?;
                 let tx_hash = &cell.out_point.tx_hash;
                 let tx_resp = self
                     .rpc_client
                     .get_transaction(tx_hash)
                     .await
-                    .map_err(|_| Error::query("fetch back tx failed1".to_string()))?
-                    .ok_or(Error::query("fetch back tx failed2".to_string()))?
+                    .map_err(|_| Error::query("fetch ckb transaction failed".to_string()))?
+                    .ok_or(Error::query("ckb transaction unready".to_string()))?
                     .transaction
                     .unwrap();
                 let tx = match tx_resp.inner {
                     ckb_jsonrpc_types::Either::Left(channel) => channel,
                     ckb_jsonrpc_types::Either::Right(json_bytes) => {
-                        serde_json::from_slice::<TransactionView>(json_bytes.as_bytes()).unwrap()
+                        serde_json::from_slice(json_bytes.as_bytes()).unwrap()
                     }
                 };
                 let channel_end = extract_channel_end_from_tx(tx)?;
