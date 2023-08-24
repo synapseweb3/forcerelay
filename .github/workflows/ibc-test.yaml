@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-20.04
     timeout-minutes: 60
     env:
-      SRC_DIR: ./tmp/ibc-test-src
+      SRC_DIR: ${{ github.workspace }}/ibc-test-src
     strategy:
       fail-fast: false
       matrix:
