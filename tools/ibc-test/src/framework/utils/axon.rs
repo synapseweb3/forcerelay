@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::signers::Signer;
@@ -47,7 +47,7 @@ pub fn prepare_axon_chain(
     let mut working_dir = std::env::current_dir().unwrap();
     working_dir.push(dir_path);
     let _ = std::fs::remove_dir_all(dir_path);
-    std::fs::create_dir(dir_path).unwrap();
+    std::fs::create_dir_all(dir_path).with_context(|| format!("create_dir {:?}", dir_path))?;
 
     // copy configs to working dir
     for file in [
@@ -56,7 +56,8 @@ pub fn prepare_axon_chain(
         "default.db-options",
     ] {
         let src_path = axon_src_path.join("devtools/chain").join(file);
-        std::fs::copy(src_path, working_dir.join(file))?;
+        std::fs::copy(&src_path, working_dir.join(file))
+            .with_context(|| format!("cp {:?} -> {:?}", &src_path, working_dir.join(file)))?;
     }
 
     let chain_config_path = working_dir.join("config.toml");
@@ -64,7 +65,8 @@ pub fn prepare_axon_chain(
 
     // Modify configs
 
-    let mut config_doc = fs::read_to_string(&chain_config_path)?
+    let mut config_doc = fs::read_to_string(&chain_config_path)
+        .with_context(|| format!("read chain config from {:?}", &chain_config_path))?
         .parse::<Document>()
         .expect("invalid toml");
     // modify ports
@@ -89,7 +91,8 @@ pub fn prepare_axon_chain(
             .push(item);
     }
 
-    fs::write(&chain_config_path, config_doc.to_string())?;
+    fs::write(&chain_config_path, config_doc.to_string())
+        .with_context(|| format!("write config to {:?}", &chain_config_path))?;
 
     // start process
     let chain_process = ChildProcess::new(
@@ -115,7 +118,8 @@ pub fn prepare_axon_chain(
             .arg("migrate")
             .env("AXON_HTTP_RPC_URL", format!("http://localhost:{}", port))
             .current_dir(&ibc_contracts_src_path)
-            .output()?;
+            .output()
+            .with_context(|| "yarn migrate")?;
         // get contract address from output
         let contract_address: Option<ethers::types::H160> = if output.status.success() {
             let output = String::from_utf8(output.stdout.clone())?;
@@ -156,7 +160,8 @@ pub fn prepare_axon_chain(
             ckb_light_client_contract_address: ethers::types::H160::default(),
         };
         let path = working_dir.join(AXON_CONTRACTS_CONFIG_PATH);
-        std::fs::write(path, toml::to_string(&deployment)?)?;
+        std::fs::write(path, toml::to_string(&deployment)?)
+            .with_context(|| "write deployment info")?;
     }
 
     Ok(chain_process)

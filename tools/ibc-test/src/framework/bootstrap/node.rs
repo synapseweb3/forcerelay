@@ -19,7 +19,7 @@ use ibc_test_framework::types::single::node::FullNode;
 use ibc_test_framework::types::wallet::{TestWallets, Wallet};
 use ibc_test_framework::util::random::random_u32;
 
-pub fn bootstrap_single_ckb_node(
+pub fn bootstrap_single_node(
     builder: &ChainBuilder,
     prefix: &str,
     use_random_id: bool,
