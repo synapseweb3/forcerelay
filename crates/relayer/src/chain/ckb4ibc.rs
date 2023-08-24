@@ -1157,9 +1157,9 @@ impl ChainEndpoint for Ckb4IbcChain {
                     return false;
                 }
                 let Ok((packet, _)) = self.fetch_packet_cell_and_extract(
-                        &request.channel_id,
-                        &request.port_id,
-                        *sequence,
+                    &request.channel_id,
+                    &request.port_id,
+                    *sequence,
                 ) else {
                     return true;
                 };

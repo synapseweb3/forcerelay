@@ -217,10 +217,11 @@ impl CkbChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let chain_id = self.id().to_string();
         let client_type_args: PackedClientTypeArgs = {
-            let Some(type_id) = self.config.client_type_args.type_id.as_ref()
-            else {
+            let Some(type_id) = self.config.client_type_args.type_id.as_ref() else {
                 // TODO: better error
-                return Err(Error::other_error("no type id in client type args".to_owned()));
+                return Err(Error::other_error(
+                    "no type id in client type args".to_owned(),
+                ));
             };
             let type_id = PackedHash::from_slice(type_id.0.as_slice()).expect("build type id");
             PackedClientTypeArgs::new_builder()
@@ -229,16 +230,10 @@ impl CkbChain {
                 .build()
         };
 
-        let Some(update_cells) = self
-            .rt
-            .block_on(
-                self
-                    .rpc_client
-                    .fetch_update_cells(
-                        &self.config.lightclient_contract_typeargs,
-                        &client_type_args
-                    )
-            )?
+        let Some(update_cells) = self.rt.block_on(self.rpc_client.fetch_update_cells(
+            &self.config.lightclient_contract_typeargs,
+            &client_type_args,
+        ))?
         else {
             return Err(Error::other_error("no multi-client cells found".to_owned()));
         };

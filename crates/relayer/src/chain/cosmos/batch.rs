@@ -410,6 +410,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::redundant_clone)]
     fn batch_error_on_oversized_message() {
         const MAX_TX_SIZE: usize = 203;
 
@@ -513,6 +514,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::redundant_clone)]
     fn test_batches_are_structured_appropriately_per_max_tx_size() {
         const MAX_TX_SIZE: usize = 198;
 
