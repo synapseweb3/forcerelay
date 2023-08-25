@@ -27,6 +27,8 @@ jobs:
     timeout-minutes: 60
     env:
       SRC_DIR: ${{ github.workspace }}/ibc-test-src
+      AXON_COMMIT: d03d2bb7cb3dcdc03319c3a74beeee6715e7f448
+      IBC_CONTRACT_COMMIT: 5746d048304ca4d73dc4800459ddd79d57fa124c
     strategy:
       fail-fast: false
       matrix:
@@ -65,14 +67,14 @@ jobs:
           tar -zxf /tmp/ckb.tar.gz -C /tmp
           echo "/tmp/ckb_v0.107.0_x86_64-unknown-linux-gnu" >> $GITHUB_PATH
       - name: Prepare Axon source
-        run: git clone -b forcerelay-test --single-branch --recursive https://github.com/axonweb3/axon.git $SRC_DIR/axon
+        run: git clone --recursive https://github.com/axonweb3/axon.git $SRC_DIR/axon && cd $SRC_DIR/axon && git checkout $AXON_COMMIT
       - name: Install Axon
         uses: actions-rs/cargo@v1
         with:
           command: install
           args: --path ${{env.SRC_DIR}}/axon
       - name: Prepare IBC contracts
-        run: git clone --recursive https://github.com/synapseweb3/ibc-solidity-contract.git $SRC_DIR/ibc-solidity-contract
+        run: git clone --recursive https://github.com/synapseweb3/ibc-solidity-contract.git $SRC_DIR/ibc-solidity-contract && cd $SRC_DIR/ibc-solidity-contract && git checkout $IBC_CONTRACT_COMMIT
       - name: Compile IBC contracts
         working-directory: ${{env.SRC_DIR}}/ibc-solidity-contract
         run: yarn install && yarn compile
