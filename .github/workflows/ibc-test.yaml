@@ -46,19 +46,17 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - uses: Swatinem/rust-cache@v1
+      - name: Create source folder
+        run: mkdir -p $SRC_DIR
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ".\n${{env.SRC_DIR}}/axon"
       - name: Set Node.js 16.x
         uses: actions/setup-node@v3
         with:
           node-version: 16.x
       - name: Install yarn
         run: npm install --global yarn
-      - name: Create folder
-        run: mkdir -p $SRC_DIR
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: -p ibc-relayer
       - name: Prepare CKB
         run: |
           if [ ! -f "/tmp/ckb.tar.gz" ]; then
@@ -78,7 +76,18 @@ jobs:
       - name: Compile IBC contracts
         working-directory: ${{env.SRC_DIR}}/ibc-solidity-contract
         run: yarn install && yarn compile
-      - uses: actions-rs/cargo@v1
+      - name: Compile packages
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p ibc-relayer
+      - name: Compile tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p ibc-test --all-features --tests --jobs=4
+      - name: Run IBC tests
+        uses: actions-rs/cargo@v1
         env:
           CHAIN_COMMAND_PATHS: ${{ matrix.chain_a.command }},${{ matrix.chain_b.command }}
           ACCOUNT_PREFIXES: ${{ matrix.chain_a.account_prefix }},${{ matrix.chain_b.account_prefix }}
