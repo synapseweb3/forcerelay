@@ -48,17 +48,18 @@ jobs:
         with:
           toolchain: stable
           override: true
+
       - name: Create source folder
         run: mkdir -p $SRC_DIR
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ".\n${{env.SRC_DIR}}/axon"
+
       - name: Set Node.js 16.x
         uses: actions/setup-node@v3
         with:
           node-version: 16.x
+
       - name: Install yarn
         run: npm install --global yarn
+
       - name: Prepare CKB
         run: |
           if [ ! -f "/tmp/ckb.tar.gz" ]; then
@@ -66,28 +67,48 @@ jobs:
           fi
           tar -zxf /tmp/ckb.tar.gz -C /tmp
           echo "/tmp/ckb_v0.107.0_x86_64-unknown-linux-gnu" >> $GITHUB_PATH
+
       - name: Prepare Axon source
         run: git clone --recursive https://github.com/axonweb3/axon.git $SRC_DIR/axon && cd $SRC_DIR/axon && git checkout $AXON_COMMIT
-      - name: Install Axon
-        uses: actions-rs/cargo@v1
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
-          command: install
-          args: --path ${{env.SRC_DIR}}/axon
-      - name: Prepare IBC contracts
-        run: git clone --recursive https://github.com/synapseweb3/ibc-solidity-contract.git $SRC_DIR/ibc-solidity-contract && cd $SRC_DIR/ibc-solidity-contract && git checkout $IBC_CONTRACT_COMMIT
-      - name: Compile IBC contracts
-        working-directory: ${{env.SRC_DIR}}/ibc-solidity-contract
-        run: yarn install && yarn compile
-      - name: Compile packages
+          workspaces: ".\n${{env.SRC_DIR}}/axon"
+
+      - name: Cache axon bin
+        id: cache-axon-bin
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-axon-bin
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ${{env.SRC_DIR}}/axon/target/release/axon
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ env.AXON_COMMIT }}
+  
+      - name: Build Axon
+        if: ${{ steps.cache-axon-bin.outputs.cache-hit != 'true' }}
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: -p ibc-relayer
+          args: --release --manifest-path ${{env.SRC_DIR}}/axon/Cargo.toml
+      
+      - name: Add axon bin to path
+        run: echo "${{env.SRC_DIR}}/axon/target/release/" >> $GITHUB_PATH
+
+      - name: Prepare IBC contracts
+        run: git clone --recursive https://github.com/synapseweb3/ibc-solidity-contract.git $SRC_DIR/ibc-solidity-contract && cd $SRC_DIR/ibc-solidity-contract && git checkout $IBC_CONTRACT_COMMIT
+
+      - name: Compile IBC contracts
+        working-directory: ${{env.SRC_DIR}}/ibc-solidity-contract
+        run: yarn install && yarn compile
+
       - name: Compile tests
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: -p ibc-test --all-features --tests --jobs=4
+          args: -p ibc-test --tests --jobs=4
+
       - name: Run IBC tests
         uses: actions-rs/cargo@v1
         env:
@@ -99,4 +120,4 @@ jobs:
           RUST_BACKTRACE: 1
         with:
           command: test
-          args: -p ibc-test --all-features -- --nocapture
+          args: -p ibc-test -- --nocapture
