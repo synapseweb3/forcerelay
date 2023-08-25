@@ -149,10 +149,16 @@ impl FullNode {
     ) -> Result<config::ChainConfig, Error> {
         let ckb_rpc = Url::from_str(self.chain_driver.rpc_address().as_str())?;
         let mut onchain_light_clients = HashMap::default();
+        // FIXME: dynamic generate counterparty chain_id
+        let chain_id = if self.chain_driver.chain_id.to_string() == "ckb4ibc-0" {
+            ChainId::from_string("ckb4ibc-1")
+        } else {
+            ChainId::from_string("ckb4ibc-0")
+        };
         onchain_light_clients.insert(
             ClientType::Ckb4Ibc,
             LightClientItem {
-                chain_id: self.chain_driver.chain_id.clone(),
+                chain_id,
                 client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
             },
         );

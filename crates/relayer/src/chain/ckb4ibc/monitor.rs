@@ -130,7 +130,7 @@ impl Ckb4IbcEventMonitor {
             .args(client_id.as_bytes().pack())
             .build();
         let key = get_search_key(script);
-        let (ibc_connection_cell, tx_hash) = self
+        let ((ibc_connection_cell, tx_hash), block_number) = self
             .search_and_extract(
                 key,
                 &|tx| {
@@ -149,7 +149,7 @@ impl Ckb4IbcEventMonitor {
             return Ok(EventBatch {
                 chain_id: self.config.id.clone(),
                 tracking_id: TrackingId::Static("ckb connection events collection"),
-                height: Height::default(),
+                height: Height::from_noncosmos_height(block_number),
                 events: vec![],
             });
         }
@@ -166,7 +166,7 @@ impl Ckb4IbcEventMonitor {
                 CkbState::Init => {
                     let connection_id = generate_connection_id(idx as u16, client_id.as_str());
                     info!(
-                        "🫡 {} received ConnectionOpenInit event, connection_id = {connection_id}",
+                        "🫡  {} received ConnectionOpenInit event, connection_id = {connection_id}",
                         self.config.id
                     );
                     let attrs = Attributes {
@@ -181,14 +181,14 @@ impl Ckb4IbcEventMonitor {
                     let event = IbcEvent::OpenInitConnection(ConnectionOpenInit(attrs));
                     Some(IbcEventWithHeight {
                         event,
-                        height: Height::default(),
+                        height: Height::from_noncosmos_height(block_number),
                         tx_hash: tx_hash.clone().into(),
                     })
                 }
                 CkbState::OpenTry => {
                     let connection_id = generate_connection_id(idx as u16, client_id.as_str());
                     info!(
-                        "🫡 {} received ConnectionOpenTry event, connection_id = {connection_id}",
+                        "🫡  {} received ConnectionOpenTry event, connection_id = {connection_id}",
                         self.config.id
                     );
                     let attrs = Attributes {
@@ -203,17 +203,26 @@ impl Ckb4IbcEventMonitor {
                     let event = IbcEvent::OpenTryConnection(ConnectionOpenTry(attrs));
                     Some(IbcEventWithHeight {
                         event,
-                        height: Height::default(),
+                        height: Height::from_noncosmos_height(block_number),
                         tx_hash: tx_hash.clone().into(),
                     })
                 }
                 _ => None,
             })
             .collect::<Vec<_>>();
+
+        let tip_block_number: u64 = self
+            .rpc_client
+            .get_tip_header()
+            .await
+            .unwrap()
+            .inner
+            .number
+            .into();
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb connection events collection"),
-            height: Height::default(),
+            height: Height::from_noncosmos_height(tip_block_number),
             events,
         })
     }
@@ -251,18 +260,18 @@ impl Ckb4IbcEventMonitor {
 
         let events = identified_channel_ends
             .into_iter()
-            .filter(|(_, tx)| {
+            .filter(|((_, tx), _)| {
                 if self.cache_set.read().unwrap().has(tx) {
                     return false;
                 }
                 self.cache_set.write().unwrap().insert(tx.clone());
                 true
             })
-            .map(|(channel, tx)| match channel.channel_end.state {
+            .map(|((channel, tx), block_number)| match channel.channel_end.state {
                 State::Init => {
                     let connection_id = channel.channel_end.connection_hops[0].clone();
                     info!(
-                        "🫡 {} received ChannelOpenInit event, channel_id = {}, connection_id = {connection_id}", 
+                        "🫡  {} received ChannelOpenInit event, channel_id = {}, connection_id = {connection_id}", 
                         self.config.id,
                         channel.channel_id
                     );
@@ -274,14 +283,14 @@ impl Ckb4IbcEventMonitor {
                             counterparty_port_id: channel.channel_end.remote.port_id,
                             counterparty_channel_id: channel.channel_end.remote.channel_id,
                         }),
-                        height: Height::default(),
+                        height: Height::from_noncosmos_height(block_number),
                         tx_hash: tx.into(),
                     }
                 },
                 State::TryOpen => {
                     let connection_id = channel.channel_end.connection_hops[0].clone();
                     info!(
-                        "🫡 {} received ChannelOpenTry event, channel_id = {}, connection_id = {connection_id}", 
+                        "🫡  {} received ChannelOpenTry event, channel_id = {}, connection_id = {connection_id}", 
                         self.config.id,
                         channel.channel_id
                     );
@@ -293,17 +302,26 @@ impl Ckb4IbcEventMonitor {
                             counterparty_port_id: channel.channel_end.remote.port_id,
                             counterparty_channel_id: channel.channel_end.remote.channel_id,
                         }),
-                        height: Height::default(),
+                        height: Height::from_noncosmos_height(block_number),
                         tx_hash: tx.into(),
                     }
                 },
                 _ => unreachable!(),
             })
             .collect::<Vec<_>>();
+
+        let tip_block_number: u64 = self
+            .rpc_client
+            .get_tip_header()
+            .await
+            .unwrap()
+            .inner
+            .number
+            .into();
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb channel events collection"),
-            height: Height::default(),
+            height: Height::from_noncosmos_height(tip_block_number),
             events,
         })
     }
@@ -330,14 +348,14 @@ impl Ckb4IbcEventMonitor {
 
         let events = ibc_packets
             .into_iter()
-            .filter(|(packet, tx)| {
+            .filter(|((packet, tx), _)| {
                 if packet.status == PacketStatus::Ack || self.cache_set.read().unwrap().has(tx) {
                     return false;
                 }
                 self.cache_set.write().unwrap().insert(tx.clone());
                 true
             })
-            .map(|(packet, tx)| match packet.status {
+            .map(|((packet, tx), block_number)| match packet.status {
                 PacketStatus::Send => {
                     info!(
                         "🫡  {} received SendPacket({}) event, from {}/{} to {}/{}",
@@ -352,7 +370,7 @@ impl Ckb4IbcEventMonitor {
                         event: IbcEvent::SendPacket(SendPacket {
                             packet: convert_packet(packet),
                         }),
-                        height: Height::default(),
+                        height: Height::from_noncosmos_height(block_number),
                         tx_hash: tx.into(),
                     }
                 }
@@ -370,7 +388,7 @@ impl Ckb4IbcEventMonitor {
                         event: IbcEvent::ReceivePacket(ReceivePacket {
                             packet: convert_packet(packet),
                         }),
-                        height: Height::default(),
+                        height: Height::from_noncosmos_height(block_number),
                         tx_hash: tx.into(),
                     }
                 }
@@ -388,17 +406,26 @@ impl Ckb4IbcEventMonitor {
                         event: IbcEvent::AcknowledgePacket(AcknowledgePacket {
                             packet: convert_packet(packet),
                         }),
-                        height: Height::default(),
+                        height: Height::from_noncosmos_height(block_number),
                         tx_hash: tx.into(),
                     }
                 }
                 PacketStatus::Ack => unreachable!(),
             })
             .collect::<Vec<_>>();
+
+        let tip_block_number: u64 = self
+            .rpc_client
+            .get_tip_header()
+            .await
+            .unwrap()
+            .inner
+            .number
+            .into();
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb channel events collection"),
-            height: Height::default(),
+            height: Height::from_noncosmos_height(tip_block_number),
             events,
         })
     }
@@ -408,7 +435,7 @@ impl Ckb4IbcEventMonitor {
         search_key: SearchKey,
         extractor: &F,
         limit: u32,
-    ) -> Result<Vec<(T, H256)>>
+    ) -> Result<Vec<((T, H256), u64)>>
     where
         F: Fn(TransactionView) -> Result<(T, H256)>,
     {
@@ -418,33 +445,39 @@ impl Ckb4IbcEventMonitor {
             .await
             .map_err(|_| Error::collect_events_failed("fetch ibc cells failed".to_string()))?;
 
-        let tx_response = cells
+        let block_numbers = cells
+            .objects
+            .iter()
+            .map(|cell| cell.block_number.into())
+            .collect::<Vec<u64>>();
+        let ibc_response = cells
             .objects
             .into_iter()
             .map(|cell| self.rpc_client.get_transaction(&cell.out_point.tx_hash));
 
-        let result = futures::future::join_all(tx_response)
+        let ibc_iterator = futures::future::join_all(ibc_response)
             .await
             .into_iter()
-            .flatten()
-            .flatten()
-            .filter_map(|tx| {
-                if tx.tx_status.status == Status::Committed && tx.transaction.is_some() {
-                    return Some(tx.transaction.unwrap());
+            .zip(block_numbers)
+            .filter_map(|(tx, block_number)| {
+                if let Ok(Some(tx)) = tx {
+                    if tx.tx_status.status == Status::Committed && tx.transaction.is_some() {
+                        return Some((tx.transaction.unwrap(), block_number));
+                    }
                 }
                 None
-            })
-            .map(|tx| {
-                let tx = match tx.inner {
-                    ckb_jsonrpc_types::Either::Left(tx) => tx,
-                    ckb_jsonrpc_types::Either::Right(json) => {
-                        serde_json::from_slice(json.as_bytes()).unwrap()
-                    }
-                };
-                extractor(tx)
-            })
-            .collect::<Result<Vec<_>>>()
-            .map_err(|e| Error::collect_events_failed(e.to_string()))?;
+            });
+
+        let mut result = vec![];
+        for (tx, block_number) in ibc_iterator {
+            let tx = match tx.inner {
+                ckb_jsonrpc_types::Either::Left(tx) => tx,
+                ckb_jsonrpc_types::Either::Right(json) => {
+                    serde_json::from_slice(json.as_bytes()).unwrap()
+                }
+            };
+            result.push((extractor(tx)?, block_number));
+        }
 
         Ok(result)
     }
@@ -467,6 +500,7 @@ fn convert_packet(packet: IbcPacket) -> Packet {
     let source_channel = ChannelId::from_str(&packet.packet.source_channel_id).unwrap();
     let destination_port = PortId::from_str(&packet.packet.destination_port_id).unwrap();
     let destination_channel = ChannelId::from_str(&packet.packet.destination_channel_id).unwrap();
+    assert!(!packet.packet.data.is_empty(), "empty packet data");
     Packet {
         sequence,
         source_port,

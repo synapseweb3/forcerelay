@@ -230,7 +230,7 @@ impl Ckb4IbcChain {
             .args(
                 PacketArgs {
                     channel_id: get_channel_number(channel_id)?,
-                    port_id: port_id.as_str().as_bytes().try_into().unwrap(),
+                    port_id: convert_port_id_to_array(port_id)?,
                     sequence,
                 }
                 .get_search_args(search_all)
@@ -805,10 +805,11 @@ impl ChainEndpoint for Ckb4IbcChain {
             .keys()
             .map(|client_type| {
                 let client_id = self.config.lc_client_id(*client_type).unwrap();
+                let chain_id = self.config.lc_chain_id(&client_id.to_string()).unwrap();
                 IdentifiedAnyClientState {
                     client_id,
                     client_state: CkbClientState {
-                        chain_id: self.id(),
+                        chain_id,
                         latest_height: Height::default(),
                     }
                     .into(),
