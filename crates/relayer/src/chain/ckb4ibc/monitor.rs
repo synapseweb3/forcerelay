@@ -37,6 +37,7 @@ use crate::chain::ckb4ibc::extractor::{
     extract_channel_end_from_tx, extract_ibc_connections_from_tx, extract_ibc_packet_from_tx,
 };
 use crate::chain::tracking::TrackingId;
+use crate::chain::SEC_TO_NANO;
 use crate::config::ckb4ibc::ChainConfig;
 use crate::event::bus::EventBus;
 use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonitorCmd};
@@ -424,7 +425,7 @@ impl Ckb4IbcEventMonitor {
             .into();
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
-            tracking_id: TrackingId::Static("ckb channel events collection"),
+            tracking_id: TrackingId::Static("ckb packet events collection"),
             height: Height::from_noncosmos_height(tip_block_number),
             events,
         })
@@ -495,12 +496,19 @@ impl Ckb4IbcEventMonitor {
 }
 
 fn convert_packet(packet: IbcPacket) -> Packet {
+    assert!(!packet.packet.data.is_empty(), "empty packet data");
     let sequence = Sequence::from(packet.packet.sequence as u64);
     let source_port = PortId::from_str(&packet.packet.source_port_id).unwrap();
     let source_channel = ChannelId::from_str(&packet.packet.source_channel_id).unwrap();
     let destination_port = PortId::from_str(&packet.packet.destination_port_id).unwrap();
     let destination_channel = ChannelId::from_str(&packet.packet.destination_channel_id).unwrap();
-    assert!(!packet.packet.data.is_empty(), "empty packet data");
+    let timeout_height = if packet.packet.timeout_height > 0 {
+        TimeoutHeight::At(Height::from_noncosmos_height(packet.packet.timeout_height))
+    } else {
+        TimeoutHeight::Never
+    };
+    let timeout_timestamp =
+        Timestamp::from_nanoseconds(packet.packet.timeout_timestamp * SEC_TO_NANO).unwrap();
     Packet {
         sequence,
         source_port,
@@ -508,7 +516,7 @@ fn convert_packet(packet: IbcPacket) -> Packet {
         destination_port,
         destination_channel,
         data: packet.packet.data,
-        timeout_height: TimeoutHeight::Never,
-        timeout_timestamp: Timestamp::none(),
+        timeout_height,
+        timeout_timestamp,
     }
 }

@@ -129,8 +129,6 @@ pub struct Ckb4IbcChain {
     connection_cache:
         RefCell<HashMap<ClientType, (IbcConnections, CellInput, Vec<IdentifiedConnectionEnd>)>>,
     packet_input_data: RefCell<HashMap<(ChannelId, PortId, Sequence), CellInput>>,
-
-    cached_tx_assembler_address: RwLock<Option<Address>>,
 }
 
 impl Ckb4IbcChain {
@@ -160,27 +158,13 @@ impl Ckb4IbcChain {
     }
 
     pub fn tx_assembler_address(&self) -> Result<Address, Error> {
-        let cached_address = self
-            .cached_tx_assembler_address
-            .read()
-            .map_err(Error::other)?
-            .clone();
-        let address = if let Some(address) = cached_address {
-            address
-        } else {
-            let network = self.network()?;
-            let key: Secp256k1KeyPair = self
-                .keybase
-                .get_key(&self.config.key_name)
-                .map_err(Error::key_base)?;
-            let address_payload = AddressPayload::from_pubkey(&key.public_key);
-            let address = Address::new(network, address_payload, true);
-            *self
-                .cached_tx_assembler_address
-                .write()
-                .map_err(Error::other)? = Some(address.clone());
-            address
-        };
+        let network = self.network()?;
+        let key: Secp256k1KeyPair = self
+            .keybase
+            .get_key(&self.config.key_name)
+            .map_err(Error::key_base)?;
+        let address_payload = AddressPayload::from_pubkey(&key.public_key);
+        let address = Address::new(network, address_payload, true);
         Ok(address)
     }
 
@@ -486,12 +470,12 @@ impl ChainEndpoint for Ckb4IbcChain {
             client_outpoints.insert(*client_type, cell.out_point);
         }
 
-        let conn_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
+        let packet_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
             &TYPE_ID_CODE_HASH.pack(),
-            &config.connection_type_args.as_bytes().to_owned(),
+            &config.packet_type_args.as_bytes().to_owned(),
         ))?;
-        if conn_contract_cell.is_none() {
-            return Err(Error::other_error("connection cell not found".to_owned()));
+        if packet_contract_cell.is_none() {
+            return Err(Error::other_error("packet contract not found".to_owned()));
         }
 
         let chan_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
@@ -502,13 +486,16 @@ impl ChainEndpoint for Ckb4IbcChain {
             return Err(Error::other_error("channel contract not found".to_owned()));
         }
 
-        let packet_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
+        let conn_contract_cell = rt.block_on(rpc_client.search_cell_by_typescript(
             &TYPE_ID_CODE_HASH.pack(),
-            &config.packet_type_args.as_bytes().to_owned(),
+            &config.connection_type_args.as_bytes().to_owned(),
         ))?;
-        if packet_contract_cell.is_none() {
-            return Err(Error::other_error("packet contract not found".to_owned()));
+        if conn_contract_cell.is_none() {
+            return Err(Error::other_error(
+                "connection contract not found".to_owned(),
+            ));
         }
+
         let keybase =
             KeyRing::new(Default::default(), "ckb", &config.id).map_err(Error::key_base)?;
         let chain = Ckb4IbcChain {
@@ -527,7 +514,6 @@ impl ChainEndpoint for Ckb4IbcChain {
             channel_cache: RefCell::new(HashMap::new()),
             connection_cache: RefCell::new(HashMap::new()),
             packet_input_data: RefCell::new(HashMap::new()),
-            cached_tx_assembler_address: RwLock::new(None),
         };
         Ok(chain)
     }
@@ -646,8 +632,8 @@ impl ChainEndpoint for Ckb4IbcChain {
                 }
             }
         }
-        let resps = txs.into_iter().map(|tx| {
-            let tx: TransactionView = tx.into();
+        let resps = txs.iter().map(|tx| {
+            let tx: TransactionView = tx.clone().into();
             self.rpc_client
                 .send_transaction(&tx.inner, None)
                 .and_then(|tx_hash| {
@@ -655,7 +641,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                         &self.rpc_client,
                         tx_hash,
                         Duration::from_secs(10),
-                        4,
+                        3,
                         Duration::from_secs(600),
                     )
                 })
@@ -675,7 +661,13 @@ impl ChainEndpoint for Ckb4IbcChain {
                     }
                 }
                 Err(e) => {
-                    return Err(Error::send_tx(e.to_string()));
+                    let tx: TransactionView = txs[i].clone().into();
+                    let json_tx = serde_json::to_string_pretty(&tx).unwrap();
+                    let error = format!(
+                        "{}\n\n======== transaction info ========\n\n{json_tx}\n",
+                        e.to_string()
+                    );
+                    return Err(Error::send_tx(error));
                 }
             }
         }

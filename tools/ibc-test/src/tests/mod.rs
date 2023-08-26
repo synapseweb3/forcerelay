@@ -17,8 +17,6 @@ macro_rules! env_vars {
 #[test]
 fn test_from_ckb_to_ckb() -> Result<(), Error> {
     env_vars!(
-        {"RUST_LOG", "debug"},
-        {"RUST_BACKTRACE", "full"},
         {"CHAIN_COMMAND_PATHS", "ckb"},
         {"ACCOUNT_PREFIXES", "ckb"},
         {"CLIENT_CODE_HASH", hex::encode(TYPE_ID_CODE_HASH)},

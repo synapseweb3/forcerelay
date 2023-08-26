@@ -1,6 +1,6 @@
-mod chan;
+mod channel;
 mod client;
-mod conn;
+mod connection;
 mod packet;
 
 use std::{cell::Ref, collections::HashMap};
@@ -61,8 +61,8 @@ use ibc_relayer_types::{
 use super::utils::{generate_connection_id, get_script_hash};
 use client::{convert_create_client, convert_update_client};
 
-use chan::*;
-use conn::*;
+use channel::*;
+use connection::*;
 use packet::*;
 
 macro_rules! convert {

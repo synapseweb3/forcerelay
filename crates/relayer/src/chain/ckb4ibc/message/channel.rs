@@ -1,5 +1,5 @@
 use ckb_ics_axon::consts::{CHANNEL_CELL_CAPACITY, CONNECTION_CELL_CAPACITY};
-use ckb_ics_axon::handler::IbcChannel;
+use ckb_ics_axon::handler::{IbcChannel, Sequence};
 use ckb_ics_axon::message::Envelope;
 use ckb_ics_axon::message::MsgChannelOpenAck as CkbMsgChannelOpenAck;
 use ckb_ics_axon::message::MsgChannelOpenConfirm as CkbMsgChannelOpenConfirm;
@@ -71,12 +71,19 @@ fn convert_channel_end(
         channel_id: remote_channel_id,
     };
 
+    let sequence = Sequence {
+        next_sequence_sends: 1,
+        next_sequence_recvs: 1,
+        next_sequence_acks: 1,
+        ..Default::default()
+    };
+
     let result = IbcChannel {
         number: channel_number,
         port_id,
         state,
         order,
-        sequence: Default::default(),
+        sequence,
         counterparty,
         connection_hops,
     };

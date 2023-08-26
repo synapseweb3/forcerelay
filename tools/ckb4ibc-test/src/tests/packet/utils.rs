@@ -141,14 +141,13 @@ pub fn transfer_port_id() -> PortId {
     PortId::from_str(&hex::encode(script_hash.as_slice())).unwrap()
 }
 
-pub fn prepare_artificials<Endpoint: ChainHandle>(
+pub fn prepare_artificials(
     config: &Config,
-    chain: &Endpoint,
+    chain_id: &ChainId,
     channel_id: &ChannelId,
 ) -> EyreResult<(SdkConfig, String, SecpSighashScriptSigner)> {
-    let chain_id = chain.id();
     let generic_config = config
-        .find_chain(&chain_id)
+        .find_chain(chain_id)
         .ok_or(eyre!("{chain_id} not found"))?;
     let ckb4ibc_config = if let ChainConfig::Ckb4Ibc(config) = generic_config {
         config

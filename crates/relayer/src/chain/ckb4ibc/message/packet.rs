@@ -110,7 +110,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: PACKET_CELL_CAPACITY,
+        input_capacity: CHANNEL_CELL_CAPACITY,
         event: None,
     })
 }

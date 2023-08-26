@@ -1,9 +1,12 @@
+use ckb_types::prelude::Entity;
 use ibc_test_framework::prelude::*;
 use log::{debug, info};
 use tokio::runtime::Runtime;
 
 mod utils;
 use utils::*;
+
+use crate::generator::{get_lock_script, PRIVKEY};
 
 pub struct CKB4IbcPacketTest {}
 
@@ -40,12 +43,12 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         // 1. prepare essential variables and check wallet balances
         let (chain_a_config, chain_a_url, chain_a_signer) = prepare_artificials(
             &relayer.config,
-            chains.handle_a(),
+            &chains.handle_a().id(),
             channels.channel_id_a.value(),
         )?;
         let (chain_b_config, chain_b_url, chain_b_signer) = prepare_artificials(
             &relayer.config,
-            chains.handle_b(),
+            &chains.handle_b().id(),
             channels.channel_id_b.value(),
         )?;
         info!(
@@ -128,4 +131,51 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
 
         Ok(())
     }
+}
+
+#[ignore]
+#[test]
+fn test_send_packet() {
+    let rt = Runtime::new().unwrap();
+    let home = env!("HOME");
+    let config_toml = std::fs::read_to_string(format!("{home}/.hermes/config.toml")).unwrap();
+    let config: Config = toml::from_str(&config_toml).unwrap();
+
+    let chain_id_a: ChainId = "ckb4ibc-0".parse().unwrap();
+    let channel_id_a: ChannelId = "channel-0".parse().unwrap();
+    let channel_id_b: ChannelId = "channel-1".parse().unwrap();
+    let port_id: PortId = {
+        let (script, _, _) = get_lock_script(PRIVKEY);
+        hex::encode(script.calc_script_hash().as_slice())
+            .parse()
+            .unwrap()
+    };
+
+    let (chain_a_config, chain_a_url, chain_a_signer) =
+        prepare_artificials(&config, &chain_id_a, &channel_id_a).unwrap();
+
+    let message = b"ping".to_vec();
+    let send_packet_tx = generate_send_packet_transaction(
+        &rt,
+        &chain_a_config,
+        &chain_a_url,
+        &chain_a_signer,
+        port_id.to_string(),
+        channel_id_b.to_string(),
+        message,
+    )
+    .unwrap();
+
+    use relayer::chain::ckb;
+    let rpc_client = ckb::rpc_client::RpcClient::new(
+        &chain_a_url.parse().unwrap(),
+        &chain_a_url.parse().unwrap(),
+    );
+    rt.block_on(ckb::sighash::init_sighash_celldep(&rpc_client))
+        .unwrap();
+    let hash = send_transaction(&chain_a_url, send_packet_tx).unwrap();
+    println!(
+        "🍻 successfully sent send_packet transaction to chain_a, hash = {}",
+        hex::encode(hash)
+    );
 }
