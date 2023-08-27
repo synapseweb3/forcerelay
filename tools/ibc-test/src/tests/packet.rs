@@ -1,6 +1,6 @@
 use ckb_types::prelude::Entity;
 use ibc_test_framework::prelude::*;
-use log::{debug, info};
+use log::info;
 use tokio::runtime::Runtime;
 
 mod utils;
@@ -58,7 +58,7 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         );
 
         // 2. trigger SendPacket event on ChainA
-        debug!("send send_packet transaction to chain_a");
+        info!("send send_packet transaction to chain_a");
         let message = b"ping".to_vec();
         let send_packet_tx = generate_send_packet_transaction(
             &rt,
@@ -76,7 +76,7 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         );
 
         // 3. listen RecvPacket event on ChainB
-        debug!("wait recv_packet being found on chain_b");
+        info!("wait recv_packet being found on chain_b");
         let mut recv_packets =
             listen_and_wait_packet_cells(&rt, &chain_b_url, &chain_b_config, |packet| {
                 packet.is_recv_packet()
@@ -87,7 +87,7 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         info!("🍻 successfully find recv_packet cell on chain_b");
 
         // 4. trigger WriteAck event on ChainB
-        debug!("send write_ack transaction to chain_b");
+        info!("send write_ack transaction to chain_b");
         let acknowledgemnt = b"pong".to_vec();
         let write_ack_tx = generate_write_ack_transaction(
             &rt,
@@ -104,7 +104,7 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         );
 
         // 5. lisen AckPacket event on ChainA
-        debug!("wait ack_packet being found on chain_a");
+        info!("wait ack_packet being found on chain_a");
         let mut ack_packets =
             listen_and_wait_packet_cells(&rt, &chain_a_url, &chain_a_config, |packet| {
                 packet.is_ack_packet()
@@ -115,7 +115,7 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         info!("🍻 successfully find ack_packet cell on chain_a");
 
         // 6. comsune AckPacket cell on ChainA
-        debug!("send ack_packet consume transaction to chain_a");
+        info!("send ack_packet consume transaction to chain_a");
         let consume_ack_packet_tx = generate_consume_ack_packet_transaction(
             &rt,
             &chain_a_config,

@@ -31,7 +31,7 @@ use super::utils::{generate_channel_id, generate_connection_id};
 pub fn extract_channel_end_from_tx(
     tx: TransactionView,
 ) -> Result<(IdentifiedChannelEnd, CkbIbcChannel), Error> {
-    let idx = get_object_idx(&tx, ObjectType::ChannelEnd)?;
+    let idx = get_object_index(&tx, ObjectType::ChannelEnd)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
         .map_err(|_| Error::ckb_decode_witness_args())?;
@@ -45,7 +45,7 @@ pub fn extract_channel_end_from_tx(
 }
 
 pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnections, Error> {
-    let idx = get_object_idx(&tx, ObjectType::IbcConnections)?;
+    let idx = get_object_index(&tx, ObjectType::IbcConnections)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes()).unwrap();
     let ibc_connection_cells =
@@ -70,7 +70,7 @@ pub fn extract_connections_from_tx(
 }
 
 pub fn extract_ibc_packet_from_tx(tx: TransactionView) -> Result<IbcPacket, Error> {
-    let idx = get_object_idx(&tx, ObjectType::IbcPacket)?;
+    let idx = get_object_index(&tx, ObjectType::IbcPacket)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
         .map_err(|_| Error::ckb_decode_witness_args())?;
@@ -209,7 +209,7 @@ enum ObjectType {
     IbcPacket,
 }
 
-fn get_object_idx(tx: &TransactionView, object_type: ObjectType) -> Result<usize, Error> {
+fn get_object_index(tx: &TransactionView, object_type: ObjectType) -> Result<usize, Error> {
     let msg = tx.inner.witnesses.last().ok_or(Error::ckb_none_witness())?;
 
     let bytes = msg.as_bytes();

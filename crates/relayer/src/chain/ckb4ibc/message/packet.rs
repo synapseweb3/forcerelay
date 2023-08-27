@@ -98,6 +98,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
+        .cell_dep(converter.get_chan_contract_outpoint())
         .input(channel_input)
         // TODO: fetch useless packet cell as input to save capacity
         // .input()

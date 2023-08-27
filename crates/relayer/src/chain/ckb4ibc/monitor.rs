@@ -19,8 +19,7 @@ use ibc_relayer_types::core::ics03_connection::events::{
 };
 use ibc_relayer_types::core::ics04_channel::channel::State;
 use ibc_relayer_types::core::ics04_channel::events::{
-    AcknowledgePacket, OpenInit as ChannelOpenInit, OpenTry as ChannelOpenTry, ReceivePacket,
-    SendPacket,
+    AcknowledgePacket, OpenInit as ChannelOpenInit, OpenTry as ChannelOpenTry, SendPacket,
 };
 use ibc_relayer_types::core::ics04_channel::packet::{Packet, Sequence};
 use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
@@ -350,7 +349,10 @@ impl Ckb4IbcEventMonitor {
         let events = ibc_packets
             .into_iter()
             .filter(|((packet, tx), _)| {
-                if packet.status == PacketStatus::Ack || self.cache_set.read().unwrap().has(tx) {
+                if packet.status == PacketStatus::Ack
+                    || packet.status == PacketStatus::Recv
+                    || self.cache_set.read().unwrap().has(tx)
+                {
                     return false;
                 }
                 self.cache_set.write().unwrap().insert(tx.clone());
@@ -375,24 +377,6 @@ impl Ckb4IbcEventMonitor {
                         tx_hash: tx.into(),
                     }
                 }
-                PacketStatus::Recv => {
-                    info!(
-                        "🫡  {} received RecvPacket({}) event, from {}/{} to {}/{}",
-                        self.config.id,
-                        packet.packet.sequence,
-                        packet.packet.source_channel_id,
-                        packet.packet.source_port_id,
-                        packet.packet.destination_channel_id,
-                        packet.packet.destination_port_id,
-                    );
-                    IbcEventWithHeight {
-                        event: IbcEvent::ReceivePacket(ReceivePacket {
-                            packet: convert_packet(packet),
-                        }),
-                        height: Height::from_noncosmos_height(block_number),
-                        tx_hash: tx.into(),
-                    }
-                }
                 PacketStatus::WriteAck => {
                     info!(
                         "🫡  {} received WriteAck({}) event, from {}/{} to {}/{}",
@@ -411,7 +395,7 @@ impl Ckb4IbcEventMonitor {
                         tx_hash: tx.into(),
                     }
                 }
-                PacketStatus::Ack => unreachable!(),
+                PacketStatus::Ack | PacketStatus::Recv => unreachable!(),
             })
             .collect::<Vec<_>>();
 

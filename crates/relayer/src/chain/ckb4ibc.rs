@@ -294,28 +294,27 @@ impl Ckb4IbcChain {
                     .transaction
                     .unwrap();
                 let tx = match tx_resp.inner {
-                    ckb_jsonrpc_types::Either::Left(channel) => channel,
+                    ckb_jsonrpc_types::Either::Left(tx) => tx,
                     ckb_jsonrpc_types::Either::Right(json_bytes) => {
                         serde_json::from_slice(json_bytes.as_bytes()).unwrap()
                     }
                 };
                 let channel_end = extract_channel_end_from_tx(tx)?;
                 let input = CellInput::new_builder()
-                    .previous_output(
-                        OutPoint::new_builder()
-                            .tx_hash(tx_hash.pack())
-                            .index(cell.tx_index.pack())
-                            .build(),
-                    )
+                    .previous_output(cell.out_point.clone().into())
                     .build();
                 Ok((channel_end, input))
             });
+
         let ((channel, ibc_channel_end), cell_input) = self.rt.block_on(channel_future)?;
 
-        let mut data = self.channel_input_data.borrow_mut();
-        data.insert((channel.channel_id.clone(), channel.port_id), cell_input);
-        let mut cache = self.channel_cache.borrow_mut();
-        cache.insert(channel.channel_id, ibc_channel_end.clone());
+        self.channel_input_data
+            .borrow_mut()
+            .insert((channel.channel_id.clone(), channel.port_id), cell_input);
+        self.channel_cache
+            .borrow_mut()
+            .insert(channel.channel_id, ibc_channel_end.clone());
+
         Ok((channel.channel_end, ibc_channel_end))
     }
 
@@ -593,6 +592,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 continue;
             }
             let unsigned_tx = unsigned_tx.unwrap();
+            let msg_type = envelope.msg_type;
             match self.complete_tx_with_secp256k1_change_and_envelope(
                 unsigned_tx,
                 input_capacity,
@@ -623,7 +623,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                         )
                         .unwrap();
                     tx_hashes.push(tx.hash().unpack());
-                    txs.push(tx);
+                    txs.push((tx, msg_type));
                     events.push(event);
                 }
                 Err(err) => {
@@ -632,21 +632,28 @@ impl ChainEndpoint for Ckb4IbcChain {
                 }
             }
         }
-        let resps = txs.iter().map(|tx| {
+        let responses = txs.iter().map(|(tx, msg_type)| {
             let tx: TransactionView = tx.clone().into();
             self.rpc_client
                 .send_transaction(&tx.inner, None)
                 .and_then(|tx_hash| {
+                    let confirms = 3;
+                    info!(
+                        "{:?} transaction {} committed to {}, wait {confirms} blocks confirmation",
+                        *msg_type,
+                        hex::encode(&tx_hash),
+                        self.id()
+                    );
                     wait_ckb_transaction_committed(
                         &self.rpc_client,
                         tx_hash,
                         Duration::from_secs(10),
-                        3,
+                        confirms,
                         Duration::from_secs(600),
                     )
                 })
         });
-        let responses = self.rt.block_on(futures::future::join_all(resps));
+        let responses = self.rt.block_on(futures::future::join_all(responses));
         for (i, response) in responses.iter().enumerate() {
             match response {
                 Ok(height) => {
@@ -661,12 +668,9 @@ impl ChainEndpoint for Ckb4IbcChain {
                     }
                 }
                 Err(e) => {
-                    let tx: TransactionView = txs[i].clone().into();
+                    let tx: TransactionView = txs[i].0.clone().into();
                     let json_tx = serde_json::to_string_pretty(&tx).unwrap();
-                    let error = format!(
-                        "{}\n\n======== transaction info ========\n\n{json_tx}\n",
-                        e.to_string()
-                    );
+                    let error = format!("{e}\n\n======== transaction info ========\n\n{json_tx}\n");
                     return Err(Error::send_tx(error));
                 }
             }
