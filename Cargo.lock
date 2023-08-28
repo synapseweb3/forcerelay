@@ -971,7 +971,7 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=1dc597c#1dc597c9a744c9aa7a5e9d00d9d8654f9d85e6c1"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=aa894e3766333#aa894e3766333e002c7164f23f28f817d6b90023"
 dependencies = [
  "bytes",
  "ethereum-types",
@@ -983,7 +983,7 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=aa894e3766333#aa894e3766333e002c7164f23f28f817d6b90023"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=ac56862#ac56862cd5948f38a4d13d2b14d5229e68175259"
 dependencies = [
  "bytes",
  "ethereum-types",
@@ -2833,7 +2833,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "forcerelay-ckb-sdk"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=264bcf7#264bcf746f42599e514ec97e3d068595c997778f"
+source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=50fa836#50fa8360cbff1aad2f5f2aede5ca009283ceb9e7"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2851,6 +2851,7 @@ dependencies = [
  "serde_with 3.3.0",
  "tiny-keccak",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3624,7 +3625,7 @@ dependencies = [
  "bs58",
  "bytes",
  "ckb-hash 0.108.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=1dc597c)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=ac56862)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3830,7 +3831,7 @@ dependencies = [
  "axon-types",
  "ckb-chain-spec",
  "ckb-hash 0.106.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=1dc597c)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=ac56862)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",

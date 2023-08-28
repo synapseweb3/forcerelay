@@ -62,6 +62,7 @@ use ibc_relayer_types::proofs::Proofs;
 use ibc_relayer_types::signer::Signer;
 use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
+use itertools::Itertools;
 use rlp::Encodable;
 use semver::Version;
 use std::sync::RwLock;
@@ -129,6 +130,7 @@ pub struct Ckb4IbcChain {
     connection_cache:
         RefCell<HashMap<ClientType, (IbcConnections, CellInput, Vec<IdentifiedConnectionEnd>)>>,
     packet_input_data: RefCell<HashMap<(ChannelId, PortId, Sequence), CellInput>>,
+    packet_cache: RefCell<HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
 }
 
 impl Ckb4IbcChain {
@@ -179,6 +181,7 @@ impl Ckb4IbcChain {
             connection_cache: self.connection_cache.borrow(),
             client_outpoints: self.client_outpoints.borrow(),
             packet_input_data: self.packet_input_data.borrow(),
+            packet_cache: self.packet_cache.borrow(),
             chan_contract_outpoint: &self.channel_outpoint,
             packet_contract_outpoint: &self.packet_outpoint,
             conn_contract_outpoint: &self.connection_outpoint,
@@ -243,7 +246,7 @@ impl Ckb4IbcChain {
                             serde_json::from_slice(bytes.as_bytes()).unwrap()
                         }
                     };
-                    let ibc_packet = extract_ibc_packet_from_tx(tx)?;
+                    let (ibc_packet, _) = extract_ibc_packet_from_tx(tx)?;
                     let cell_input = CellInput::new_builder()
                         .previous_output(cell.out_point.into())
                         .build();
@@ -251,7 +254,27 @@ impl Ckb4IbcChain {
                 }
                 Ok(packets)
             });
-        self.rt.block_on(packets)
+
+        let packets = self
+            .rt
+            .block_on(packets)?
+            .into_iter()
+            .map(|(packet, cell_input)| {
+                let channel_id: ChannelId = packet.packet.source_channel_id.parse().unwrap();
+                let port_id: PortId = packet.packet.source_port_id.parse().unwrap();
+                let sequence: Sequence = (packet.packet.sequence as u64).try_into().unwrap();
+
+                self.packet_input_data.borrow_mut().insert(
+                    (channel_id.clone(), port_id.clone(), sequence),
+                    cell_input.clone(),
+                );
+                self.packet_cache
+                    .borrow_mut()
+                    .insert((channel_id, port_id, sequence), packet.clone());
+                (packet, cell_input)
+            })
+            .collect_vec();
+        Ok(packets)
     }
 
     fn fetch_channel_cell_and_extract(
@@ -383,7 +406,7 @@ impl Ckb4IbcChain {
         );
         let (result, _) = self.rt.block_on(tx)?;
         let witness = WitnessArgs::new_builder()
-            .output_type(get_encoded_object(envelope).witness)
+            .output_type(get_encoded_object(&envelope).witness)
             .build()
             .as_bytes()
             .pack();
@@ -513,6 +536,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             channel_cache: RefCell::new(HashMap::new()),
             connection_cache: RefCell::new(HashMap::new()),
             packet_input_data: RefCell::new(HashMap::new()),
+            packet_cache: RefCell::new(HashMap::new()),
         };
         Ok(chain)
     }

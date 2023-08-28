@@ -78,7 +78,7 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         // 3. listen RecvPacket event on ChainB
         info!("wait recv_packet being found on chain_b");
         let mut recv_packets =
-            listen_and_wait_packet_cells(&rt, &chain_b_url, &chain_b_config, |packet| {
+            listen_and_wait_packet_cells(&rt, &chain_b_url, &chain_b_config, false, |packet| {
                 packet.is_recv_packet()
             })?;
         if recv_packets.is_empty() {
@@ -103,10 +103,10 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
             hex::encode(hash)
         );
 
-        // 5. lisen AckPacket event on ChainA
+        // 5. listen AckPacket event on ChainA
         info!("wait ack_packet being found on chain_a");
         let mut ack_packets =
-            listen_and_wait_packet_cells(&rt, &chain_a_url, &chain_a_config, |packet| {
+            listen_and_wait_packet_cells(&rt, &chain_a_url, &chain_a_config, true, |packet| {
                 packet.is_ack_packet()
             })?;
         if ack_packets.is_empty() {

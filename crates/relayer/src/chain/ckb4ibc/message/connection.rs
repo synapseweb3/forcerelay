@@ -60,14 +60,14 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
     };
 
     let old_connection = get_encoded_object(old_ibc_connection_cell);
-    let new_connection = get_encoded_object(new_ibc_connection_cell);
+    let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(converter.get_ibc_connections_input(&client_id)?.clone())
         .output(
             connection_lock,
             get_connection_capacity(),
@@ -129,14 +129,14 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
     };
 
     let old_connection = get_encoded_object(old_ibc_connection_cell);
-    let new_connection = get_encoded_object(new_ibc_connection_cell);
+    let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(converter.get_ibc_connections_input(&client_id)?.clone())
         .output(
             connection_lock,
             get_connection_capacity(),
@@ -186,14 +186,14 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
     let client_id = connection_end.client_id.clone();
 
     let old_connection = get_encoded_object(old_ibc_connection_cell);
-    let new_connection = get_encoded_object(new_ibc_connection_cell);
+    let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(converter.get_ibc_connections_input(&client_id)?.clone())
         .output(
             connection_lock,
             get_connection_capacity(),
@@ -247,14 +247,14 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
     let client_id = connection_end.client_id.clone();
 
     let old_connection = get_encoded_object(old_ibc_connection_cell);
-    let new_connection = get_encoded_object(new_ibc_connection_cell);
+    let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(converter.get_ibc_connections_input(&client_id)?.clone())
         .output(
             connection_lock,
             get_connection_capacity(),

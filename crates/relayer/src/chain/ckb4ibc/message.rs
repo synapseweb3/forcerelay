@@ -7,7 +7,7 @@ use std::{cell::Ref, collections::HashMap};
 
 use crate::{config::ckb4ibc::ChainConfig, error::Error, keyring::Secp256k1KeyPair};
 use ckb_ics_axon::{
-    handler::{IbcChannel, IbcConnections},
+    handler::{IbcChannel, IbcConnections, IbcPacket},
     message::Envelope,
 };
 use ckb_types::{
@@ -76,31 +76,35 @@ macro_rules! convert {
 pub trait MsgToTxConverter {
     fn get_key(&self) -> &Secp256k1KeyPair;
 
-    fn get_ibc_connections(&self, client_id: &str) -> Result<IbcConnections, Error>;
+    fn get_ibc_connections(&self, client_id: &str) -> Result<&IbcConnections, Error>;
 
     fn get_ibc_connections_by_connection_id(
         &self,
         connection_id: &ConnectionId,
-    ) -> Result<IbcConnections, Error>;
+    ) -> Result<&IbcConnections, Error>;
 
     fn get_ibc_connections_by_port_id(
         &self,
         channel_id: &ChannelId,
-    ) -> Result<IbcConnections, Error>;
+    ) -> Result<&IbcConnections, Error>;
 
-    fn get_ibc_connections_input(&self, client_id: &str) -> Result<CellInput, Error>;
+    fn get_ibc_connections_input(&self, client_id: &str) -> Result<&CellInput, Error>;
 
-    fn get_ibc_channel(&self, id: &ChannelId) -> IbcChannel;
+    fn get_ibc_channel(&self, id: &ChannelId) -> Result<&IbcChannel, Error>;
 
-    fn get_ibc_channel_input(&self, channel_id: &ChannelId, port_id: &PortId) -> CellInput;
+    fn get_ibc_channel_input(
+        &self,
+        channel_id: &ChannelId,
+        port_id: &PortId,
+    ) -> Result<&CellInput, Error>;
 
     fn get_client_outpoint(&self, client_id: &str) -> Option<&OutPoint>;
 
-    fn get_conn_contract_outpoint(&self) -> OutPoint;
+    fn get_conn_contract_outpoint(&self) -> &OutPoint;
 
-    fn get_chan_contract_outpoint(&self) -> OutPoint;
+    fn get_chan_contract_outpoint(&self) -> &OutPoint;
 
-    fn get_packet_contract_outpoint(&self) -> OutPoint;
+    fn get_packet_contract_outpoint(&self) -> &OutPoint;
 
     fn get_channel_code_hash(&self) -> Byte32;
 
@@ -108,7 +112,19 @@ pub trait MsgToTxConverter {
 
     fn get_connection_code_hash(&self) -> Byte32;
 
-    fn get_packet_cell_input(&self, chan: ChannelId, port: PortId, seq: Sequence) -> CellInput;
+    fn get_ibc_packet_input(
+        &self,
+        chan: &ChannelId,
+        port: &PortId,
+        seq: &Sequence,
+    ) -> Result<&CellInput, Error>;
+
+    fn get_ibc_packet(
+        &self,
+        chan: &ChannelId,
+        port: &PortId,
+        seq: &Sequence,
+    ) -> Result<&IbcPacket, Error>;
 
     fn get_commitment_prefix(&self) -> Vec<u8>;
 
@@ -122,6 +138,7 @@ pub struct Converter<'a> {
     pub connection_cache:
         Ref<'a, HashMap<ClientType, (IbcConnections, CellInput, Vec<IdentifiedConnectionEnd>)>>,
     pub packet_input_data: Ref<'a, HashMap<(ChannelId, PortId, Sequence), CellInput>>,
+    pub packet_cache: Ref<'a, HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
     pub config: &'a ChainConfig,
     pub client_outpoints: Ref<'a, HashMap<ClientType, OutPoint>>,
     pub chan_contract_outpoint: &'a OutPoint,
@@ -135,10 +152,10 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         todo!()
     }
 
-    fn get_ibc_connections(&self, client_id: &str) -> Result<IbcConnections, Error> {
+    fn get_ibc_connections(&self, client_id: &str) -> Result<&IbcConnections, Error> {
         let client_type = self.config.lc_client_type(client_id)?;
         if let Some((connection, _, _)) = self.connection_cache.get(&client_type) {
-            Ok(connection.clone())
+            Ok(connection)
         } else {
             Err(Error::query(format!(
                 "client_type {client_type} isn't in cache"
@@ -149,7 +166,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     fn get_ibc_connections_by_connection_id(
         &self,
         connection_id: &ConnectionId,
-    ) -> Result<IbcConnections, Error> {
+    ) -> Result<&IbcConnections, Error> {
         let ibc_connections = self.connection_cache.iter().find(|(_, (v, _, _))| {
             v.connections
                 .iter()
@@ -157,7 +174,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
                 .any(|(idx, c)| connection_id == &generate_connection_id(idx as u16, &c.client_id))
         });
         if let Some((_, (value, _, _))) = ibc_connections {
-            Ok(value.clone())
+            Ok(value)
         } else {
             Err(Error::query(format!(
                 "connection {connection_id} not found in cache"
@@ -168,7 +185,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     fn get_ibc_connections_by_port_id(
         &self,
         channel_id: &ChannelId,
-    ) -> Result<IbcConnections, Error> {
+    ) -> Result<&IbcConnections, Error> {
         let channel = self
             .channel_cache
             .get(channel_id)
@@ -178,10 +195,10 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         self.get_ibc_connections_by_connection_id(&connection_id)
     }
 
-    fn get_ibc_connections_input(&self, client_id: &str) -> Result<CellInput, Error> {
+    fn get_ibc_connections_input(&self, client_id: &str) -> Result<&CellInput, Error> {
         let client_type = self.config.lc_client_type(client_id)?;
         if let Some((_, cell_input, _)) = self.connection_cache.get(&client_type) {
-            Ok(cell_input.clone())
+            Ok(cell_input)
         } else {
             Err(Error::query(format!(
                 "client_type {client_type} isn't in cache"
@@ -189,15 +206,20 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         }
     }
 
-    fn get_ibc_channel(&self, channel_id: &ChannelId) -> IbcChannel {
-        self.channel_cache.get(channel_id).unwrap().clone()
+    fn get_ibc_channel(&self, channel_id: &ChannelId) -> Result<&IbcChannel, Error> {
+        self.channel_cache
+            .get(channel_id)
+            .ok_or(Error::query(format!("no channel_id {channel_id}")))
     }
 
-    fn get_ibc_channel_input(&self, channel_id: &ChannelId, port_id: &PortId) -> CellInput {
+    fn get_ibc_channel_input(
+        &self,
+        channel_id: &ChannelId,
+        port_id: &PortId,
+    ) -> Result<&CellInput, Error> {
         self.channel_input_data
             .get(&(channel_id.clone(), port_id.clone()))
-            .unwrap()
-            .clone()
+            .ok_or(Error::query(format!("no channel({channel_id}/{port_id})")))
     }
 
     fn get_client_outpoint(&self, client_id: &str) -> Option<&OutPoint> {
@@ -207,16 +229,16 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         self.client_outpoints.get(&client_type)
     }
 
-    fn get_conn_contract_outpoint(&self) -> OutPoint {
-        self.conn_contract_outpoint.clone()
+    fn get_conn_contract_outpoint(&self) -> &OutPoint {
+        self.conn_contract_outpoint
     }
 
-    fn get_chan_contract_outpoint(&self) -> OutPoint {
-        self.chan_contract_outpoint.clone()
+    fn get_chan_contract_outpoint(&self) -> &OutPoint {
+        self.chan_contract_outpoint
     }
 
-    fn get_packet_contract_outpoint(&self) -> OutPoint {
-        self.packet_contract_outpoint.clone()
+    fn get_packet_contract_outpoint(&self) -> &OutPoint {
+        self.packet_contract_outpoint
     }
 
     fn get_channel_code_hash(&self) -> Byte32 {
@@ -231,16 +253,30 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         get_script_hash(&self.config.connection_type_args)
     }
 
-    fn get_packet_cell_input(
+    fn get_ibc_packet_input(
         &self,
-        channel_id: ChannelId,
-        port_id: PortId,
-        sequence: Sequence,
-    ) -> CellInput {
+        channel_id: &ChannelId,
+        port_id: &PortId,
+        sequence: &Sequence,
+    ) -> Result<&CellInput, Error> {
         self.packet_input_data
-            .get(&(channel_id, port_id, sequence))
-            .unwrap()
-            .clone()
+            .get(&(channel_id.clone(), port_id.clone(), *sequence))
+            .ok_or(Error::query(format!(
+                "no packet({channel_id}/{port_id}/{sequence})"
+            )))
+    }
+
+    fn get_ibc_packet(
+        &self,
+        channel_id: &ChannelId,
+        port_id: &PortId,
+        sequence: &Sequence,
+    ) -> Result<&IbcPacket, Error> {
+        self.packet_cache
+            .get(&(channel_id.clone(), port_id.clone(), *sequence))
+            .ok_or(Error::query(format!(
+                "no packet({channel_id}/{port_id}/{sequence})"
+            )))
     }
 
     fn get_commitment_prefix(&self) -> Vec<u8> {

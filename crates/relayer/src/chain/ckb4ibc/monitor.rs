@@ -19,7 +19,7 @@ use ibc_relayer_types::core::ics03_connection::events::{
 };
 use ibc_relayer_types::core::ics04_channel::channel::State;
 use ibc_relayer_types::core::ics04_channel::events::{
-    AcknowledgePacket, OpenInit as ChannelOpenInit, OpenTry as ChannelOpenTry, SendPacket,
+    OpenInit as ChannelOpenInit, OpenTry as ChannelOpenTry, SendPacket, WriteAcknowledgement,
 };
 use ibc_relayer_types::core::ics04_channel::packet::{Packet, Sequence};
 use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
@@ -338,9 +338,9 @@ impl Ckb4IbcEventMonitor {
                 key,
                 &|tx| {
                     let hash = tx.hash.clone();
-                    let obj = extract_ibc_packet_from_tx(tx)
+                    let obj_with_content = extract_ibc_packet_from_tx(tx)
                         .map_err(|_| Error::collect_events_failed("packet".to_string()))?;
-                    Ok((obj, hash))
+                    Ok((obj_with_content, hash))
                 },
                 5,
             )
@@ -348,7 +348,7 @@ impl Ckb4IbcEventMonitor {
 
         let events = ibc_packets
             .into_iter()
-            .filter(|((packet, tx), _)| {
+            .filter(|(((packet, _), tx), _)| {
                 if packet.status == PacketStatus::Ack
                     || packet.status == PacketStatus::Recv
                     || self.cache_set.read().unwrap().has(tx)
@@ -358,45 +358,48 @@ impl Ckb4IbcEventMonitor {
                 self.cache_set.write().unwrap().insert(tx.clone());
                 true
             })
-            .map(|((packet, tx), block_number)| match packet.status {
-                PacketStatus::Send => {
-                    info!(
-                        "🫡  {} received SendPacket({}) event, from {}/{} to {}/{}",
-                        self.config.id,
-                        packet.packet.sequence,
-                        packet.packet.source_channel_id,
-                        packet.packet.source_port_id,
-                        packet.packet.destination_channel_id,
-                        packet.packet.destination_port_id,
-                    );
-                    IbcEventWithHeight {
-                        event: IbcEvent::SendPacket(SendPacket {
-                            packet: convert_packet(packet),
-                        }),
-                        height: Height::from_noncosmos_height(block_number),
-                        tx_hash: tx.into(),
+            .map(
+                |(((packet, content), tx), block_number)| match packet.status {
+                    PacketStatus::Send => {
+                        info!(
+                            "🫡  {} received SendPacket({}) event, from {}/{} to {}/{}",
+                            self.config.id,
+                            packet.packet.sequence,
+                            packet.packet.source_channel_id,
+                            packet.packet.source_port_id,
+                            packet.packet.destination_channel_id,
+                            packet.packet.destination_port_id,
+                        );
+                        IbcEventWithHeight {
+                            event: IbcEvent::SendPacket(SendPacket {
+                                packet: convert_packet(packet),
+                            }),
+                            height: Height::from_noncosmos_height(block_number),
+                            tx_hash: tx.into(),
+                        }
                     }
-                }
-                PacketStatus::WriteAck => {
-                    info!(
-                        "🫡  {} received WriteAck({}) event, from {}/{} to {}/{}",
-                        self.config.id,
-                        packet.packet.sequence,
-                        packet.packet.source_channel_id,
-                        packet.packet.source_port_id,
-                        packet.packet.destination_channel_id,
-                        packet.packet.destination_port_id,
-                    );
-                    IbcEventWithHeight {
-                        event: IbcEvent::AcknowledgePacket(AcknowledgePacket {
-                            packet: convert_packet(packet),
-                        }),
-                        height: Height::from_noncosmos_height(block_number),
-                        tx_hash: tx.into(),
+                    PacketStatus::WriteAck => {
+                        info!(
+                            "🫡  {} received WriteAck({}) event, from {}/{} to {}/{}",
+                            self.config.id,
+                            packet.packet.sequence,
+                            packet.packet.source_channel_id,
+                            packet.packet.source_port_id,
+                            packet.packet.destination_channel_id,
+                            packet.packet.destination_port_id,
+                        );
+                        IbcEventWithHeight {
+                            event: IbcEvent::WriteAcknowledgement(WriteAcknowledgement {
+                                packet: convert_packet(packet),
+                                ack: content,
+                            }),
+                            height: Height::from_noncosmos_height(block_number),
+                            tx_hash: tx.into(),
+                        }
                     }
-                }
-                PacketStatus::Ack | PacketStatus::Recv => unreachable!(),
-            })
+                    PacketStatus::Ack | PacketStatus::Recv => unreachable!(),
+                },
+            )
             .collect::<Vec<_>>();
 
         let tip_block_number: u64 = self

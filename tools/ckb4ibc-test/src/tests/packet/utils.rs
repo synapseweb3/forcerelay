@@ -121,7 +121,7 @@ fn complete_partial_transaction(
                 output_indices: vec![],
             },
         )
-        .map_err(error_cast)?;
+        .map_err(|e| tx_error_cast(e, unsigned_tx))?;
     Ok(signed_tx)
 }
 
@@ -265,18 +265,23 @@ pub fn listen_and_wait_packet_cells<F: Fn(&PacketCell) -> bool>(
     rt: &Runtime,
     ckb_url: &str,
     sdk_config: &SdkConfig,
+    always_wait: bool,
     filter: F,
 ) -> EyreResult<Vec<PacketCell>> {
     let sdk_rpc = SdkRpcClient::new(ckb_url.to_owned());
     let stream = PacketCell::subscribe(sdk_rpc, sdk_config.clone());
     pin_mut!(stream);
     if let Some(packets) = rt.block_on(stream.next()) {
-        let recv_packets = packets
+        let packets = packets
             .map_err(error_cast)?
             .into_iter()
             .filter(|packet| filter(packet))
-            .collect();
-        Ok(recv_packets)
+            .collect::<Vec<_>>();
+        if always_wait && packets.is_empty() {
+            sleep(Duration::from_secs(3));
+            return listen_and_wait_packet_cells(rt, ckb_url, sdk_config, always_wait, filter);
+        }
+        Ok(packets)
     } else {
         Err(eyre!("failed to listen packet cells"))
     }

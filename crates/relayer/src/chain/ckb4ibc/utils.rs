@@ -42,8 +42,8 @@ pub struct EncodedObject {
     pub data: Bytes,
 }
 
-pub fn get_encoded_object<T: rlp::Encodable>(obj: T) -> EncodedObject {
-    let content = rlp::encode(&obj);
+pub fn get_encoded_object<T: rlp::Encodable>(obj: &T) -> EncodedObject {
+    let content = rlp::encode(obj);
     let slice = content.as_ref();
     let hash = keccak256(slice);
     EncodedObject {
