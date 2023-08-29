@@ -1,3 +1,4 @@
+use ckb_ics_axon::consts::PACKET_CELL_CAPACITY;
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
 use ckb_sdk::rpc::ckb_light_client::{Order, ScriptType, SearchKey};
 use ckb_sdk::traits::SecpCkbRawKeySigner;
@@ -5,13 +6,11 @@ use ckb_sdk::unlock::{ScriptSigner, SecpSighashScriptSigner};
 use ckb_sdk::{AddressPayload, CkbRpcClient, HumanCapacity};
 use ckb_sdk::{ScriptGroup, ScriptGroupType};
 use ckb_types::core::{ScriptHashType, TransactionBuilder, TransactionView};
-use ckb_types::packed::{CellDep, Script};
+use ckb_types::packed::{CellDep, CellOutput, Script};
 use ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ckb_types::H256;
 use eyre::{eyre, Result as EyreResult};
-use forcerelay_ckb_sdk::ckb_ics_axon::handler::{IbcPacket, PacketStatus};
 use forcerelay_ckb_sdk::ckb_ics_axon::message::Envelope;
-use forcerelay_ckb_sdk::ckb_ics_axon::object::Packet;
 use forcerelay_ckb_sdk::ckb_rpc_client::CkbRpcClient as SdkRpcClient;
 use forcerelay_ckb_sdk::config::{AddressOrScript, Config as SdkConfig};
 use forcerelay_ckb_sdk::search::{
@@ -22,7 +21,7 @@ use forcerelay_ckb_sdk::transaction::{
     add_ibc_envelope, assemble_consume_ack_packet_partial_transaction,
     assemble_send_packet_partial_transaction, assemble_write_ack_partial_transaction,
 };
-use futures::{pin_mut, StreamExt};
+use futures::{pin_mut, StreamExt, TryStreamExt};
 use ibc_test_framework::prelude::*;
 use relayer::chain::ckb::prelude::{CkbReader, TxCompleter};
 use relayer::chain::ckb::rpc_client::RpcClient;
@@ -111,6 +110,7 @@ fn complete_partial_transaction(
         add_ibc_envelope(unsigned_tx_without_envelope.as_advanced_builder(), &value).build()
     });
     let signature_end = unsigned_tx.inputs().len();
+    println!("signature_start = {signature_start}, signature_end = {signature_end}");
     let signed_tx = signer
         .sign_tx(
             &unsigned_tx,
@@ -223,30 +223,20 @@ pub fn generate_send_packet_transaction(
     sdk_config: &SdkConfig,
     ckb_url: &str,
     signer: &SecpSighashScriptSigner,
-    target_port_id: String,
-    target_channel_id: String,
     payload: Vec<u8>,
 ) -> EyreResult<TransactionView> {
     // prepare ingredients
     let (metadata_celldep, channel_contract_celldep, _, ibc_channel) =
         prepare_celldeps_and_channel(rt, ckb_url, sdk_config)?;
-    let send_packet = IbcPacket {
-        packet: Packet {
-            destination_port_id: target_port_id,
-            destination_channel_id: target_channel_id,
-            data: payload,
-            ..Default::default()
-        },
-        tx_hash: None,
-        status: PacketStatus::Send,
-    };
     // assemble partial transaction
     let (send_packet_tx, envelope) = assemble_send_packet_partial_transaction(
         metadata_celldep,
         channel_contract_celldep,
         sdk_config,
         ibc_channel,
-        send_packet,
+        payload,
+        0,
+        0,
     )
     .map_err(error_cast)?;
     // complete partial transaction
@@ -261,27 +251,18 @@ pub fn generate_send_packet_transaction(
     Ok(signed_tx)
 }
 
-pub fn listen_and_wait_packet_cells<F: Fn(&PacketCell) -> bool>(
+pub fn listen_and_wait_packet_cell<F: Fn(&PacketCell) -> bool>(
     rt: &Runtime,
     ckb_url: &str,
     sdk_config: &SdkConfig,
-    always_wait: bool,
     filter: F,
-) -> EyreResult<Vec<PacketCell>> {
+) -> EyreResult<PacketCell> {
     let sdk_rpc = SdkRpcClient::new(ckb_url.to_owned());
-    let stream = PacketCell::subscribe(sdk_rpc, sdk_config.clone());
+    let stream = PacketCell::subscribe(sdk_rpc, sdk_config.clone())
+        .try_filter(|cell| futures::future::ready(filter(cell)));
     pin_mut!(stream);
-    if let Some(packets) = rt.block_on(stream.next()) {
-        let packets = packets
-            .map_err(error_cast)?
-            .into_iter()
-            .filter(|packet| filter(packet))
-            .collect::<Vec<_>>();
-        if always_wait && packets.is_empty() {
-            sleep(Duration::from_secs(3));
-            return listen_and_wait_packet_cells(rt, ckb_url, sdk_config, always_wait, filter);
-        }
-        Ok(packets)
+    if let Some(packet) = rt.block_on(stream.next()) {
+        Ok(packet.map_err(error_cast)?)
     } else {
         Err(eyre!("failed to listen packet cells"))
     }
@@ -330,9 +311,16 @@ pub fn generate_consume_ack_packet_transaction(
 ) -> EyreResult<TransactionView> {
     // prepare ingredients
     let (_, _, packet_contract_celldep, _) = prepare_celldeps_and_channel(rt, ckb_url, sdk_config)?;
-    let consume_ack_packet_tx =
+    let mut consume_ack_packet_tx =
         assemble_consume_ack_packet_partial_transaction(packet_contract_celldep, ack_packet)
             .map_err(error_cast)?;
+    // add output payback cell mannually
+    let (lock, _, _) = get_lock_script(PRIVKEY);
+    let payback_cell = CellOutput::new_builder()
+        .lock(lock)
+        .capacity(PACKET_CELL_CAPACITY.pack())
+        .build();
+    consume_ack_packet_tx = consume_ack_packet_tx.output(payback_cell);
     // complete partial transaction
     let signed_tx =
         complete_partial_transaction(rt, consume_ack_packet_tx, ckb_url, sdk_config, None, signer)?;

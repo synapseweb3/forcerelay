@@ -1,12 +1,9 @@
-use ckb_types::prelude::Entity;
 use ibc_test_framework::prelude::*;
 use log::info;
 use tokio::runtime::Runtime;
 
 mod utils;
 use utils::*;
-
-use crate::generator::{get_lock_script, PRIVKEY};
 
 pub struct CKB4IbcPacketTest {}
 
@@ -65,8 +62,6 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
             &chain_a_config,
             &chain_a_url,
             &chain_a_signer,
-            channels.port_b.to_string(),
-            channels.channel_id_b.to_string(),
             message,
         )?;
         let hash = send_transaction(&chain_a_url, send_packet_tx)?;
@@ -77,13 +72,10 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
 
         // 3. listen RecvPacket event on ChainB
         info!("wait recv_packet being found on chain_b");
-        let mut recv_packets =
-            listen_and_wait_packet_cells(&rt, &chain_b_url, &chain_b_config, false, |packet| {
+        let recv_packet =
+            listen_and_wait_packet_cell(&rt, &chain_b_url, &chain_b_config, |packet| {
                 packet.is_recv_packet()
             })?;
-        if recv_packets.is_empty() {
-            return Err(eyre!("not found recv packet on chain_b {}", chains.chain_id_b()).into());
-        };
         info!("🍻 successfully find recv_packet cell on chain_b");
 
         // 4. trigger WriteAck event on ChainB
@@ -94,7 +86,7 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
             &chain_b_config,
             &chain_b_url,
             &chain_b_signer,
-            recv_packets.remove(0),
+            recv_packet,
             acknowledgemnt,
         )?;
         let hash = send_transaction(&chain_b_url, write_ack_tx)?;
@@ -105,13 +97,10 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
 
         // 5. listen AckPacket event on ChainA
         info!("wait ack_packet being found on chain_a");
-        let mut ack_packets =
-            listen_and_wait_packet_cells(&rt, &chain_a_url, &chain_a_config, true, |packet| {
+        let ack_packet =
+            listen_and_wait_packet_cell(&rt, &chain_a_url, &chain_a_config, |packet| {
                 packet.is_ack_packet()
             })?;
-        if ack_packets.is_empty() {
-            return Err(eyre!("not found ack packet on chain_a {}", chains.chain_id_a()).into());
-        };
         info!("🍻 successfully find ack_packet cell on chain_a");
 
         // 6. comsune AckPacket cell on ChainA
@@ -121,7 +110,7 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
             &chain_a_config,
             &chain_a_url,
             &chain_a_signer,
-            ack_packets.remove(0),
+            ack_packet,
         )?;
         let hash = send_transaction(&chain_a_url, consume_ack_packet_tx)?;
         info!(
@@ -143,13 +132,6 @@ fn test_send_packet() {
 
     let chain_id_a: ChainId = "ckb4ibc-0".parse().unwrap();
     let channel_id_a: ChannelId = "channel-0".parse().unwrap();
-    let channel_id_b: ChannelId = "channel-1".parse().unwrap();
-    let port_id: PortId = {
-        let (script, _, _) = get_lock_script(PRIVKEY);
-        hex::encode(script.calc_script_hash().as_slice())
-            .parse()
-            .unwrap()
-    };
 
     let (chain_a_config, chain_a_url, chain_a_signer) =
         prepare_artificials(&config, &chain_id_a, &channel_id_a).unwrap();
@@ -160,8 +142,6 @@ fn test_send_packet() {
         &chain_a_config,
         &chain_a_url,
         &chain_a_signer,
-        port_id.to_string(),
-        channel_id_b.to_string(),
         message,
     )
     .unwrap();
