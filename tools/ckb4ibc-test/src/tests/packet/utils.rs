@@ -1,11 +1,10 @@
-use ckb_ics_axon::consts::PACKET_CELL_CAPACITY;
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
 use ckb_sdk::rpc::ckb_light_client::{Order, ScriptType, SearchKey};
 use ckb_sdk::traits::SecpCkbRawKeySigner;
 use ckb_sdk::unlock::{ScriptSigner, SecpSighashScriptSigner};
 use ckb_sdk::{AddressPayload, CkbRpcClient, HumanCapacity};
 use ckb_sdk::{ScriptGroup, ScriptGroupType};
-use ckb_types::core::{ScriptHashType, TransactionBuilder, TransactionView};
+use ckb_types::core::{Capacity, ScriptHashType, TransactionBuilder, TransactionView};
 use ckb_types::packed::{CellDep, CellOutput, Script};
 use ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ckb_types::H256;
@@ -63,11 +62,7 @@ fn prepare_celldeps_and_channel(
     ))
 }
 
-fn fill_transaction_with_secp256k1_change(
-    rt: &Runtime,
-    ckb_url: &str,
-    tx: TransactionView,
-) -> EyreResult<TransactionView> {
+fn collect_inputs_capacity(rt: &Runtime, ckb_url: &str, tx: &TransactionView) -> EyreResult<u64> {
     let rpc_client = RpcClient::new(&ckb_url.parse().unwrap(), &ckb_url.parse().unwrap());
     let mut inputs_capacity = 0u64;
     for input in tx.input_pts_iter() {
@@ -87,6 +82,16 @@ fn fill_transaction_with_secp256k1_change(
         let capacity: u64 = tx.inner.outputs[index as usize].capacity.into();
         inputs_capacity += capacity;
     }
+    Ok(inputs_capacity)
+}
+
+fn fill_transaction_with_secp256k1_change(
+    rt: &Runtime,
+    ckb_url: &str,
+    tx: TransactionView,
+) -> EyreResult<TransactionView> {
+    let inputs_capacity = collect_inputs_capacity(rt, ckb_url, &tx)?;
+    let rpc_client = RpcClient::new(&ckb_url.parse().unwrap(), &ckb_url.parse().unwrap());
     let (_, _, address) = get_lock_script(PRIVKEY);
     let (tx, _) = rt
         .block_on(rpc_client.complete_tx_with_secp256k1_change(tx, &address, inputs_capacity, 3000))
@@ -110,7 +115,6 @@ fn complete_partial_transaction(
         add_ibc_envelope(unsigned_tx_without_envelope.as_advanced_builder(), &value).build()
     });
     let signature_end = unsigned_tx.inputs().len();
-    println!("signature_start = {signature_start}, signature_end = {signature_end}");
     let signed_tx = signer
         .sign_tx(
             &unsigned_tx,
@@ -311,18 +315,29 @@ pub fn generate_consume_ack_packet_transaction(
 ) -> EyreResult<TransactionView> {
     // prepare ingredients
     let (_, _, packet_contract_celldep, _) = prepare_celldeps_and_channel(rt, ckb_url, sdk_config)?;
-    let mut consume_ack_packet_tx =
+    let (mut consume_ack_packet_tx, envelope) =
         assemble_consume_ack_packet_partial_transaction(packet_contract_celldep, ack_packet)
             .map_err(error_cast)?;
     // add output payback cell mannually
+    let tx = consume_ack_packet_tx.build();
+    let inputs_capacity = collect_inputs_capacity(rt, ckb_url, &tx)?;
     let (lock, _, _) = get_lock_script(PRIVKEY);
     let payback_cell = CellOutput::new_builder()
         .lock(lock)
-        .capacity(PACKET_CELL_CAPACITY.pack())
+        .capacity(Capacity::shannons(inputs_capacity).pack())
         .build();
-    consume_ack_packet_tx = consume_ack_packet_tx.output(payback_cell);
+    consume_ack_packet_tx = tx
+        .as_advanced_builder()
+        .output(payback_cell)
+        .output_data(Default::default());
     // complete partial transaction
-    let signed_tx =
-        complete_partial_transaction(rt, consume_ack_packet_tx, ckb_url, sdk_config, None, signer)?;
+    let signed_tx = complete_partial_transaction(
+        rt,
+        consume_ack_packet_tx,
+        ckb_url,
+        sdk_config,
+        Some(envelope),
+        signer,
+    )?;
     Ok(signed_tx)
 }

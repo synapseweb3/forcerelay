@@ -2,16 +2,13 @@ use std::str::FromStr;
 
 use crate::config::ckb4ibc::ChainConfig;
 use crate::error::Error;
-use ckb_ics_axon::consts::{
-    CHANNEL_CELL_CAPACITY, CHANNEL_ID_PREFIX, CONNECTION_CELL_CAPACITY, CONNECTION_ID_PREFIX,
-    PACKET_CELL_CAPACITY,
-};
+use ckb_ics_axon::consts::{CHANNEL_ID_PREFIX, CONNECTION_ID_PREFIX};
 use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey, SearchKeyFilter};
 use ckb_sdk::NetworkType;
-use ckb_types::core::{Capacity, ScriptHashType};
+use ckb_types::core::ScriptHashType;
 use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script};
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::{h256, H256};
@@ -210,18 +207,6 @@ pub fn get_search_key_with_sudt(
         group_by_transaction: None,
         script_search_mode: None,
     })
-}
-
-pub fn get_connection_capacity() -> Capacity {
-    Capacity::bytes(CONNECTION_CELL_CAPACITY as usize).unwrap()
-}
-
-pub fn get_channel_capacity() -> Capacity {
-    Capacity::bytes(CHANNEL_CELL_CAPACITY as usize).unwrap()
-}
-
-pub fn get_packet_capacity() -> Capacity {
-    Capacity::bytes(PACKET_CELL_CAPACITY as usize).unwrap()
 }
 
 pub fn get_dummy_merkle_proof(height: Height) -> Proofs {

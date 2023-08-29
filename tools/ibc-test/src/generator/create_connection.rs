@@ -9,7 +9,7 @@ use ckb_sdk::{
     ScriptGroup, ScriptGroupType,
 };
 use ckb_types::{
-    core::{DepType, ScriptHashType, TransactionView},
+    core::{Capacity, DepType, ScriptHashType, TransactionView},
     packed::{BytesOpt, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs},
     prelude::{Builder, Entity, Pack},
     H256,
@@ -73,6 +73,10 @@ pub fn generate_create_connection(
     .as_slice()
     .pack();
     println!("connection lock args: {:?}", connection_lock_args);
+
+    let connection = IbcConnections::default();
+    let connection_data = rlp::encode(&connection);
+    let hash = keccak256(&connection_data).as_slice().pack();
     let connection_output = CellOutput::new_builder()
         .lock(
             Script::new_builder()
@@ -81,12 +85,8 @@ pub fn generate_create_connection(
                 .args(connection_lock_args)
                 .build(),
         )
-        .capacity(30_000_000_000u64.pack())
-        .build();
-
-    let connection = IbcConnections::default();
-    let connection_data = rlp::encode(&connection);
-    let hash = keccak256(&connection_data);
+        .build_exact_capacity(Capacity::bytes(hash.len()).unwrap())
+        .unwrap();
 
     let (lock_script, secret_key, _) = get_lock_script(PRIVKEY);
     let change_output = CellOutput::new_builder()
@@ -107,7 +107,7 @@ pub fn generate_create_connection(
         .input(input)
         .output(connection_output)
         .output(change_output)
-        .output_data(hash.as_slice().pack())
+        .output_data(hash)
         .output_data(empty_data)
         .witness(
             WitnessArgs::new_builder()

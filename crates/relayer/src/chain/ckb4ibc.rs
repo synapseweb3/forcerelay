@@ -124,12 +124,14 @@ pub struct Ckb4IbcChain {
     counterparty_client_type: WatchSender<Option<ClientType>>,
 
     client_outpoints: RefCell<HashMap<ClientType, OutPoint>>,
-    channel_input_data: RefCell<HashMap<(ChannelId, PortId), CellInput>>,
+    channel_input_data: RefCell<HashMap<(ChannelId, PortId), (CellInput, u64)>>,
     channel_cache: RefCell<HashMap<ChannelId, IbcChannel>>,
     #[allow(clippy::type_complexity)]
-    connection_cache:
-        RefCell<HashMap<ClientType, (IbcConnections, CellInput, Vec<IdentifiedConnectionEnd>)>>,
-    packet_input_data: RefCell<HashMap<(ChannelId, PortId, Sequence), CellInput>>,
+    connection_cache: RefCell<
+        HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>,
+    >,
+    #[allow(clippy::type_complexity)]
+    packet_input_data: RefCell<HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>>,
     packet_cache: RefCell<HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
 }
 
@@ -250,7 +252,8 @@ impl Ckb4IbcChain {
                     let cell_input = CellInput::new_builder()
                         .previous_output(cell.out_point.into())
                         .build();
-                    packets.push((ibc_packet, cell_input));
+                    let capacity: u64 = cell.output.capacity.into();
+                    packets.push((ibc_packet, cell_input, capacity));
                 }
                 Ok(packets)
             });
@@ -259,14 +262,14 @@ impl Ckb4IbcChain {
             .rt
             .block_on(packets)?
             .into_iter()
-            .map(|(packet, cell_input)| {
+            .map(|(packet, cell_input, capacity)| {
                 let channel_id: ChannelId = packet.packet.source_channel_id.parse().unwrap();
                 let port_id: PortId = packet.packet.source_port_id.parse().unwrap();
                 let sequence: Sequence = (packet.packet.sequence as u64).try_into().unwrap();
 
                 self.packet_input_data.borrow_mut().insert(
                     (channel_id.clone(), port_id.clone(), sequence),
-                    cell_input.clone(),
+                    (cell_input.clone(), capacity),
                 );
                 self.packet_cache
                     .borrow_mut()
@@ -326,26 +329,22 @@ impl Ckb4IbcChain {
                 let input = CellInput::new_builder()
                     .previous_output(cell.out_point.clone().into())
                     .build();
-                Ok((channel_end, input))
+                let capacity: u64 = cell.output.capacity.into();
+                Ok((channel_end, input, capacity))
             });
 
-        let ((channel, ibc_channel_end), cell_input) = self.rt.block_on(channel_future)?;
+        let ((channel, ibc_channel_end), cell_input, capacity) =
+            self.rt.block_on(channel_future)?;
 
-        self.channel_input_data
-            .borrow_mut()
-            .insert((channel.channel_id.clone(), channel.port_id), cell_input);
+        self.channel_input_data.borrow_mut().insert(
+            (channel.channel_id.clone(), channel.port_id),
+            (cell_input, capacity),
+        );
         self.channel_cache
             .borrow_mut()
             .insert(channel.channel_id, ibc_channel_end.clone());
 
         Ok((channel.channel_end, ibc_channel_end))
-    }
-
-    fn clear_cache(&mut self) {
-        self.channel_input_data.get_mut().clear();
-        self.channel_cache.get_mut().clear();
-        self.packet_input_data.get_mut().clear();
-        self.connection_cache.get_mut().clear();
     }
 
     fn query_connection_and_cache(&self) -> Result<(), Error> {
@@ -365,14 +364,15 @@ impl Ckb4IbcChain {
                     let cell_input = CellInput::new_builder()
                         .previous_output(cell.out_point.into())
                         .build();
+                    let capacity: u64 = cell.output.capacity.into();
                     let client_id = hex::encode(cell.output.lock.args.into_bytes());
-                    resps.push((tx, cell_input, client_id));
+                    resps.push((tx, cell_input, capacity, client_id));
                 }
                 Ok(resps)
             });
         let mut cache = self.connection_cache.borrow_mut();
         let prefix = self.query_commitment_prefix()?;
-        for (transaction, cell_input, client_id) in self.rt.block_on(future)? {
+        for (transaction, cell_input, capacity, client_id) in self.rt.block_on(future)? {
             let tx = transaction
                 .expect("empty transaction response")
                 .transaction
@@ -385,9 +385,19 @@ impl Ckb4IbcChain {
             };
             let (connections, ibc_connection) = extract_connections_from_tx(tx, &prefix)?;
             let client_type = self.config.lc_client_type(&client_id)?;
-            cache.insert(client_type, (ibc_connection, cell_input, connections));
+            cache.insert(
+                client_type,
+                (ibc_connection, cell_input, capacity, connections),
+            );
         }
         Ok(())
+    }
+
+    fn clear_cache(&mut self) {
+        self.channel_input_data.get_mut().clear();
+        self.channel_cache.get_mut().clear();
+        self.packet_input_data.get_mut().clear();
+        self.connection_cache.get_mut().clear();
     }
 
     pub fn complete_tx_with_secp256k1_change_and_envelope(
@@ -404,19 +414,31 @@ impl Ckb4IbcChain {
             input_capacity,
             fee_rate,
         );
-        let (result, _) = self.rt.block_on(tx)?;
+        let (tx, extra_inputs) = self.rt.block_on(tx)?;
+
+        let total_inputs_capacity = extra_inputs
+            .into_iter()
+            .map(|v| Unpack::<u64>::unpack(&v.capacity()))
+            .sum::<u64>()
+            + input_capacity;
+        let total_outputs_capacity = tx.outputs_capacity().unwrap().as_u64();
+        assert!(
+            total_inputs_capacity > total_outputs_capacity,
+            "capacity overflow: {total_inputs_capacity} > {total_outputs_capacity}"
+        );
+
         let witness = WitnessArgs::new_builder()
             .output_type(get_encoded_object(&envelope).witness)
             .build()
             .as_bytes()
             .pack();
-        let result = result
+        let tx = tx
             .as_advanced_builder()
             // placeholder for the secp256k1 script, it will be used in the signing step
             .witness(WitnessArgs::new_builder().build().as_bytes().pack())
             .witness(witness)
             .build();
-        Ok(result)
+        Ok(tx)
     }
 
     fn counterparty_client_type(&self) -> ClientType {
@@ -893,7 +915,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .connection_cache
             .borrow()
             .iter()
-            .flat_map(|(_, (_, _, connection))| connection.clone())
+            .flat_map(|(_, (_, _, _, connection))| connection.clone())
             .collect();
         Ok(connections)
     }
@@ -904,7 +926,7 @@ impl ChainEndpoint for Ckb4IbcChain {
     ) -> Result<Vec<ConnectionId>, Error> {
         self.query_connection_and_cache()?;
         let client_type = self.config.lc_client_type(&request.client_id.to_string())?;
-        if let Some((_, _, connection)) = self.connection_cache.borrow().get(&client_type) {
+        if let Some((_, _, _, connection)) = self.connection_cache.borrow().get(&client_type) {
             self.sync_counterparty_client_type(client_type);
             let connection_ids = connection.iter().map(|v| v.connection_id.clone()).collect();
             Ok(connection_ids)

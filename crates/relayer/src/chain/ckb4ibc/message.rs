@@ -88,7 +88,7 @@ pub trait MsgToTxConverter {
         channel_id: &ChannelId,
     ) -> Result<&IbcConnections, Error>;
 
-    fn get_ibc_connections_input(&self, client_id: &str) -> Result<&CellInput, Error>;
+    fn get_ibc_connections_input(&self, client_id: &str) -> Result<(&CellInput, u64), Error>;
 
     fn get_ibc_channel(&self, id: &ChannelId) -> Result<&IbcChannel, Error>;
 
@@ -96,7 +96,7 @@ pub trait MsgToTxConverter {
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-    ) -> Result<&CellInput, Error>;
+    ) -> Result<(&CellInput, u64), Error>;
 
     fn get_client_outpoint(&self, client_id: &str) -> Option<&OutPoint>;
 
@@ -117,7 +117,7 @@ pub trait MsgToTxConverter {
         chan: &ChannelId,
         port: &PortId,
         seq: &Sequence,
-    ) -> Result<&CellInput, Error>;
+    ) -> Result<(&CellInput, u64), Error>;
 
     fn get_ibc_packet(
         &self,
@@ -132,12 +132,15 @@ pub trait MsgToTxConverter {
 }
 
 pub struct Converter<'a> {
-    pub channel_input_data: Ref<'a, HashMap<(ChannelId, PortId), CellInput>>,
+    pub channel_input_data: Ref<'a, HashMap<(ChannelId, PortId), (CellInput, u64)>>,
     pub channel_cache: Ref<'a, HashMap<ChannelId, IbcChannel>>,
     #[allow(clippy::type_complexity)]
-    pub connection_cache:
-        Ref<'a, HashMap<ClientType, (IbcConnections, CellInput, Vec<IdentifiedConnectionEnd>)>>,
-    pub packet_input_data: Ref<'a, HashMap<(ChannelId, PortId, Sequence), CellInput>>,
+    pub connection_cache: Ref<
+        'a,
+        HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>,
+    >,
+    #[allow(clippy::type_complexity)]
+    pub packet_input_data: Ref<'a, HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>>,
     pub packet_cache: Ref<'a, HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
     pub config: &'a ChainConfig,
     pub client_outpoints: Ref<'a, HashMap<ClientType, OutPoint>>,
@@ -154,7 +157,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
 
     fn get_ibc_connections(&self, client_id: &str) -> Result<&IbcConnections, Error> {
         let client_type = self.config.lc_client_type(client_id)?;
-        if let Some((connection, _, _)) = self.connection_cache.get(&client_type) {
+        if let Some((connection, _, _, _)) = self.connection_cache.get(&client_type) {
             Ok(connection)
         } else {
             Err(Error::query(format!(
@@ -167,13 +170,13 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         &self,
         connection_id: &ConnectionId,
     ) -> Result<&IbcConnections, Error> {
-        let ibc_connections = self.connection_cache.iter().find(|(_, (v, _, _))| {
+        let ibc_connections = self.connection_cache.iter().find(|(_, (v, _, _, _))| {
             v.connections
                 .iter()
                 .enumerate()
                 .any(|(idx, c)| connection_id == &generate_connection_id(idx as u16, &c.client_id))
         });
-        if let Some((_, (value, _, _))) = ibc_connections {
+        if let Some((_, (value, _, _, _))) = ibc_connections {
             Ok(value)
         } else {
             Err(Error::query(format!(
@@ -195,10 +198,10 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         self.get_ibc_connections_by_connection_id(&connection_id)
     }
 
-    fn get_ibc_connections_input(&self, client_id: &str) -> Result<&CellInput, Error> {
+    fn get_ibc_connections_input(&self, client_id: &str) -> Result<(&CellInput, u64), Error> {
         let client_type = self.config.lc_client_type(client_id)?;
-        if let Some((_, cell_input, _)) = self.connection_cache.get(&client_type) {
-            Ok(cell_input)
+        if let Some((_, cell_input, capacity, _)) = self.connection_cache.get(&client_type) {
+            Ok((cell_input, *capacity))
         } else {
             Err(Error::query(format!(
                 "client_type {client_type} isn't in cache"
@@ -216,9 +219,10 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-    ) -> Result<&CellInput, Error> {
+    ) -> Result<(&CellInput, u64), Error> {
         self.channel_input_data
             .get(&(channel_id.clone(), port_id.clone()))
+            .map(|(input, capacity)| (input, *capacity))
             .ok_or(Error::query(format!("no channel({channel_id}/{port_id})")))
     }
 
@@ -258,9 +262,10 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         channel_id: &ChannelId,
         port_id: &PortId,
         sequence: &Sequence,
-    ) -> Result<&CellInput, Error> {
+    ) -> Result<(&CellInput, u64), Error> {
         self.packet_input_data
             .get(&(channel_id.clone(), port_id.clone(), *sequence))
+            .map(|(input, capacity)| (input, *capacity))
             .ok_or(Error::query(format!(
                 "no packet({channel_id}/{port_id}/{sequence})"
             )))
@@ -410,13 +415,13 @@ impl TxBuilder {
         self.builder.input(input).into()
     }
 
-    pub fn output(self, lock: Script, capacity: Capacity, data: PackedBytes) -> Self {
+    pub fn output(self, lock: Script, data: PackedBytes) -> Self {
         self.builder
             .output(
                 CellOutput::new_builder()
                     .lock(lock)
-                    .capacity(capacity.pack())
-                    .build(),
+                    .build_exact_capacity(Capacity::bytes(data.len()).unwrap())
+                    .expect("transaction output capacity"),
             )
             .output_data(data)
             .into()

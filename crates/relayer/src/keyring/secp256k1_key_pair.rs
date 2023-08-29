@@ -361,7 +361,7 @@ impl SigningKeyPair for Secp256k1KeyPair {
 
                 // SAFETY: hashed_message is 32 bytes, as expected in `Message::from_slice`,
                 // so `unwrap` is safe.
-                Message::from_slice(&hashed_message).unwrap()
+                Message::from_slice(hashed_message.as_slice()).unwrap()
             }
             Secp256k1AddressType::Ckb => Message::from_slice(message)?,
         };

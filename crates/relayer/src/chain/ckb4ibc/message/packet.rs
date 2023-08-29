@@ -1,4 +1,3 @@
-use ckb_ics_axon::consts::{CHANNEL_CELL_CAPACITY, PACKET_CELL_CAPACITY};
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::handler::PacketStatus;
 use ckb_ics_axon::message::Envelope;
@@ -15,8 +14,8 @@ use ibc_relayer_types::core::ics04_channel::packet::Packet;
 use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 use crate::chain::ckb4ibc::utils::{
     convert_port_id_to_array, convert_proof, extract_client_id_by_connection_id,
-    get_channel_capacity, get_channel_lock_script, get_channel_number, get_client_outpoint,
-    get_encoded_object, get_packet_capacity, get_packet_lock_script,
+    get_channel_lock_script, get_channel_number, get_client_outpoint, get_encoded_object,
+    get_packet_lock_script,
 };
 use crate::chain::SEC_TO_NANO;
 use crate::error::Error;
@@ -92,7 +91,8 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         status: PacketStatus::Recv,
     });
 
-    let channel_input = converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port)?;
+    let (channel_input, input_capacity) =
+        converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port)?;
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
     let packet_lock = get_packet_lock_script(converter, packet_args.to_args());
 
@@ -102,8 +102,8 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         .input(channel_input.clone())
         // TODO: fetch useless packet cell as input to save capacity
         // .input()
-        .output(channel_lock, get_channel_capacity(), new_channel.data)
-        .output(packet_lock, get_packet_capacity(), ibc_packet.data)
+        .output(channel_lock, new_channel.data)
+        .output(packet_lock, ibc_packet.data)
         .witness(old_channel.witness, new_channel.witness)
         .witness(BytesOpt::default(), ibc_packet.witness)
         .build();
@@ -111,7 +111,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CHANNEL_CELL_CAPACITY,
+        input_capacity,
         event: None,
     })
 }
@@ -156,8 +156,9 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         tx_hash: None,
         status: PacketStatus::Ack,
     });
-    let channel_input = converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port)?;
-    let old_packet_input = converter.get_ibc_packet_input(
+    let (channel_input, channel_capacity) =
+        converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port)?;
+    let (old_packet_input, packet_capacity) = converter.get_ibc_packet_input(
         &channel_id,
         &msg.packet.source_port,
         &msg.packet.sequence,
@@ -184,8 +185,8 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         .cell_dep(converter.get_packet_contract_outpoint().clone())
         .input(channel_input.clone())
         .input(old_packet_input.clone())
-        .output(channel_lock, get_channel_capacity(), new_channel.data)
-        .output(packet_lock, get_packet_capacity(), new_packet.data)
+        .output(channel_lock, new_channel.data)
+        .output(packet_lock, new_packet.data)
         .witness(old_channel.witness, new_channel.witness)
         .witness(old_packet.witness, new_packet.witness)
         .build();
@@ -193,7 +194,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CHANNEL_CELL_CAPACITY + PACKET_CELL_CAPACITY,
+        input_capacity: channel_capacity + packet_capacity,
         event: None,
     })
 }
