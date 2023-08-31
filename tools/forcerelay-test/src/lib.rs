@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use ckb_sdk::constants::TYPE_ID_CODE_HASH;
+    use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
     use ckb_sdk::{
         rpc::ckb_light_client::{Cell, Order, ScriptType, SearchKey},
         IndexerRpcClient,
@@ -207,7 +208,7 @@ mod tests {
             filter: None,
             with_data: None,
             group_by_transaction: None,
-            script_search_mode: None,
+            script_search_mode: Some(ScriptSearchMode::Exact),
         };
 
         let mut retry_time = 0;

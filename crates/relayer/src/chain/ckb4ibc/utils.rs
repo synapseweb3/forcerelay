@@ -6,6 +6,7 @@ use ckb_ics_axon::consts::{CHANNEL_ID_PREFIX, CONNECTION_ID_PREFIX};
 use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
+use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey, SearchKeyFilter};
 use ckb_sdk::NetworkType;
 use ckb_types::core::ScriptHashType;
@@ -124,7 +125,7 @@ pub fn get_connection_search_key(
         filter: None,
         with_data: None,
         group_by_transaction: None,
-        script_search_mode: None,
+        script_search_mode: Some(ScriptSearchMode::Exact),
     })
 }
 
@@ -163,14 +164,14 @@ pub fn get_packet_lock_script(converter: &impl MsgToTxConverter, args: Vec<u8>) 
         .build()
 }
 
-pub fn get_search_key(script: Script) -> SearchKey {
+pub fn get_prefix_search_key(script: Script) -> SearchKey {
     SearchKey {
         script: script.into(),
         script_type: ScriptType::Lock,
         filter: None,
         with_data: Some(true),
         group_by_transaction: None,
-        script_search_mode: None,
+        script_search_mode: Some(ScriptSearchMode::Prefix),
     }
 }
 
@@ -205,7 +206,7 @@ pub fn get_search_key_with_sudt(
         filter: Some(filter),
         with_data: Some(true),
         group_by_transaction: None,
-        script_search_mode: None,
+        script_search_mode: Some(ScriptSearchMode::Exact),
     })
 }
 

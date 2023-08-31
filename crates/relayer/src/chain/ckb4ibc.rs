@@ -76,7 +76,7 @@ use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverte
 use self::monitor::Ckb4IbcEventMonitor;
 use self::utils::{
     convert_port_id_to_array, get_channel_number, get_dummy_merkle_proof, get_encoded_object,
-    get_search_key, get_search_key_with_sudt,
+    get_prefix_search_key, get_search_key_with_sudt,
 };
 
 use super::ckb::rpc_client::RpcClient;
@@ -226,7 +226,7 @@ impl Ckb4IbcChain {
                 .pack(),
             )
             .build();
-        let search_key = get_search_key(script);
+        let search_key = get_prefix_search_key(script);
         let packets = self
             .rpc_client
             .fetch_live_cells(search_key, limit, None)
@@ -301,7 +301,7 @@ impl Ckb4IbcChain {
             .args(channel_args.to_args().pack())
             .hash_type(ScriptHashType::Type.into())
             .build();
-        let search_key = get_search_key(script);
+        let search_key = get_prefix_search_key(script);
         let channel_future = self
             .rpc_client
             .fetch_live_cells(search_key, 1, None)
@@ -781,7 +781,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         };
         let search_key = match symbol {
             Some(symbol) => get_search_key_with_sudt(lock_script, symbol, self.network()?)?,
-            None => get_search_key(lock_script),
+            None => get_prefix_search_key(lock_script),
         };
         let asset_cells =
             self.rt
@@ -973,7 +973,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .args("".pack())
             .hash_type(ScriptHashType::Type.into())
             .build();
-        let search_key = get_search_key(script);
+        let search_key = get_prefix_search_key(script);
         let (limit, index) = {
             if let Some(pagination) = request.pagination {
                 (pagination.limit as u32, pagination.offset as u32)

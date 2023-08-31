@@ -10,6 +10,7 @@ use ckb_ics_axon::object::State;
 use ckb_ics_axon::ChannelArgs;
 use ckb_jsonrpc_types::{Deserialize, JsonBytes, Status};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
+use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
 use ckb_sdk::*;
 use ckb_types::core::ScriptHashType;
@@ -304,7 +305,7 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
         filter: None,
         with_data: None,
         group_by_transaction: None,
-        script_search_mode: None,
+        script_search_mode: Some(ScriptSearchMode::Exact),
     };
     let mut loop_count = 0;
     loop {
@@ -346,19 +347,16 @@ fn channel_id_to_u16(channel_id: &ChannelId) -> u16 {
 
 pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &ChannelId) -> IbcChannel {
     let rpc_client = get_client(port);
+    let channel_args = ChannelArgs {
+        client_id: get_test_client_id().into(),
+        open: true,
+        channel_id: channel_id_to_u16(channel_id),
+        port_id,
+    };
     let search_key = SearchKey {
         script: Script::new_builder()
             .code_hash(CHANNEL_CODE_HASH.pack())
-            .args(
-                ChannelArgs {
-                    client_id: get_test_client_id().into(),
-                    open: true,
-                    channel_id: channel_id_to_u16(channel_id),
-                    port_id,
-                }
-                .to_args()
-                .pack(),
-            )
+            .args(channel_args.to_args().pack())
             .hash_type(ScriptHashType::Type.into())
             .build()
             .into(),
@@ -366,7 +364,7 @@ pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &Channel
         filter: None,
         with_data: None,
         group_by_transaction: None,
-        script_search_mode: None,
+        script_search_mode: Some(ScriptSearchMode::Exact),
     };
     let mut loop_count = 0;
     loop {

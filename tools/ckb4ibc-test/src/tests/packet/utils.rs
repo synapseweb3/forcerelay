@@ -1,4 +1,5 @@
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
+use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
 use ckb_sdk::rpc::ckb_light_client::{Order, ScriptType, SearchKey};
 use ckb_sdk::traits::SecpCkbRawKeySigner;
 use ckb_sdk::unlock::{ScriptSigner, SecpSighashScriptSigner};
@@ -201,10 +202,10 @@ pub fn wallet_balance(
     let search_key = SearchKey {
         script: script.clone().into(),
         script_type: ScriptType::Lock,
-        script_search_mode: None,
         filter: None,
         with_data: None,
         group_by_transaction: None,
+        script_search_mode: Some(ScriptSearchMode::Exact),
     };
     let wallet_cells = rt
         .block_on(SdkRpcClient::new(ckb_url.clone()).get_cells(

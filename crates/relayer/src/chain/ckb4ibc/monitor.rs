@@ -43,7 +43,7 @@ use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonit
 use crate::event::IbcEventWithHeight;
 
 use super::cache_set::CacheSet;
-use super::utils::{generate_connection_id, get_script_hash, get_search_key};
+use super::utils::{generate_connection_id, get_prefix_search_key, get_script_hash};
 
 // TODO: add cell emitter here
 pub struct Ckb4IbcEventMonitor {
@@ -129,7 +129,7 @@ impl Ckb4IbcEventMonitor {
             .hash_type(ScriptHashType::Type.into())
             .args(client_id.as_bytes().pack())
             .build();
-        let key = get_search_key(script);
+        let key = get_prefix_search_key(script);
         let ((ibc_connection_cell, tx_hash), block_number) = self
             .search_and_extract(
                 key,
@@ -243,7 +243,7 @@ impl Ckb4IbcEventMonitor {
             .args(channel_args.get_prefix_for_searching_unopen().pack())
             .build();
 
-        let key = get_search_key(script);
+        let key = get_prefix_search_key(script);
         let identified_channel_ends = self
             .search_and_extract(
                 key,
@@ -332,7 +332,7 @@ impl Ckb4IbcEventMonitor {
             .hash_type(ScriptHashType::Type.into())
             .args("".pack())
             .build();
-        let key = get_search_key(script);
+        let key = get_prefix_search_key(script);
         let ibc_packets = self
             .search_and_extract(
                 key,
