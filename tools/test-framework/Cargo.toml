@@ -42,3 +42,5 @@ flex-error = "0.4.4"
 prost = { version = "0.11" }
 tonic = { version = "0.8", features = ["tls", "tls-roots"] }
 hdpath = "0.6.1"
+ethers = { version = "2.0.2", features = ["rustls", "ws"] }
+ckb-fixed-hash = "0"

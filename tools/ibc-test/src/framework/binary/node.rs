@@ -7,7 +7,7 @@ use ibc_test_framework::{
     prelude::*,
 };
 
-use crate::framework::bootstrap::ckb::bootstrap_single_ckb_node;
+use crate::framework::bootstrap::node::bootstrap_single_node;
 
 /**
    A wrapper type that lifts a test case that implements [`BinaryNodeTest`]
@@ -25,7 +25,7 @@ where
     Overrides: NodeConfigOverride + NodeGenesisOverride,
 {
     fn run(&self, config: &TestConfig, builder: &ChainBuilder) -> Result<(), Error> {
-        let (node_a, _miner_a) = bootstrap_single_ckb_node(
+        let (node_a, _miner_a) = bootstrap_single_node(
             builder,
             "0",
             config.bootstrap_with_random_ids,
@@ -34,7 +34,7 @@ where
             0,
         )?;
 
-        let (node_b, _miner_b) = bootstrap_single_ckb_node(
+        let (node_b, _miner_b) = bootstrap_single_node(
             builder,
             "1",
             config.bootstrap_with_random_ids,

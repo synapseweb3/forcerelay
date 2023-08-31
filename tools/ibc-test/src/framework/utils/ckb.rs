@@ -15,7 +15,7 @@ use ckb_types::core::ScriptHashType;
 use ckb_types::packed::Script;
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
-use futures::Future;
+
 use ibc_test_framework::prelude::{ChannelId, Wallet};
 use ibc_test_framework::types::process::ChildProcess;
 use relayer::chain::ckb::prelude::CkbReader;
@@ -24,11 +24,12 @@ use relayer::chain::ckb4ibc::extractor::{
 };
 use relayer::keyring::{Secp256k1AddressType, Secp256k1KeyPair};
 use reqwest::blocking::Client;
-use secp256k1::rand::Rng;
-use secp256k1::{rand, PublicKey, Secp256k1, SecretKey};
-use tokio::runtime::Runtime;
+
+use secp256k1::{PublicKey, Secp256k1, SecretKey};
+
 use toml_edit::{value, Document};
 
+use super::common::{gen_secp256k1_private_key, wait_task};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
@@ -249,17 +250,6 @@ fn pubkey_to_script_args(public_key: &PublicKey) -> [u8; 20] {
         .unwrap()
 }
 
-fn get_rt() -> &'static Runtime {
-    lazy_static::lazy_static! {
-        static ref RT: Runtime = Runtime::new().unwrap();
-    }
-    &RT
-}
-
-fn wait_task<F: Future>(f: F) -> F::Output {
-    get_rt().block_on(f)
-}
-
 fn wait_for_port(port: u32) {
     let timeout = Duration::from_secs(15);
     let now = Instant::now();
@@ -406,13 +396,6 @@ pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &Channel
             thread::sleep(time::Duration::from_secs(1));
         }
     }
-}
-
-fn gen_secp256k1_private_key() -> SecretKey {
-    let mut rng = rand::thread_rng();
-    let mut private_key = [0u8; 32];
-    rng.fill(&mut private_key);
-    SecretKey::from_slice(&private_key).unwrap()
 }
 
 /// Add CKB devnet relayer wallet to the chain.

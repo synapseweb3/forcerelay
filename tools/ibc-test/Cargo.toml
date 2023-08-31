@@ -1,5 +1,5 @@
 [package]
-name = "ckb4ibc-test"
+name = "ibc-test"
 version = "0.1.0"
 edition = "2021"
 
@@ -42,3 +42,4 @@ anyhow = "1.0.72"
 log = "0.4.19"
 toml_edit = "0.19.14"
 lazy_static = "1.4.0"
+ethers = { version = "2.0.2", features = ["rustls", "ws"] }
