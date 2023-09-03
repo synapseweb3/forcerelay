@@ -143,28 +143,48 @@ impl FullNode {
         }
     }
 
+    // should keep `use_random_id` flag equals FALSE
     fn generate_ckb_chain_config(
         &self,
         _chain_type: &TestedChainType,
     ) -> Result<config::ChainConfig, Error> {
         let ckb_rpc = Url::from_str(self.chain_driver.rpc_address().as_str())?;
+        let this_chain_id = self.chain_driver.chain_id.clone();
         let mut onchain_light_clients = HashMap::default();
-        // FIXME: dynamic generate counterparty chain_id
-        let chain_id = if self.chain_driver.chain_id.to_string() == "ckb4ibc-0" {
-            ChainId::from_string("ckb4ibc-1")
+
+        // normally we cannot put same `client_cell_type_args` in config.toml, because
+        // Forcerelay/Axon assumes each counterparty chain has its own unique `client_id`
+        // to figure out unique `client_type` and `chain_id`
+        if std::env::var("ACCOUNT_PREFIXES").unwrap().contains("axon") {
+            let counterparty_chain_id = if this_chain_id.to_string() == "ckb4ibc-0" {
+                ChainId::from_string("axon-1")
+            } else {
+                ChainId::from_string("axon-0")
+            };
+            onchain_light_clients.insert(
+                ClientType::Axon,
+                LightClientItem {
+                    chain_id: counterparty_chain_id,
+                    client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
+                },
+            );
         } else {
-            ChainId::from_string("ckb4ibc-0")
-        };
-        onchain_light_clients.insert(
-            ClientType::Ckb4Ibc,
-            LightClientItem {
-                chain_id,
-                client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
-            },
-        );
+            let counterparty_chain_id = if this_chain_id.to_string() == "ckb4ibc-0" {
+                ChainId::from_string("ckb4ibc-1")
+            } else {
+                ChainId::from_string("ckb4ibc-0")
+            };
+            onchain_light_clients.insert(
+                ClientType::Ckb4Ibc,
+                LightClientItem {
+                    chain_id: counterparty_chain_id,
+                    client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
+                },
+            );
+        }
 
         let ckb_config = config::ckb4ibc::ChainConfig {
-            id: self.chain_driver.chain_id.clone(),
+            id: this_chain_id,
             ckb_rpc: ckb_rpc.clone(),
             ckb_indexer_rpc: ckb_rpc,
             key_name: "relayer_ckb_wallet".to_string(),
@@ -176,6 +196,7 @@ impl FullNode {
             onchain_light_clients,
             packet_filter: Default::default(),
         };
+
         Ok(config::ChainConfig::Ckb4Ibc(ckb_config))
     }
 

@@ -119,13 +119,18 @@ pub fn get_connection_search_key(
         client_id = Some(config.lc_client_id(client_type)?.to_string());
     }
     let script = get_connection_lock_script(config, client_id)?;
+    let script_search_mode = if client_type.is_some() {
+        Some(ScriptSearchMode::Exact)
+    } else {
+        Some(ScriptSearchMode::Prefix)
+    };
     Ok(SearchKey {
         script: script.into(),
         script_type: ScriptType::Lock,
         filter: None,
         with_data: None,
         group_by_transaction: None,
-        script_search_mode: Some(ScriptSearchMode::Exact),
+        script_search_mode,
     })
 }
 

@@ -25,8 +25,10 @@ use futures::{pin_mut, StreamExt, TryStreamExt};
 use ibc_test_framework::prelude::*;
 use relayer::chain::ckb::prelude::{CkbReader, TxCompleter};
 use relayer::chain::ckb::rpc_client::RpcClient;
+use relayer::chain::ChainType;
 use relayer::config::ChainConfig;
 use secp256k1::{Secp256k1, SecretKey};
+use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::runtime::Runtime;
 
@@ -138,12 +140,34 @@ pub fn tx_error_cast<T: ToString>(error: T, tx: TransactionView) -> eyre::Error 
     )
 }
 
-pub fn transfer_port_id() -> PortId {
-    let relayer_key = SecretKey::from_str(PRIVKEY).unwrap();
-    let address = AddressPayload::from_pubkey(&relayer_key.public_key(&Secp256k1::default()));
-    let script: Script = (&address).into();
-    let script_hash = script.calc_script_hash();
-    PortId::from_str(&hex::encode(script_hash.as_slice())).unwrap()
+pub fn get_chain_type(command_path: &str) -> ChainType {
+    let path: PathBuf = command_path.into();
+    match path.file_name().unwrap().to_str().unwrap() {
+        "ckb" => ChainType::Ckb,
+        "axon" => ChainType::Axon,
+        chain => unimplemented!("unknown chain {:?}", chain),
+    }
+}
+
+pub fn transfer_port_id(chain_type: ChainType) -> PortId {
+    match chain_type {
+        ChainType::Ckb => {
+            // CKB only allow h256 as portId
+            let relayer_key = SecretKey::from_str(PRIVKEY).unwrap();
+            let address =
+                AddressPayload::from_pubkey(&relayer_key.public_key(&Secp256k1::default()));
+            let script: Script = (&address).into();
+            let script_hash = script.calc_script_hash();
+            PortId::from_str(&hex::encode(script_hash.as_slice())).unwrap()
+        }
+        ChainType::Axon => {
+            // Axon default port ID
+            PortId::from_str("port-0").unwrap()
+        }
+        _ => {
+            unreachable!()
+        }
+    }
 }
 
 pub fn prepare_artificials(

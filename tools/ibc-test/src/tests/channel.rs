@@ -1,17 +1,30 @@
 use std::str::FromStr;
 
-use crate::framework::{binary::channel::run_arbitrary_binary_channel_test, utils::ckb::*};
+use crate::framework::utils::ckb::*;
 use ckb_types::H256;
 use ibc_test_framework::{chain::chain_type::ChainType, prelude::*};
 
-#[test]
-fn test_channel() -> Result<(), Error> {
-    run_arbitrary_binary_channel_test(&ChannelTest)
+pub struct ChannelTest<'a, Test> {
+    /// Inner test
+    pub test: &'a Test,
 }
 
-pub struct ChannelTest;
+impl<'a, Test> ChannelTest<'a, Test> {
+    pub fn new(test: &'a Test) -> Self {
+        Self { test }
+    }
+}
 
-impl TestOverrides for ChannelTest {}
+impl<'a, Test, Overrides> HasOverrides for ChannelTest<'a, Test>
+where
+    Test: HasOverrides<Overrides = Overrides>,
+{
+    type Overrides = Overrides;
+
+    fn get_overrides(&self) -> &Self::Overrides {
+        self.test.get_overrides()
+    }
+}
 
 fn check_ckb_ibc_cells(
     rpc_port: u16,
@@ -38,22 +51,25 @@ fn check_ckb_ibc_cells(
     Ok(())
 }
 
-impl BinaryChannelTest for ChannelTest {
+impl<'a, Test> BinaryChannelTest for ChannelTest<'a, Test>
+where
+    Test: BinaryChannelTest,
+{
     fn run<ChainA: ChainHandle, ChainB: ChainHandle>(
         &self,
-        _config: &TestConfig,
-        _relayer: RelayerDriver,
+        config: &TestConfig,
+        relayer: RelayerDriver,
         chains: ConnectedChains<ChainA, ChainB>,
         channel: ConnectedChannel<ChainA, ChainB>,
     ) -> Result<(), Error> {
         info!(
-            "successfully create channel from chain {} conn {} port {} to chain {} conn {} port {}",
+            "check conneciton and channel on-chain status ({}: {}/{}, {}: {}/{})",
             chains.chain_id_a(),
+            channel.connection.connection_id_a,
             channel.channel_id_a,
-            channel.port_a,
             chains.chain_id_b(),
+            channel.connection.connection_id_b,
             channel.channel_id_b,
-            channel.port_b,
         );
 
         match &chains.node_a.chain_driver().value().chain_type {
@@ -61,8 +77,8 @@ impl BinaryChannelTest for ChannelTest {
                 check_ckb_ibc_cells(
                     chains.node_a.chain_driver().value().rpc_port,
                     1,
-                    &channel.port_a.into_value(),
-                    &channel.channel_id_a.into_value(),
+                    &channel.port_a.clone().into_value(),
+                    &channel.channel_id_a.clone().into_value(),
                 )?;
             }
             chain => {
@@ -75,8 +91,8 @@ impl BinaryChannelTest for ChannelTest {
                 check_ckb_ibc_cells(
                     chains.node_b.chain_driver().value().rpc_port,
                     2,
-                    &channel.port_b.into_value(),
-                    &channel.channel_id_b.into_value(),
+                    &channel.port_b.clone().into_value(),
+                    &channel.channel_id_b.clone().into_value(),
                 )?;
             }
             chain => {
@@ -84,6 +100,6 @@ impl BinaryChannelTest for ChannelTest {
             }
         }
 
-        Ok(())
+        self.test.run(config, relayer, chains, channel)
     }
 }
