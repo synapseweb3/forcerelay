@@ -8,9 +8,12 @@ mod create_connection;
 mod deploy_channel;
 mod deploy_connection;
 mod deploy_packet_metadata;
+mod deploy_sudt;
 mod utils;
 
 pub use utils::{calc_script_hash, get_lock_script};
+
+use self::deploy_sudt::{generate_deploy_sudt, SUDTAttribute};
 
 pub const PRIVKEY: &str = "63d86723e08f0f813a36ce6aa123bb2289d90680ae1e99d4de8cdb334553f24d";
 pub const GENESIS_TXHASH: H256 =
@@ -19,14 +22,21 @@ pub const GENESIS_TXHASH: H256 =
 #[ignore]
 #[test]
 fn generate() {
-    let connetion_attr = generate_deploy_connection();
-    let channel_attr = generate_deploy_channel(&connetion_attr);
+    let sudt_attr = generate_deploy_sudt();
+    let connection_attr = generate_deploy_connection(&sudt_attr);
+    let channel_attr = generate_deploy_channel(&connection_attr);
     let packet_metadata_attr = generate_deploy_packet_metadata(&channel_attr);
-    let (_, _) = generate_create_connection(&connetion_attr, &packet_metadata_attr);
-    generate_consts_file(&connetion_attr, &channel_attr, &packet_metadata_attr);
+    let (_, _) = generate_create_connection(&connection_attr, &packet_metadata_attr);
+    generate_consts_file(
+        &sudt_attr,
+        &connection_attr,
+        &channel_attr,
+        &packet_metadata_attr,
+    );
 }
 
 fn generate_consts_file(
+    sudt_attr: &SUDTAttribute,
     connection_attr: &ConnectionAttribute,
     channel_attr: &ChannelAttribute,
     packet_metadata_attr: &PacketMetataAttribute,
@@ -34,22 +44,28 @@ fn generate_consts_file(
     let consts_rs = format!(
         r#"use ckb_types::{{h256, H256}};
 
+pub const SUDT_CODE_HASH: H256 =
+    h256!("0x{}");
 pub const CONNECTION_CODE_HASH: H256 =
     h256!("0x{}");
 pub const CHANNEL_CODE_HASH: H256 =
     h256!("0x{}");
 
-pub const CONNECTION_TYPE_ARGS: H256 = 
+pub const SUDT_TYPE_ARGS: H256 =
     h256!("0x{}");
-pub const CHANNEL_TYPE_ARGS: H256 = 
+pub const CONNECTION_TYPE_ARGS: H256 =
     h256!("0x{}");
-pub const PACKET_TYPE_ARGS: H256 = 
+pub const CHANNEL_TYPE_ARGS: H256 =
+    h256!("0x{}");
+pub const PACKET_TYPE_ARGS: H256 =
     h256!("0x{}");
 pub const CLIENT_TYPE_ARGS: H256 =
     h256!("0x{}");
 "#,
+        sudt_attr.sudt_code_hash,
         connection_attr.connection_code_hash,
         channel_attr.channel_code_hash,
+        sudt_attr.sudt_type_args,
         connection_attr.connection_type_args,
         channel_attr.channel_type_args,
         packet_metadata_attr.packet_type_args,
