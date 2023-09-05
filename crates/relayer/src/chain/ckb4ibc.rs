@@ -1169,7 +1169,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             } else {
                 // no matter the `data` is empty or not, we recognize the acknowledge is committed
                 // if the `WriteAck` cell exists
-                let ack_commitment = keccak256(&ibc_packet.packet.data).to_vec();
+                let ack_commitment = keccak256(&ibc_packet.packet.rlp_bytes()).to_vec();
                 Ok((ack_commitment, None))
             }
         } else {
