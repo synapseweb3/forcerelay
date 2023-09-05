@@ -21,6 +21,7 @@ use crate::generator::{
 pub struct SUDTAttribute {
     pub tx_hash: H256,
     pub balance_index: usize,
+    pub sudt_index: usize,
     pub sudt_type_args: H256,
     pub sudt_code_hash: H256,
 }
@@ -94,6 +95,7 @@ pub fn generate_deploy_sudt() -> SUDTAttribute {
 
     SUDTAttribute {
         tx_hash,
+        sudt_index: 0,
         balance_index: 1,
         sudt_type_args,
         sudt_code_hash,
