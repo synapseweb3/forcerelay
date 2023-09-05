@@ -34,7 +34,7 @@ fn matrix_test_within_axon_and_ckb() -> Result<(), Error> {
     run_arbitrary_binary_channel_test(&ChannelTest::new(&CKB4IbcPacketTest::new(packet_run)))
 }
 
-#[ignore]
+#[ignore = "only for my native manual test"]
 #[test]
 fn specific_test_only_for_ckb() -> Result<(), Error> {
     env_vars!(

@@ -357,6 +357,9 @@ impl Ckb4IbcChain {
             .and_then(|response| async {
                 let mut resps = vec![];
                 for cell in response.objects {
+                    if cell.output.lock.args.len() != 32 {
+                        continue;
+                    }
                     let tx = self
                         .rpc_client
                         .get_transaction(&cell.out_point.tx_hash)
@@ -449,7 +452,7 @@ impl Ckb4IbcChain {
 
     fn sync_counterparty_client_type(&self, client_type: ClientType) {
         self.counterparty_client_type.send_if_modified(|prev| {
-            if *prev != Some(client_type) {
+            if prev.is_none() {
                 *prev = Some(client_type);
                 true
             } else {

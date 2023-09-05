@@ -7,7 +7,8 @@ use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
-use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey, SearchKeyFilter};
+use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
+use ckb_sdk::traits::{CellQueryOptions, ValueRangeOption};
 use ckb_sdk::NetworkType;
 use ckb_types::core::ScriptHashType;
 use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script};
@@ -201,18 +202,12 @@ pub fn get_search_key_with_sudt(
         .hash_type(ScriptHashType::Type.into())
         .args(owner_lockhash.as_bytes().to_vec().pack())
         .build();
-    let filter = SearchKeyFilter {
-        script: Some(sudt_script.into()),
-        ..Default::default()
-    };
-    Ok(SearchKey {
-        script: script.into(),
-        script_type: ScriptType::Lock,
-        filter: Some(filter),
-        with_data: Some(true),
-        group_by_transaction: None,
-        script_search_mode: Some(ScriptSearchMode::Exact),
-    })
+    let mut query = CellQueryOptions::new_lock(script);
+    query.with_data = Some(true);
+    query.script_search_mode = Some(ScriptSearchMode::Exact);
+    query.secondary_script = Some(sudt_script);
+    query.data_len_range = Some(ValueRangeOption::new_exact(16));
+    Ok(query.into())
 }
 
 pub fn get_dummy_merkle_proof(height: Height) -> Proofs {

@@ -112,9 +112,14 @@ impl Ckb4IbcEventMonitor {
                 MonitorCmd::Subscribe(tx) => tx.send(self.event_bus.subscribe()).unwrap(),
             }
         }
-        self.process_batch(self.fetch_connection_events().await);
-        self.process_batch(self.fetch_channel_events().await);
-        self.process_batch(self.fetch_packet_events().await);
+        let futs = tokio::join!(
+            self.fetch_channel_events(),
+            self.fetch_connection_events(),
+            self.fetch_packet_events(),
+        );
+        self.process_batch(futs.0);
+        self.process_batch(futs.1);
+        self.process_batch(futs.2);
         Next::Continue
     }
 

@@ -176,9 +176,9 @@ jobs:
           NEXTEST_RETRIES: 2
           CHAIN_COMMAND_PATHS: icad
         run: |
-          nix shell .#python .#ica -c cargo \
-            test -p ibc-integration-test --features ica --no-fail-fast -- \
-            --nocapture --test-threads=1 test_ica_filter
+          nix shell .#python .#ica -c \
+            cargo nextest run -p ibc-integration-test --features ica --no-fail-fast \
+            --test-threads=2 test_ica_filter
 
   ics29-fee-test:
     runs-on: ubuntu-20.04
