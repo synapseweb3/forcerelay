@@ -8,7 +8,7 @@ For easy to upgrade the upstream, we separate this crate from `ibc-test-framewor
 
 We use chain-A chain-B, connection-A connection-B or channel-A channel-B to represent the two chains's components. We can assume the chain A is the initiator in the IBC test framework's context.
 
-1. The testing framework always opens an empty client/connection/channel on chain B side to force the chain B use `xxx-1` name instead of `xxx-0`, it is for catching bugs.
+1. The testing framework always opens an empty client/connection/channel on chain B side to force the chain B use `xxx-1` name instead of `xxx-0`. The reason for this behavior is to catch bugs or issues that might arise when using a different name rather than default name. This methdology can potentially uncover edge cases or problems related to naming conventions or conflicts.
 2. The testing framework is designed for gaia chain, it assumes the chain A and chain B both has a builtin `transfer` module, and the module is registered to IBCHandler, in channel tests IBC framework opens channel to the `transfer` module if we do not override it.
 
 ## Known issues
