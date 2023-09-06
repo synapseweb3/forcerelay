@@ -63,10 +63,10 @@ jobs:
       - name: Prepare CKB
         run: |
           if [ ! -f "/tmp/ckb.tar.gz" ]; then
-            curl -L https://github.com/nervosnetwork/ckb/releases/download/v0.107.0/ckb_v0.107.0_x86_64-unknown-linux-gnu.tar.gz -o /tmp/ckb.tar.gz
+            curl -L https://github.com/nervosnetwork/ckb/releases/download/v0.110.0/ckb_v0.110.0_x86_64-unknown-linux-gnu.tar.gz -o /tmp/ckb.tar.gz
           fi
           tar -zxf /tmp/ckb.tar.gz -C /tmp
-          echo "/tmp/ckb_v0.107.0_x86_64-unknown-linux-gnu" >> $GITHUB_PATH
+          echo "/tmp/ckb_v0.110.0_x86_64-unknown-linux-gnu" >> $GITHUB_PATH
 
       - name: Prepare Axon source
         run: git clone --recursive https://github.com/axonweb3/axon.git $SRC_DIR/axon && cd $SRC_DIR/axon && git checkout $AXON_COMMIT
@@ -74,7 +74,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ".\n${{env.SRC_DIR}}/axon"
+          workspaces: "."
 
       - name: Cache axon bin
         id: cache-axon-bin
