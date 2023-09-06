@@ -226,42 +226,6 @@ pub fn prepare_ckb_chain(
         check_and_wait_ckb_transaction(output.result, port);
     });
 
-    // let output = send_tx(
-    //     fs::read_to_string("txs/deploy_connection.json").unwrap(),
-    //     port,
-    // )
-    // .unwrap();
-    // println!("deploying connection: {output}");
-
-    // // check `txs/deploy_connection.json`
-    // check_and_wait_ckb_transaction(output.result, port);
-
-    // let output = send_tx(fs::read_to_string("txs/deploy_channel.json").unwrap(), port).unwrap();
-    // println!("deploying channel: {output}");
-
-    // // check `txs/deploy_channel.json`
-    // check_and_wait_ckb_transaction(output.result, port);
-
-    // let output = send_tx(
-    //     fs::read_to_string("txs/deploy_packet_metadata.json").unwrap(),
-    //     port,
-    // )
-    // .unwrap();
-    // println!("deploying packet and metadata: {output}");
-
-    // // check `txs/deploy_packet_metadata.json`
-    // check_and_wait_ckb_transaction(output.result, port);
-
-    // let output = send_tx(
-    //     fs::read_to_string("txs/create_connection.json").unwrap(),
-    //     port,
-    // )
-    // .unwrap();
-    // println!("deploying create connection: {output}");
-
-    // // check `txs/create_connection.json`
-    // check_and_wait_ckb_transaction(output.result, port);
-
     (ckb_process, miner_process)
 }
 
