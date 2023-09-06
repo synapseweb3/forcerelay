@@ -1,11 +1,10 @@
 use crate::{
     chain::ckb4ibc::utils::{
-        convert_proof, generate_connection_id, get_client_outpoint, get_connection_capacity,
-        get_connection_index_by_id, get_connection_lock_script, get_encoded_object,
+        convert_proof, generate_connection_id, get_client_outpoint, get_connection_index_by_id,
+        get_connection_lock_script, get_encoded_object,
     },
     error::Error,
 };
-use ckb_ics_axon::consts::CONNECTION_CELL_CAPACITY;
 use ckb_ics_axon::{
     message::{
         Envelope, MsgConnectionOpenAck as CkbMsgConnectionOpenAck,
@@ -60,19 +59,16 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
     };
 
     let old_connection = get_encoded_object(old_ibc_connection_cell);
-    let new_connection = get_encoded_object(new_ibc_connection_cell);
+    let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
+    let (connection_input, input_capacity) = converter.get_ibc_connections_input(&client_id)?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
-        .output(
-            connection_lock,
-            get_connection_capacity(),
-            new_connection.data,
-        )
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(connection_input.clone())
+        .output(connection_lock, new_connection.data)
         .witness(old_connection.witness, new_connection.witness)
         .build();
 
@@ -82,11 +78,10 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         counterparty_connection_id: None,
         counterparty_client_id: msg.counterparty.client_id().clone(),
     }));
-
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CONNECTION_CELL_CAPACITY,
+        input_capacity,
         event: Some(event),
     })
 }
@@ -129,19 +124,16 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
     };
 
     let old_connection = get_encoded_object(old_ibc_connection_cell);
-    let new_connection = get_encoded_object(new_ibc_connection_cell);
+    let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
+    let (connection_input, input_capacity) = converter.get_ibc_connections_input(&client_id)?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
-        .output(
-            connection_lock,
-            get_connection_capacity(),
-            new_connection.data,
-        )
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(connection_input.clone())
+        .output(connection_lock, new_connection.data)
         .witness(old_connection.witness, new_connection.witness)
         .build();
 
@@ -155,7 +147,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CONNECTION_CELL_CAPACITY,
+        input_capacity,
         event: Some(event),
     })
 }
@@ -186,19 +178,16 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
     let client_id = connection_end.client_id.clone();
 
     let old_connection = get_encoded_object(old_ibc_connection_cell);
-    let new_connection = get_encoded_object(new_ibc_connection_cell);
+    let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
+    let (connection_input, input_capacity) = converter.get_ibc_connections_input(&client_id)?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
-        .output(
-            connection_lock,
-            get_connection_capacity(),
-            new_connection.data,
-        )
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(connection_input.clone())
+        .output(connection_lock, new_connection.data)
         .witness(old_connection.witness, new_connection.witness)
         .build();
 
@@ -212,7 +201,7 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CONNECTION_CELL_CAPACITY,
+        input_capacity,
         event: Some(event),
     })
 }
@@ -247,19 +236,16 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
     let client_id = connection_end.client_id.clone();
 
     let old_connection = get_encoded_object(old_ibc_connection_cell);
-    let new_connection = get_encoded_object(new_ibc_connection_cell);
+    let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
+    let (connection_input, input_capacity) = converter.get_ibc_connections_input(&client_id)?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
-        .output(
-            connection_lock,
-            get_connection_capacity(),
-            new_connection.data,
-        )
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(connection_input.clone())
+        .output(connection_lock, new_connection.data)
         .witness(old_connection.witness, new_connection.witness)
         .build();
 
@@ -273,7 +259,7 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CONNECTION_CELL_CAPACITY,
+        input_capacity,
         event: Some(event),
     })
 }

@@ -121,9 +121,10 @@ impl<'a, Chain> TaggedFullNodeExt<Chain> for MonoTagged<Chain, &'a FullNode> {
     }
 }
 
-fn hex_to_h256(h: &[u8]) -> ckb_fixed_hash::H256 {
-    let raw = hex::decode(h).expect("decode hex");
-    ckb_fixed_hash::H256(raw.try_into().expect("convert to h256"))
+fn h256_env(key: &str) -> [u8; 32] {
+    let value = std::env::var(key).expect("get type_args env");
+    let raw = hex::decode(value).expect("decode hex");
+    raw.try_into().expect("convert to h256")
 }
 
 impl FullNode {
@@ -142,47 +143,60 @@ impl FullNode {
         }
     }
 
+    // should keep `use_random_id` flag equals FALSE
     fn generate_ckb_chain_config(
         &self,
         _chain_type: &TestedChainType,
     ) -> Result<config::ChainConfig, Error> {
         let ckb_rpc = Url::from_str(self.chain_driver.rpc_address().as_str())?;
-        let connection_type_args =
-            hex_to_h256(b"f49ce32397c6741998b04d7548c5ed372007424daf67ee5bfadaefec3c865781");
-        let channel_type_args =
-            hex_to_h256(b"b407c3b93dee611b2e65248254c28012a8d227c53803e5842d4a81934179adfc");
-        let packet_type_args =
-            hex_to_h256(b"63b3d51df3884cc649135a51ad2a1ae1a8c2dfeca37c8b16220b26716fb3b4c4");
-        let client_cell_type_args =
-            hex_to_h256(b"7ede7d98985de2f464e737b8e177ede186c50d3d584d1bd9b2399330c2187e61");
+        let this_chain_id = self.chain_driver.chain_id.clone();
         let mut onchain_light_clients = HashMap::default();
-        onchain_light_clients.insert(
-            ClientType::Ckb4Ibc,
-            LightClientItem {
-                chain_id: self.chain_driver.chain_id.clone(),
-                client_cell_type_args: client_cell_type_args.clone(),
-            },
-        );
-        onchain_light_clients.insert(
-            ClientType::Axon,
-            LightClientItem {
-                chain_id: self.chain_driver.chain_id.clone(),
-                client_cell_type_args,
-            },
-        );
+
+        // normally we cannot put same `client_cell_type_args` in config.toml, because
+        // Forcerelay/Axon assumes each counterparty chain has its own unique `client_id`
+        // to figure out unique `client_type` and `chain_id`
+        if std::env::var("ACCOUNT_PREFIXES").unwrap().contains("axon") {
+            let counterparty_chain_id = if this_chain_id.to_string() == "ckb4ibc-0" {
+                ChainId::from_string("axon-1")
+            } else {
+                ChainId::from_string("axon-0")
+            };
+            onchain_light_clients.insert(
+                ClientType::Axon,
+                LightClientItem {
+                    chain_id: counterparty_chain_id,
+                    client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
+                },
+            );
+        } else {
+            let counterparty_chain_id = if this_chain_id.to_string() == "ckb4ibc-0" {
+                ChainId::from_string("ckb4ibc-1")
+            } else {
+                ChainId::from_string("ckb4ibc-0")
+            };
+            onchain_light_clients.insert(
+                ClientType::Ckb4Ibc,
+                LightClientItem {
+                    chain_id: counterparty_chain_id,
+                    client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
+                },
+            );
+        }
 
         let ckb_config = config::ckb4ibc::ChainConfig {
-            id: self.chain_driver.chain_id.clone(),
+            id: this_chain_id,
             ckb_rpc: ckb_rpc.clone(),
             ckb_indexer_rpc: ckb_rpc,
             key_name: "relayer_ckb_wallet".to_string(),
             store_prefix: "forcerelay".to_string(),
-            connection_type_args,
-            channel_type_args,
-            packet_type_args,
+            client_code_hash: h256_env("CLIENT_CODE_HASH").into(),
+            connection_type_args: h256_env("CONNECTION_TYPE_ARGS").into(),
+            channel_type_args: h256_env("CHANNEL_TYPE_ARGS").into(),
+            packet_type_args: h256_env("PACKET_TYPE_ARGS").into(),
             onchain_light_clients,
             packet_filter: Default::default(),
         };
+
         Ok(config::ChainConfig::Ckb4Ibc(ckb_config))
     }
 

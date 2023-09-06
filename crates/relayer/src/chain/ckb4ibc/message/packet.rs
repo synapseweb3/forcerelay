@@ -1,4 +1,3 @@
-use ckb_ics_axon::consts::{CHANNEL_CELL_CAPACITY, PACKET_CELL_CAPACITY};
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::handler::PacketStatus;
 use ckb_ics_axon::message::Envelope;
@@ -15,8 +14,8 @@ use ibc_relayer_types::core::ics04_channel::packet::Packet;
 use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 use crate::chain::ckb4ibc::utils::{
     convert_port_id_to_array, convert_proof, extract_client_id_by_connection_id,
-    get_channel_capacity, get_channel_lock_script, get_channel_number, get_client_outpoint,
-    get_encoded_object, get_packet_capacity, get_packet_lock_script,
+    get_channel_lock_script, get_channel_number, get_client_outpoint, get_encoded_object,
+    get_packet_lock_script,
 };
 use crate::chain::SEC_TO_NANO;
 use crate::error::Error;
@@ -44,7 +43,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_id = msg.packet.destination_channel.clone();
-    let old_channel_end = converter.get_ibc_channel(&channel_id);
+    let old_channel_end = converter.get_ibc_channel(&channel_id)?;
     let mut new_channel_end = old_channel_end.clone();
 
     let packet = convert_ibc_packet(&msg.packet);
@@ -85,24 +84,26 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     };
 
     let old_channel = get_encoded_object(old_channel_end);
-    let new_channel = get_encoded_object(new_channel_end);
-    let ibc_packet = get_encoded_object(IbcPacket {
+    let new_channel = get_encoded_object(&new_channel_end);
+    let ibc_packet = get_encoded_object(&IbcPacket {
         packet,
         tx_hash: None,
         status: PacketStatus::Recv,
     });
 
-    let channel_input = converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port);
+    let (channel_input, input_capacity) =
+        converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port)?;
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
     let packet_lock = get_packet_lock_script(converter, packet_args.to_args());
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .input(channel_input)
+        .cell_dep(converter.get_chan_contract_outpoint().clone())
+        .input(channel_input.clone())
         // TODO: fetch useless packet cell as input to save capacity
         // .input()
-        .output(channel_lock, get_channel_capacity(), new_channel.data)
-        .output(packet_lock, get_packet_capacity(), ibc_packet.data)
+        .output(channel_lock, new_channel.data)
+        .output(packet_lock, ibc_packet.data)
         .witness(old_channel.witness, new_channel.witness)
         .witness(BytesOpt::default(), ibc_packet.witness)
         .build();
@@ -110,7 +111,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: PACKET_CELL_CAPACITY,
+        input_capacity,
         event: None,
     })
 }
@@ -120,7 +121,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_id = msg.packet.source_channel.clone();
-    let old_channel_end = converter.get_ibc_channel(&channel_id);
+    let old_channel_end = converter.get_ibc_channel(&channel_id)?;
     let mut new_channel_end = old_channel_end.clone();
 
     match old_channel_end.order {
@@ -130,7 +131,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     }
 
     let old_channel = get_encoded_object(old_channel_end);
-    let new_channel = get_encoded_object(new_channel_end.clone());
+    let new_channel = get_encoded_object(&new_channel_end);
 
     let ack_packet = CkbMsgAckPacket {
         proofs: convert_proof(msg.proofs)?,
@@ -150,14 +151,21 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         port_id,
     };
 
-    let new_packet = get_encoded_object(IbcPacket {
+    let new_packet = get_encoded_object(&IbcPacket {
         packet,
         tx_hash: None,
         status: PacketStatus::Ack,
     });
-    let channel_input = converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port);
-    let old_packet =
-        converter.get_packet_cell_input(channel_id, msg.packet.source_port, msg.packet.sequence);
+    let (channel_input, channel_capacity) =
+        converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port)?;
+    let (old_packet_input, packet_capacity) = converter.get_ibc_packet_input(
+        &channel_id,
+        &msg.packet.source_port,
+        &msg.packet.sequence,
+    )?;
+    let old_ibc_packet =
+        converter.get_ibc_packet(&channel_id, &msg.packet.source_port, &msg.packet.sequence)?;
+    let old_packet = get_encoded_object(old_ibc_packet);
 
     let (client_cell_type_args, client_id) =
         extract_client_id_by_connection_id(&new_channel_end.connection_hops[0], converter)?;
@@ -173,19 +181,20 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_chan_contract_outpoint())
-        .input(channel_input)
-        .input(old_packet)
-        .output(channel_lock, get_channel_capacity(), new_channel.data)
-        .output(packet_lock, get_packet_capacity(), new_packet.data)
+        .cell_dep(converter.get_chan_contract_outpoint().clone())
+        .cell_dep(converter.get_packet_contract_outpoint().clone())
+        .input(channel_input.clone())
+        .input(old_packet_input.clone())
+        .output(channel_lock, new_channel.data)
+        .output(packet_lock, new_packet.data)
         .witness(old_channel.witness, new_channel.witness)
-        .witness(BytesOpt::default(), new_packet.witness)
+        .witness(old_packet.witness, new_packet.witness)
         .build();
 
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CHANNEL_CELL_CAPACITY + PACKET_CELL_CAPACITY,
+        input_capacity: channel_capacity + packet_capacity,
         event: None,
     })
 }

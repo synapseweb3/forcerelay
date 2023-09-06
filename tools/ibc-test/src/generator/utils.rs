@@ -2,11 +2,11 @@ use std::{str::FromStr, sync::Mutex};
 
 use ckb_sdk::{Address, AddressPayload, NetworkType};
 use ckb_types::{
-    core::DepType,
     core::TransactionView,
+    core::{DepType, ScriptHashType},
     h256,
     packed::{CellDep, OutPoint, Script},
-    prelude::{Builder, Entity, Pack},
+    prelude::{Builder, Entity, Pack, Unpack},
     H256,
 };
 use secp256k1::{Secp256k1, SecretKey};
@@ -20,13 +20,23 @@ pub fn keccak256(slice: &[u8]) -> [u8; 32] {
     output
 }
 
-pub fn get_lock_script(private: &str) -> (Script, SecretKey) {
+pub fn get_lock_script(private: &str) -> (Script, SecretKey, Address) {
     let secret_key = SecretKey::from_str(private).unwrap();
     let public_key = secret_key.public_key(&Secp256k1::signing_only());
     let address_payload = AddressPayload::from_pubkey(&public_key);
-    let addr = Address::new(NetworkType::Dev, address_payload, true);
-    let lock_script = Script::from(&addr);
-    (lock_script, secret_key)
+    let address = Address::new(NetworkType::Dev, address_payload, true);
+    let lock_script = Script::from(&address);
+    (lock_script, secret_key, address)
+}
+
+pub fn calc_script_hash(code_hash: &H256, args: &[u8]) -> H256 {
+    Script::new_builder()
+        .code_hash(code_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(args.pack())
+        .build()
+        .calc_script_hash()
+        .unpack()
 }
 
 pub fn get_secp256k1_cell_dep() -> CellDep {

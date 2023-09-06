@@ -44,7 +44,7 @@ pub fn generate_deploy_connection() -> ConnectionAttribute {
     println!("connection type args: {:?}", hex::encode(type_0_args));
     let connection_type_args: H256 = type_0_args.into();
 
-    let (lock_script, secret_key) = get_lock_script(PRIVKEY);
+    let (lock_script, secret_key, _) = get_lock_script(PRIVKEY);
 
     let connection_type_script = Script::new_builder()
         .code_hash(

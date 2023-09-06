@@ -31,7 +31,7 @@ use super::utils::{generate_channel_id, generate_connection_id};
 pub fn extract_channel_end_from_tx(
     tx: TransactionView,
 ) -> Result<(IdentifiedChannelEnd, CkbIbcChannel), Error> {
-    let idx = get_object_idx(&tx, ObjectType::ChannelEnd)?;
+    let idx = get_object_index(&tx, ObjectType::ChannelEnd)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
         .map_err(|_| Error::ckb_decode_witness_args())?;
@@ -40,12 +40,11 @@ pub fn extract_channel_end_from_tx(
             .map_err(|_| Error::extract_chan_tx_error(tx.hash.to_string()))?;
 
     let channel_end = convert_channel_end(ckb_channel_end.clone())?;
-
     Ok((channel_end, ckb_channel_end))
 }
 
 pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnections, Error> {
-    let idx = get_object_idx(&tx, ObjectType::IbcConnections)?;
+    let idx = get_object_index(&tx, ObjectType::IbcConnections)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes()).unwrap();
     let ibc_connection_cells =
@@ -69,19 +68,20 @@ pub fn extract_connections_from_tx(
     Ok((result, ibc_connection_cell))
 }
 
-pub fn extract_ibc_packet_from_tx(tx: TransactionView) -> Result<IbcPacket, Error> {
-    let idx = get_object_idx(&tx, ObjectType::IbcPacket)?;
+pub fn extract_ibc_packet_from_tx(tx: TransactionView) -> Result<(IbcPacket, Vec<u8>), Error> {
+    let envelope = get_envelope(&tx)?;
+    let idx = navigate(&envelope.msg_type, &ObjectType::IbcPacket);
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
         .map_err(|_| Error::ckb_decode_witness_args())?;
     let ibc_packet =
         rlp::decode::<IbcPacket>(&witness_args.output_type().to_opt().unwrap().raw_data())
             .map_err(|_| Error::extract_chan_tx_error(tx.hash.to_string()))?;
-    Ok(ibc_packet)
+    Ok((ibc_packet, envelope.content))
 }
 
-fn navigate(t: MsgType, object_type: ObjectType) -> usize {
-    match (&t, &object_type) {
+fn navigate(t: &MsgType, object_type: &ObjectType) -> usize {
+    match (t, object_type) {
         (MsgType::MsgClientCreate, ObjectType::IbcConnections) => 0,
         (MsgType::MsgConnectionOpenInit, ObjectType::IbcConnections) => 0,
         (MsgType::MsgConnectionOpenTry, ObjectType::IbcConnections) => 0,
@@ -98,12 +98,14 @@ fn navigate(t: MsgType, object_type: ObjectType) -> usize {
         (MsgType::MsgSendPacket, ObjectType::ChannelEnd) => 0,
         (MsgType::MsgRecvPacket, ObjectType::ChannelEnd) => 0,
         (MsgType::MsgAckPacket, ObjectType::ChannelEnd) => 0,
-        (MsgType::MsgWriteAckPacket, ObjectType::ChannelEnd) => 0, // only input
-        (MsgType::MsgTimeoutPacket, ObjectType::ChannelEnd) => todo!(),
+        (MsgType::MsgWriteAckPacket, ObjectType::ChannelEnd) => 0,
+        (MsgType::MsgTimeoutPacket, ObjectType::ChannelEnd) => 0,
         (MsgType::MsgSendPacket, ObjectType::IbcPacket) => 1,
         (MsgType::MsgRecvPacket, ObjectType::IbcPacket) => 1,
         (MsgType::MsgAckPacket, ObjectType::IbcPacket) => 1,
-        _ => unreachable!(),
+        (MsgType::MsgWriteAckPacket, ObjectType::IbcPacket) => 1,
+        (MsgType::MsgTimeoutPacket, ObjectType::IbcPacket) => 1,
+        _ => unreachable!("navigate: {t:?}, {object_type:?}"),
     }
 }
 
@@ -209,7 +211,12 @@ enum ObjectType {
     IbcPacket,
 }
 
-fn get_object_idx(tx: &TransactionView, object_type: ObjectType) -> Result<usize, Error> {
+fn get_object_index(tx: &TransactionView, object_type: ObjectType) -> Result<usize, Error> {
+    let envelope = get_envelope(tx)?;
+    Ok(navigate(&envelope.msg_type, &object_type))
+}
+
+fn get_envelope(tx: &TransactionView) -> Result<Envelope, Error> {
     let msg = tx.inner.witnesses.last().ok_or(Error::ckb_none_witness())?;
 
     let bytes = msg.as_bytes();
@@ -222,6 +229,5 @@ fn get_object_idx(tx: &TransactionView, object_type: ObjectType) -> Result<usize
 
     let envelope =
         rlp::decode::<Envelope>(&envelope_slice).map_err(|_| Error::ckb_decode_envelope())?;
-
-    Ok(navigate(envelope.msg_type, object_type))
+    Ok(envelope)
 }

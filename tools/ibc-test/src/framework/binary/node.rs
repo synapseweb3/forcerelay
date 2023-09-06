@@ -47,9 +47,8 @@ where
         let _node_process_b = node_b.process.clone();
 
         eprintln!("Node is initialized, Starting running inner test..........");
-        self.test.run(config, node_a, node_b)?;
 
-        Ok(())
+        self.test.run(config, node_a, node_b)
     }
 }
 

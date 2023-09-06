@@ -2,18 +2,18 @@ use std::str::FromStr;
 
 use crate::config::ckb4ibc::ChainConfig;
 use crate::error::Error;
-use ckb_ics_axon::consts::{
-    CHANNEL_CELL_CAPACITY, CHANNEL_ID_PREFIX, CONNECTION_CELL_CAPACITY, CONNECTION_ID_PREFIX,
-    PACKET_CELL_CAPACITY,
-};
+use ckb_ics_axon::consts::{CHANNEL_ID_PREFIX, CONNECTION_ID_PREFIX};
 use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
+use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
-use ckb_types::core::{Capacity, ScriptHashType};
+use ckb_sdk::traits::{CellQueryOptions, ValueRangeOption};
+use ckb_sdk::NetworkType;
+use ckb_types::core::ScriptHashType;
 use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script};
 use ckb_types::prelude::{Builder, Entity, Pack};
-use ckb_types::H256;
+use ckb_types::{h256, H256};
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics04_channel::channel::ChannelEnd;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ConnectionId, PortId};
@@ -22,6 +22,11 @@ use ibc_relayer_types::Height;
 use tiny_keccak::{Hasher, Keccak};
 
 use super::message::MsgToTxConverter;
+
+const SUDT_CODE_HASH_MAINNET: H256 =
+    h256!("0x5e7a36a77e68eecc013dfa2fe6a23f3b6c344b04005808694ae6dd45eea4cfd5");
+const SUDT_CODE_HASH_TESTNET: H256 =
+    h256!("0xc5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4");
 
 pub fn keccak256(slice: &[u8]) -> [u8; 32] {
     let mut hasher = Keccak::v256();
@@ -36,8 +41,8 @@ pub struct EncodedObject {
     pub data: Bytes,
 }
 
-pub fn get_encoded_object<T: rlp::Encodable>(obj: T) -> EncodedObject {
-    let content = rlp::encode(&obj);
+pub fn get_encoded_object<T: rlp::Encodable>(obj: &T) -> EncodedObject {
+    let content = rlp::encode(obj);
     let slice = content.as_ref();
     let hash = keccak256(slice);
     EncodedObject {
@@ -115,12 +120,18 @@ pub fn get_connection_search_key(
         client_id = Some(config.lc_client_id(client_type)?.to_string());
     }
     let script = get_connection_lock_script(config, client_id)?;
+    let script_search_mode = if client_type.is_some() {
+        Some(ScriptSearchMode::Exact)
+    } else {
+        Some(ScriptSearchMode::Prefix)
+    };
     Ok(SearchKey {
         script: script.into(),
         script_type: ScriptType::Lock,
         filter: None,
         with_data: None,
         group_by_transaction: None,
+        script_search_mode,
     })
 }
 
@@ -132,7 +143,8 @@ pub fn get_connection_lock_script(
     let mut client_cell_type_args = vec![];
     if let Some(client_id) = client_id {
         let client_type = config.lc_client_type(&client_id)?;
-        client_cell_type_args.append(&mut config.lc_client_type_args(client_type)?.to_vec());
+        client_cell_type_args
+            .append(&mut config.lc_client_type_hash(client_type)?.as_bytes().to_vec());
     }
     let script = Script::new_builder()
         .code_hash(get_script_hash(&config.connection_type_args))
@@ -158,26 +170,44 @@ pub fn get_packet_lock_script(converter: &impl MsgToTxConverter, args: Vec<u8>) 
         .build()
 }
 
-pub fn get_search_key(script: Script) -> SearchKey {
+pub fn get_prefix_search_key(script: Script) -> SearchKey {
     SearchKey {
         script: script.into(),
         script_type: ScriptType::Lock,
         filter: None,
         with_data: Some(true),
         group_by_transaction: None,
+        script_search_mode: Some(ScriptSearchMode::Prefix),
     }
 }
 
-pub fn get_connection_capacity() -> Capacity {
-    Capacity::bytes(CONNECTION_CELL_CAPACITY as usize).unwrap()
-}
-
-pub fn get_channel_capacity() -> Capacity {
-    Capacity::bytes(CHANNEL_CELL_CAPACITY as usize).unwrap()
-}
-
-pub fn get_packet_capacity() -> Capacity {
-    Capacity::bytes(PACKET_CELL_CAPACITY as usize).unwrap()
+pub fn get_search_key_with_sudt(
+    script: Script,
+    symbol: &str,
+    network: NetworkType,
+) -> Result<SearchKey, Error> {
+    let sudt_code_hash = match network {
+        NetworkType::Mainnet => SUDT_CODE_HASH_MAINNET,
+        NetworkType::Testnet => SUDT_CODE_HASH_TESTNET,
+        _ => {
+            return Err(Error::other_error(format!(
+                "unsupported network: {network}"
+            )))
+        }
+    };
+    let owner_lockhash =
+        H256::from_str(symbol).map_err(|_| Error::other_error("invalid sUDT symbol".to_owned()))?;
+    let sudt_script = Script::new_builder()
+        .code_hash(sudt_code_hash.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(owner_lockhash.as_bytes().to_vec().pack())
+        .build();
+    let mut query = CellQueryOptions::new_lock(script);
+    query.with_data = Some(true);
+    query.script_search_mode = Some(ScriptSearchMode::Exact);
+    query.secondary_script = Some(sudt_script);
+    query.data_len_range = Some(ValueRangeOption::new_exact(16));
+    Ok(query.into())
 }
 
 pub fn get_dummy_merkle_proof(height: Height) -> Proofs {

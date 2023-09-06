@@ -1,5 +1,4 @@
-use ckb_ics_axon::consts::{CHANNEL_CELL_CAPACITY, CONNECTION_CELL_CAPACITY};
-use ckb_ics_axon::handler::IbcChannel;
+use ckb_ics_axon::handler::{IbcChannel, Sequence};
 use ckb_ics_axon::message::Envelope;
 use ckb_ics_axon::message::MsgChannelOpenAck as CkbMsgChannelOpenAck;
 use ckb_ics_axon::message::MsgChannelOpenConfirm as CkbMsgChannelOpenConfirm;
@@ -23,9 +22,8 @@ use std::str::FromStr;
 use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 use crate::chain::ckb4ibc::utils::{
     convert_port_id_to_array, convert_proof, extract_client_id_by_connection_id,
-    generate_channel_id, get_channel_capacity, get_channel_lock_script, get_channel_number,
-    get_client_id_from_channel, get_client_outpoint, get_connection_capacity,
-    get_connection_lock_script, get_encoded_object,
+    generate_channel_id, get_channel_lock_script, get_channel_number, get_client_id_from_channel,
+    get_client_outpoint, get_connection_lock_script, get_encoded_object,
 };
 use crate::error::Error;
 
@@ -71,12 +69,19 @@ fn convert_channel_end(
         channel_id: remote_channel_id,
     };
 
+    let sequence = Sequence {
+        next_sequence_sends: 1,
+        next_sequence_recvs: 1,
+        next_sequence_acks: 1,
+        ..Default::default()
+    };
+
     let result = IbcChannel {
         number: channel_number,
         port_id,
         state,
         order,
-        sequence: Default::default(),
+        sequence,
         counterparty,
         connection_hops,
     };
@@ -95,7 +100,7 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
 
     let ibc_channel_end =
         convert_channel_end(msg.channel.clone(), msg.port_id.clone(), next_channel_num)?;
-    let ibc_channel = get_encoded_object(ibc_channel_end);
+    let ibc_channel = get_encoded_object(&ibc_channel_end);
 
     let envelope = Envelope {
         msg_type: MsgType::MsgChannelOpenInit,
@@ -111,22 +116,19 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
     };
 
     let old_connection = get_encoded_object(old_connection_cell);
-    let new_connection = get_encoded_object(new_connection_cell);
+    let new_connection = get_encoded_object(&new_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
+    let (connection_input, input_capacity) = converter.get_ibc_connections_input(&client_id)?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .cell_dep(converter.get_chan_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
-        .output(
-            connection_lock,
-            get_connection_capacity(),
-            new_connection.data,
-        )
-        .output(channel_lock, get_channel_capacity(), ibc_channel.data)
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .cell_dep(converter.get_chan_contract_outpoint().clone())
+        .input(connection_input.clone())
+        .output(connection_lock, new_connection.data)
+        .output(channel_lock, ibc_channel.data)
         .witness(old_connection.witness, new_connection.witness)
         .witness(BytesOpt::default(), ibc_channel.witness)
         .build();
@@ -142,7 +144,7 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CONNECTION_CELL_CAPACITY,
+        input_capacity,
         event: Some(event),
     })
 }
@@ -159,11 +161,11 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
 
     let ibc_channel_end =
         convert_channel_end(msg.channel.clone(), msg.port_id.clone(), next_channel_num)?;
-    let ibc_channel = get_encoded_object(ibc_channel_end);
+    let ibc_channel = get_encoded_object(&ibc_channel_end);
 
     let (client_cell_type_args, client_id) = get_client_id_from_channel(&msg.channel, converter)?;
     let old_connection = get_encoded_object(old_connection_cell);
-    let new_connection = get_encoded_object(new_connection_cell);
+    let new_connection = get_encoded_object(&new_connection_cell);
 
     let envelope = Envelope {
         msg_type: MsgType::MsgChannelOpenTry,
@@ -182,17 +184,14 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
+    let (connection_input, input_capacity) = converter.get_ibc_connections_input(&client_id)?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .input(converter.get_ibc_connections_input(&client_id)?)
-        .output(
-            connection_lock,
-            get_connection_capacity(),
-            new_connection.data,
-        )
-        .output(channel_lock, get_channel_capacity(), ibc_channel.data)
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .input(connection_input.clone())
+        .output(connection_lock, new_connection.data)
+        .output(channel_lock, ibc_channel.data)
         .witness(old_connection.witness, new_connection.witness)
         .witness(BytesOpt::default(), ibc_channel.witness)
         .build();
@@ -208,7 +207,7 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CONNECTION_CELL_CAPACITY,
+        input_capacity,
         event: Some(event),
     })
 }
@@ -218,7 +217,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_idx = get_channel_number(&msg.channel_id)?;
-    let old_channel = converter.get_ibc_channel(&msg.channel_id);
+    let old_channel = converter.get_ibc_channel(&msg.channel_id)?;
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id).unwrap();
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
@@ -244,14 +243,16 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
 
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
     let old_channel = get_encoded_object(old_channel);
-    let new_channel = get_encoded_object(new_channel);
+    let new_channel = get_encoded_object(&new_channel);
+    let (channel_input, input_capacity) =
+        converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id)?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_conn_contract_outpoint())
-        .cell_dep(converter.get_chan_contract_outpoint())
-        .input(converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id))
-        .output(channel_lock, get_channel_capacity(), new_channel.data)
+        .cell_dep(converter.get_conn_contract_outpoint().clone())
+        .cell_dep(converter.get_chan_contract_outpoint().clone())
+        .input(channel_input.clone())
+        .output(channel_lock, new_channel.data)
         .witness(old_channel.witness, new_channel.witness)
         .build();
 
@@ -266,7 +267,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CHANNEL_CELL_CAPACITY,
+        input_capacity,
         event: Some(event),
     })
 }
@@ -275,7 +276,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelOpenConfirm,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_channel = converter.get_ibc_channel(&msg.channel_id);
+    let old_channel = converter.get_ibc_channel(&msg.channel_id)?;
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
 
@@ -304,13 +305,15 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
 
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
     let old_channel = get_encoded_object(old_channel);
-    let new_channel = get_encoded_object(new_channel);
+    let new_channel = get_encoded_object(&new_channel);
+    let (channel_input, input_capacity) =
+        converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id)?;
 
     let packed_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
-        .cell_dep(converter.get_chan_contract_outpoint())
-        .input(converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id))
-        .output(channel_lock, get_channel_capacity(), new_channel.data)
+        .cell_dep(converter.get_chan_contract_outpoint().clone())
+        .input(channel_input.clone())
+        .output(channel_lock, new_channel.data)
         .witness(old_channel.witness, new_channel.witness)
         .build();
 
@@ -325,7 +328,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
-        input_capacity: CHANNEL_CELL_CAPACITY,
+        input_capacity,
         event: Some(event),
     })
 }
