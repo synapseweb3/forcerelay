@@ -14,11 +14,9 @@ macro_rules! env_vars {
     };
 }
 
-#[test]
-fn matrix_test_within_axon_and_ckb() -> Result<(), Error> {
+fn init_envs() -> Result<(), Error> {
     let value = std::env::var("ACCOUNT_PREFIXES")
         .map_err(|e| eyre::eyre!("no ENV entry \"ACCOUNT_PREFIXES\": {e}"))?;
-    let mut packet_run = false;
     if value.contains("ckb") {
         env_vars!(
             {"CLIENT_CODE_HASH", hex::encode(TYPE_ID_CODE_HASH)},
@@ -27,24 +25,37 @@ fn matrix_test_within_axon_and_ckb() -> Result<(), Error> {
             {"PACKET_TYPE_ARGS", hex::encode(PACKET_TYPE_ARGS)},
             {"CLIENT_TYPE_ARGS", hex::encode(CLIENT_TYPE_ARGS)},
         );
-        if value == "ckb,ckb" {
-            packet_run = true;
-        }
     }
-    run_arbitrary_binary_channel_test(&ChannelTest::new(&CKB4IbcPacketTest::new(packet_run)))
+    Ok(())
 }
 
-#[ignore = "only for my native manual test"]
+#[test]
+fn test_channel() -> Result<(), Error> {
+    init_envs()?;
+    run_arbitrary_binary_channel_test(&ChannelTest::new())
+}
+
+#[test]
+fn test_ckb_packet() -> Result<(), Error> {
+    init_envs()?;
+    let value = std::env::var("ACCOUNT_PREFIXES")
+        .map_err(|e| eyre::eyre!("no ENV entry \"ACCOUNT_PREFIXES\": {e}"))?;
+    if value == "ckb,ckb" {
+        log::info!("Run ckb packet tests for {}", value);
+        run_arbitrary_binary_channel_test(&CKB4IbcPacketTest::new())
+    } else {
+        log::info!("Ignore ckb packet tests for {}", value);
+        Ok(())
+    }
+}
+
+#[ignore = "local dev manually test"]
 #[test]
 fn specific_test_only_for_ckb() -> Result<(), Error> {
     env_vars!(
         {"CHAIN_COMMAND_PATHS", "ckb,ckb"},
         {"ACCOUNT_PREFIXES", "ckb,ckb"},
-        {"CLIENT_CODE_HASH", hex::encode(TYPE_ID_CODE_HASH)},
-        {"CONNECTION_TYPE_ARGS", hex::encode(CONNECTION_TYPE_ARGS)},
-        {"CHANNEL_TYPE_ARGS", hex::encode(CHANNEL_TYPE_ARGS)},
-        {"PACKET_TYPE_ARGS", hex::encode(PACKET_TYPE_ARGS)},
-        {"CLIENT_TYPE_ARGS", hex::encode(CLIENT_TYPE_ARGS)},
     );
-    run_arbitrary_binary_channel_test(&ChannelTest::new(&CKB4IbcPacketTest::new(true)))
+    init_envs()?;
+    run_arbitrary_binary_channel_test(&CKB4IbcPacketTest::new())
 }

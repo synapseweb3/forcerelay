@@ -9,14 +9,12 @@ use utils::*;
 
 pub struct CKB4IbcPacketTest {
     test_config: RefCell<Option<TestConfig>>,
-    running: bool,
 }
 
 impl CKB4IbcPacketTest {
-    pub fn new(running: bool) -> Self {
+    pub fn new() -> Self {
         Self {
             test_config: Default::default(),
-            running,
         }
     }
 }
@@ -49,10 +47,6 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         chains: ConnectedChains<ChainA, ChainB>,
         channels: ConnectedChannel<ChainA, ChainB>,
     ) -> Result<(), Error> {
-        if !self.running {
-            return Ok(());
-        }
-
         println!("\n============== Start Packet Test Over Channel ============\n");
         info!(
             "send sudt packets over channel (chain_a {}: {}/{}, chain_b {}: {}/{})",

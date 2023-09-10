@@ -4,25 +4,13 @@ use crate::framework::utils::ckb::*;
 use ckb_types::H256;
 use ibc_test_framework::{chain::chain_type::ChainType, prelude::*};
 
-pub struct ChannelTest<'a, Test> {
-    /// Inner test
-    pub test: &'a Test,
-}
+pub struct ChannelTest;
 
-impl<'a, Test> ChannelTest<'a, Test> {
-    pub fn new(test: &'a Test) -> Self {
-        Self { test }
-    }
-}
+impl TestOverrides for ChannelTest {}
 
-impl<'a, Test, Overrides> HasOverrides for ChannelTest<'a, Test>
-where
-    Test: HasOverrides<Overrides = Overrides>,
-{
-    type Overrides = Overrides;
-
-    fn get_overrides(&self) -> &Self::Overrides {
-        self.test.get_overrides()
+impl ChannelTest {
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -51,14 +39,11 @@ fn check_ckb_ibc_cells(
     Ok(())
 }
 
-impl<'a, Test> BinaryChannelTest for ChannelTest<'a, Test>
-where
-    Test: BinaryChannelTest,
-{
+impl BinaryChannelTest for ChannelTest {
     fn run<ChainA: ChainHandle, ChainB: ChainHandle>(
         &self,
-        config: &TestConfig,
-        relayer: RelayerDriver,
+        _config: &TestConfig,
+        _relayer: RelayerDriver,
         chains: ConnectedChains<ChainA, ChainB>,
         channel: ConnectedChannel<ChainA, ChainB>,
     ) -> Result<(), Error> {
@@ -99,7 +84,6 @@ where
                 warn!("Skip IBC channel check for chain-B({:?})", chain);
             }
         }
-
-        self.test.run(config, relayer, chains, channel)
+        Ok(())
     }
 }
