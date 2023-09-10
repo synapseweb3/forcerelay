@@ -6,13 +6,13 @@ use ibc_test_framework::{chain::chain_type::ChainType, prelude::*};
 
 pub struct ChannelTest;
 
-impl TestOverrides for ChannelTest {}
-
 impl ChannelTest {
     pub fn new() -> Self {
         Self
     }
 }
+
+impl TestOverrides for ChannelTest {}
 
 fn check_ckb_ibc_cells(
     rpc_port: u16,

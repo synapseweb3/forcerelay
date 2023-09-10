@@ -3,10 +3,9 @@ use ibc_test_framework::prelude::Error;
 
 use crate::consts::{CHANNEL_TYPE_ARGS, CLIENT_TYPE_ARGS, CONNECTION_TYPE_ARGS, PACKET_TYPE_ARGS};
 use crate::framework::binary::channel::run_arbitrary_binary_channel_test;
-use crate::tests::{channel::ChannelTest, packet::CKB4IbcPacketTest};
 
-mod channel;
-mod packet;
+mod ckb;
+mod ibc;
 
 macro_rules! env_vars {
     ($({$key:expr, $val:expr},)+) => {
@@ -32,7 +31,7 @@ fn init_envs() -> Result<(), Error> {
 #[test]
 fn test_channel() -> Result<(), Error> {
     init_envs()?;
-    run_arbitrary_binary_channel_test(&ChannelTest::new())
+    run_arbitrary_binary_channel_test(&ibc::channel::ChannelTest::new())
 }
 
 #[test]
@@ -42,7 +41,7 @@ fn test_ckb_packet() -> Result<(), Error> {
         .map_err(|e| eyre::eyre!("no ENV entry \"ACCOUNT_PREFIXES\": {e}"))?;
     if value == "ckb,ckb" {
         log::info!("Run ckb packet tests for {}", value);
-        run_arbitrary_binary_channel_test(&CKB4IbcPacketTest::new())
+        run_arbitrary_binary_channel_test(&ckb::packet::CKB4IbcPacketTest::new())
     } else {
         log::info!("Ignore ckb packet tests for {}", value);
         Ok(())
@@ -57,5 +56,5 @@ fn specific_test_only_for_ckb() -> Result<(), Error> {
         {"ACCOUNT_PREFIXES", "ckb,ckb"},
     );
     init_envs()?;
-    run_arbitrary_binary_channel_test(&CKB4IbcPacketTest::new())
+    run_arbitrary_binary_channel_test(&ckb::packet::CKB4IbcPacketTest::new())
 }

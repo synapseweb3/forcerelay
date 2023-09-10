@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use ibc_test_framework::prelude::*;
 use log::info;
 use tokio::runtime::Runtime;
@@ -7,37 +5,15 @@ use tokio::runtime::Runtime;
 mod utils;
 use utils::*;
 
-pub struct CKB4IbcPacketTest {
-    test_config: RefCell<Option<TestConfig>>,
-}
+pub struct CKB4IbcPacketTest;
 
 impl CKB4IbcPacketTest {
     pub fn new() -> Self {
-        Self {
-            test_config: Default::default(),
-        }
+        Self
     }
 }
 
-impl TestOverrides for CKB4IbcPacketTest {
-    fn modify_test_config(&self, config: &mut TestConfig) {
-        *self.test_config.borrow_mut() = Some(config.to_owned());
-    }
-
-    fn channel_port_a(&self) -> PortId {
-        let config_opt = self.test_config.borrow();
-        let config = config_opt.as_ref().unwrap();
-        let command = config.chain_command_paths.first().unwrap();
-        transfer_port_id(get_chain_type(command))
-    }
-
-    fn channel_port_b(&self) -> PortId {
-        let config_opt = self.test_config.borrow();
-        let config = config_opt.as_ref().unwrap();
-        let command = config.chain_command_paths.iter().last().unwrap();
-        transfer_port_id(get_chain_type(command))
-    }
-}
+impl TestOverrides for CKB4IbcPacketTest {}
 
 impl BinaryChannelTest for CKB4IbcPacketTest {
     fn run<ChainA: ChainHandle, ChainB: ChainHandle>(
