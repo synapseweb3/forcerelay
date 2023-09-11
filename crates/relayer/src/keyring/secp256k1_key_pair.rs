@@ -284,6 +284,10 @@ impl Secp256k1KeyPair {
 impl SigningKeyPair for Secp256k1KeyPair {
     const KEY_TYPE: KeyType = KeyType::Secp256k1;
 
+    fn from_secret_key(_secret_key: &str) -> Result<Self, Error> {
+        unimplemented!()
+    }
+
     fn from_key_file(key_file: KeyFile, hd_path: &StandardHDPath) -> Result<Self, Error> {
         // Decode the Bech32-encoded address from the key file
         let keyfile_address_bytes = decode_bech32(&key_file.address)?;

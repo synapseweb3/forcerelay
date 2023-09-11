@@ -109,6 +109,10 @@ impl Ed25519KeyPair {
 impl SigningKeyPair for Ed25519KeyPair {
     const KEY_TYPE: KeyType = KeyType::Ed25519;
 
+    fn from_secret_key(_secret_key: &str) -> Result<Self, Error> {
+        unimplemented!()
+    }
+
     fn from_key_file(key_file: KeyFile, hd_path: &StandardHDPath) -> Result<Self, Error> {
         // TODO: Derive this from something in `key_file`
         let address_type = Ed25519AddressType::Solana;

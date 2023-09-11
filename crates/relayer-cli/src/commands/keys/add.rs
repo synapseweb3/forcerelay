@@ -40,7 +40,9 @@ use crate::conclude::Output;
 #[clap(
     override_usage = "forcerelay keys add [OPTIONS] --chain <CHAIN_ID> --key-file <KEY_FILE>
 
-    forcerelay keys add [OPTIONS] --chain <CHAIN_ID> --mnemonic-file <MNEMONIC_FILE>"
+    forcerelay keys add [OPTIONS] --chain <CHAIN_ID> --mnemonic-file <MNEMONIC_FILE>
+
+    forcerelay keys add [OPTIONS] --chain <CHAIN_ID> --secret-file <SECRET_FILE>"
 )]
 pub struct KeysAddCmd {
     #[clap(
@@ -70,6 +72,16 @@ pub struct KeysAddCmd {
         group = "add-restore"
     )]
     mnemonic_file: Option<PathBuf>,
+
+    #[clap(
+        long = "secret-file",
+        required = true,
+        value_name = "SECRET_FILE",
+        help_heading = "FLAGS",
+        help = "Path to file containing secret key to restore from",
+        group = "add-restore"
+    )]
+    secret_file: Option<PathBuf>,
 
     #[clap(
         long = "key-name",
@@ -131,9 +143,13 @@ impl Runnable for KeysAddCmd {
             Ok(result) => result,
         };
 
-        // Check if --key-file or --mnemonic-file was given as input.
-        match (self.key_file.clone(), self.mnemonic_file.clone()) {
-            (Some(key_file), _) => {
+        // Check if --key-file or --mnemonic-file or --secret-file was given as input.
+        match (
+            self.key_file.clone(),
+            self.mnemonic_file.clone(),
+            self.secret_file.clone(),
+        ) {
+            (Some(key_file), _, _) => {
                 let key = add_key(
                     &opts.config,
                     &opts.name,
@@ -156,7 +172,7 @@ impl Runnable for KeysAddCmd {
                     .exit(),
                 }
             }
-            (_, Some(mnemonic_file)) => {
+            (_, Some(mnemonic_file), _) => {
                 let key = restore_key(
                     &mnemonic_file,
                     &opts.name,
@@ -176,6 +192,25 @@ impl Runnable for KeysAddCmd {
                     Err(e) => Output::error(format!(
                         "An error occurred restoring the key on chain {} from file {:?}: {}",
                         self.chain_id, mnemonic_file, e
+                    ))
+                    .exit(),
+                }
+            }
+            (_, _, Some(secret_file)) => {
+                let key =
+                    parse_key_from_secret(&secret_file, &opts.name, &opts.config, self.overwrite);
+
+                match key {
+                    Ok(key) => Output::success_msg(format!(
+                        "Parsed key '{}' ({}) on chain {}",
+                        opts.name,
+                        key.account(),
+                        opts.config.id(),
+                    ))
+                    .exit(),
+                    Err(e) => Output::error(format!(
+                        "An error occurred parsing the key on chain {} from file {:?}: {}",
+                        self.chain_id, secret_file, e
                     ))
                     .exit(),
                 }
@@ -255,6 +290,15 @@ pub fn restore_key(
     Ok(key_pair)
 }
 
+pub fn parse_key_from_secret(
+    _secret_file: &Path,
+    _key_name: &str,
+    _config: &ChainConfig,
+    _overwrite: bool,
+) -> eyre::Result<AnySigningKeyPair> {
+    unimplemented!()
+}
+
 /// Check if the key with the given key name already exists.
 /// If it already exists and overwrite is false, abort the command with an error.
 /// If overwrite is true, output a warning message informing the key will be overwritten.
@@ -284,6 +328,7 @@ mod tests {
                 chain_id: ChainId::from_string("chain_id"),
                 key_file: Some(PathBuf::from("key_file")),
                 mnemonic_file: None,
+                secret_file: None,
                 key_name: None,
                 hd_path: "m/44'/118'/0'/0/0".to_string(),
                 overwrite: false,
@@ -299,6 +344,7 @@ mod tests {
                 chain_id: ChainId::from_string("chain_id"),
                 key_file: None,
                 mnemonic_file: Some(PathBuf::from("mnemonic_file")),
+                secret_file: None,
                 key_name: None,
                 hd_path: "m/44'/118'/0'/0/0".to_string(),
                 overwrite: false
@@ -314,12 +360,35 @@ mod tests {
     }
 
     #[test]
+    fn test_keys_add_secret_key() {
+        assert_eq!(
+            KeysAddCmd {
+                chain_id: ChainId::from_string("chain_id"),
+                key_file: None,
+                mnemonic_file: None,
+                secret_file: Some(PathBuf::from("secret_file")),
+                key_name: None,
+                hd_path: "m/44'/118'/0'/0/0".to_string(),
+                overwrite: false,
+            },
+            KeysAddCmd::parse_from([
+                "test",
+                "--chain",
+                "chain_id",
+                "--secret-file",
+                "secret_file",
+            ])
+        )
+    }
+
+    #[test]
     fn test_keys_add_key_file_overwrite() {
         assert_eq!(
             KeysAddCmd {
                 chain_id: ChainId::from_string("chain_id"),
                 key_file: Some(PathBuf::from("key_file")),
                 mnemonic_file: None,
+                secret_file: None,
                 key_name: None,
                 hd_path: "m/44'/118'/0'/0/0".to_string(),
                 overwrite: true,
@@ -342,6 +411,7 @@ mod tests {
                 chain_id: ChainId::from_string("chain_id"),
                 key_file: None,
                 mnemonic_file: Some(PathBuf::from("mnemonic_file")),
+                secret_file: None,
                 key_name: None,
                 hd_path: "m/44'/118'/0'/0/0".to_string(),
                 overwrite: true,
@@ -352,6 +422,29 @@ mod tests {
                 "chain_id",
                 "--mnemonic-file",
                 "mnemonic_file",
+                "--overwrite"
+            ])
+        )
+    }
+
+    #[test]
+    fn test_keys_add_secret_key_overwrite() {
+        assert_eq!(
+            KeysAddCmd {
+                chain_id: ChainId::from_string("chain_id"),
+                key_file: None,
+                mnemonic_file: None,
+                secret_file: Some(PathBuf::from("secret_file")),
+                key_name: None,
+                hd_path: "m/44'/118'/0'/0/0".to_string(),
+                overwrite: true,
+            },
+            KeysAddCmd::parse_from([
+                "test",
+                "--chain",
+                "chain_id",
+                "--secret-file",
+                "secret_file",
                 "--overwrite"
             ])
         )
