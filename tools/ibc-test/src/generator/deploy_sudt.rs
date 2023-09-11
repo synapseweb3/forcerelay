@@ -14,26 +14,24 @@ use ckb_types::{
 
 use crate::generator::{
     utils::{get_lock_script, get_secp256k1_cell_dep, wrap_rpc_request_and_save},
-    PRIVKEY,
+    GENESIS_TXHASH, PRIVKEY,
 };
 
-use super::deploy_connection::ConnectionAttribute;
-
 #[derive(Debug)]
-pub struct ChannelAttribute {
+pub struct SUDTAttribute {
     pub tx_hash: H256,
     pub balance_index: usize,
-    pub channel_index: usize,
-    pub channel_type_args: H256,
-    pub channel_code_hash: H256,
+    pub sudt_index: usize,
+    pub sudt_type_args: H256,
+    pub sudt_code_hash: H256,
 }
 
-pub fn generate_deploy_channel(attribute: &ConnectionAttribute) -> ChannelAttribute {
+pub fn generate_deploy_sudt() -> SUDTAttribute {
     let input = CellInput::new_builder()
         .previous_output(
             OutPoint::new_builder()
-                .tx_hash(attribute.tx_hash.pack())
-                .index(attribute.balance_index.pack())
+                .tx_hash(GENESIS_TXHASH.pack())
+                .index(8u32.pack())
                 .build(),
         )
         .build();
@@ -43,45 +41,38 @@ pub fn generate_deploy_channel(attribute: &ConnectionAttribute) -> ChannelAttrib
     blake_2b.update(0u64.to_le_bytes().as_slice());
     let mut type_0_args = [0; 32];
     blake_2b.finalize(&mut type_0_args);
-    println!("channel type args: {:?}", hex::encode(type_0_args));
-    let channel_type_args: H256 = type_0_args.into();
+    println!("sUDT type args: {:?}", hex::encode(type_0_args));
 
+    let sudt_type_args: H256 = type_0_args.into();
     let (lock_script, secret_key, _) = get_lock_script(PRIVKEY);
 
-    let channel_type_script = Script::new_builder()
+    let sudt_type_script = Script::new_builder()
         .code_hash(TYPE_ID_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
         .args(type_0_args.as_slice().pack())
         .build();
 
-    println!(
-        "channel code hash: {}",
-        channel_type_script.calc_script_hash()
-    );
-    let channel_code_hash: H256 = channel_type_script.calc_script_hash().unpack();
+    println!("sUDT code hash: {}", sudt_type_script.calc_script_hash());
+    let sudt_code_hash: H256 = sudt_type_script.calc_script_hash().unpack();
 
-    let channel_output = CellOutput::new_builder()
-        .type_(
-            ScriptOpt::new_builder()
-                .set(Some(channel_type_script))
-                .build(),
-        )
+    let sudt_output = CellOutput::new_builder()
+        .type_(ScriptOpt::new_builder().set(Some(sudt_type_script)).build())
         .lock(lock_script.clone())
-        .capacity(100_000_000_000_000u64.pack())
+        .capacity(50_000_000_000_000u64.pack())
         .build();
 
     let change_output = CellOutput::new_builder()
         .lock(lock_script.clone())
-        .capacity(800_000_000_000_000_u64.pack())
+        .capacity(1_200_000_000_000_000_u64.pack())
         .build();
     let empty_data = "0x".as_bytes().to_vec().pack();
 
     let tx = TransactionView::new_advanced_builder()
         .cell_dep(get_secp256k1_cell_dep())
         .input(input)
-        .output(channel_output)
+        .output(sudt_output)
         .output(change_output)
-        .output_data(std::fs::read("./contracts/ics-channel").unwrap().pack())
+        .output_data(std::fs::read("./contracts/simple-udt").unwrap().pack())
         .output_data(empty_data)
         .build();
 
@@ -100,13 +91,13 @@ pub fn generate_deploy_channel(attribute: &ConnectionAttribute) -> ChannelAttrib
             },
         )
         .unwrap();
-    let tx_hash = wrap_rpc_request_and_save(tx, "./txs/deploy_channel.json");
+    let tx_hash = wrap_rpc_request_and_save(tx, "./txs/deploy_sudt.json");
 
-    ChannelAttribute {
+    SUDTAttribute {
         tx_hash,
+        sudt_index: 0,
         balance_index: 1,
-        channel_index: 0,
-        channel_type_args,
-        channel_code_hash,
+        sudt_type_args,
+        sudt_code_hash,
     }
 }

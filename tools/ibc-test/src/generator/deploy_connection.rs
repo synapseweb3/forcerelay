@@ -1,12 +1,12 @@
 use ckb_hash::new_blake2b;
 use ckb_sdk::{
+    constants::TYPE_ID_CODE_HASH,
     traits::SecpCkbRawKeySigner,
     unlock::{ScriptSigner, SecpSighashScriptSigner},
     ScriptGroup, ScriptGroupType,
 };
 use ckb_types::{
     core::{ScriptHashType, TransactionView},
-    h256,
     packed::{CellInput, CellOutput, OutPoint, Script, ScriptOpt},
     prelude::*,
     H256,
@@ -14,8 +14,10 @@ use ckb_types::{
 
 use crate::generator::{
     utils::{get_lock_script, get_secp256k1_cell_dep, wrap_rpc_request_and_save},
-    GENESIS_TXHASH, PRIVKEY,
+    PRIVKEY,
 };
+
+use super::deploy_sudt::SUDTAttribute;
 
 #[derive(Debug)]
 pub struct ConnectionAttribute {
@@ -26,12 +28,12 @@ pub struct ConnectionAttribute {
     pub connection_code_hash: H256,
 }
 
-pub fn generate_deploy_connection() -> ConnectionAttribute {
+pub fn generate_deploy_connection(attribute: &SUDTAttribute) -> ConnectionAttribute {
     let input = CellInput::new_builder()
         .previous_output(
             OutPoint::new_builder()
-                .tx_hash(GENESIS_TXHASH.pack())
-                .index(8u32.pack())
+                .tx_hash(attribute.tx_hash.pack())
+                .index(attribute.balance_index.pack())
                 .build(),
         )
         .build();
@@ -47,9 +49,7 @@ pub fn generate_deploy_connection() -> ConnectionAttribute {
     let (lock_script, secret_key, _) = get_lock_script(PRIVKEY);
 
     let connection_type_script = Script::new_builder()
-        .code_hash(
-            h256!("0x00000000000000000000000000000000000000000000000000545950455f4944").pack(),
-        )
+        .code_hash(TYPE_ID_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
         .args(type_0_args.as_slice().pack())
         .build();

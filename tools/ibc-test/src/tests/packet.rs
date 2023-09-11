@@ -84,13 +84,19 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
 
         // 2. trigger SendPacket event on ChainA
         info!("send send_packet transaction to chain_a");
-        let message = b"ping".to_vec();
+        let relayer_on_a = chain_a_config.user_lock_script().calc_script_hash();
+        let message = ICS20Transfer {
+            denom: "AT".to_owned(),
+            amount: 1000,
+            sender: relayer_on_a.raw_data().to_vec(),
+            receiver: relayer_on_a.raw_data().to_vec(),
+        };
         let send_packet_tx = generate_send_packet_transaction(
             &rt,
             &chain_a_config,
             &chain_a_url,
             &chain_a_signer,
-            message,
+            &message,
         )?;
         let hash = send_transaction(&chain_a_url, send_packet_tx)?;
         info!(
@@ -104,18 +110,20 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
             listen_and_wait_packet_cell(&rt, &chain_b_url, &chain_b_config, |packet| {
                 packet.is_recv_packet()
             })?;
-        info!("🍻 successfully find recv_packet cell on chain_b");
+        let payload: ICS20Transfer =
+            serde_json::from_slice(&recv_packet.packet.packet.data).expect("ics20 message");
+        let relayer_on_b = chain_b_config.user_lock_script().calc_script_hash();
+        assert!(payload == message && payload.receiver == relayer_on_b.raw_data().to_vec());
+        info!("🍻 successfully find recv_packet cell on chain_b: {payload}");
 
         // 4. trigger WriteAck event on ChainB
         info!("send write_ack transaction to chain_b");
-        let acknowledgemnt = b"pong".to_vec();
         let write_ack_tx = generate_write_ack_transaction(
             &rt,
             &chain_b_config,
             &chain_b_url,
             &chain_b_signer,
             recv_packet,
-            acknowledgemnt,
         )?;
         let hash = send_transaction(&chain_b_url, write_ack_tx)?;
         info!(
@@ -163,14 +171,19 @@ fn trigger_send_packet() {
 
     let (chain_a_config, chain_a_url, chain_a_signer) =
         prepare_artificials(&config, &chain_id_a, &channel_id_a).unwrap();
-
-    let message = b"ping".to_vec();
+    let relayer_on_a = chain_a_config.user_lock_script().calc_script_hash();
+    let message = ICS20Transfer {
+        denom: "AT".to_owned(),
+        amount: 1000,
+        sender: relayer_on_a.raw_data().to_vec(),
+        receiver: relayer_on_a.raw_data().to_vec(),
+    };
     let send_packet_tx = generate_send_packet_transaction(
         &rt,
         &chain_a_config,
         &chain_a_url,
         &chain_a_signer,
-        message,
+        &message,
     )
     .unwrap();
 
