@@ -4,7 +4,7 @@ use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
 use ckb_sdk::rpc::ckb_light_client::{Order, ScriptType, SearchKey};
 use ckb_sdk::traits::{CellQueryOptions, SecpCkbRawKeySigner, ValueRangeOption};
 use ckb_sdk::unlock::{ScriptSigner, SecpSighashScriptSigner};
-use ckb_sdk::{AddressPayload, CkbRpcClient, HumanCapacity};
+use ckb_sdk::{CkbRpcClient, HumanCapacity};
 use ckb_sdk::{ScriptGroup, ScriptGroupType};
 use ckb_types::core::{Capacity, ScriptHashType, TransactionBuilder, TransactionView};
 use ckb_types::packed::{CellDep, CellInput, CellOutput, Script};
@@ -26,12 +26,9 @@ use futures::{pin_mut, StreamExt, TryStreamExt};
 use ibc_test_framework::prelude::*;
 use relayer::chain::ckb::prelude::{CkbReader, TxCompleter};
 use relayer::chain::ckb::rpc_client::RpcClient;
-use relayer::chain::ChainType;
 use relayer::config::ChainConfig;
 use rlp::Encodable;
-use secp256k1::{Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::str::FromStr;
 use tiny_keccak::Hasher;
 use tokio::runtime::Runtime;
@@ -234,36 +231,6 @@ pub fn tx_error_cast<T: ToString>(error: T, tx: TransactionView) -> eyre::Error 
         error.to_string(),
         serde_json::to_string_pretty(&JsonTxView::from(tx)).unwrap()
     )
-}
-
-pub fn get_chain_type(command_path: &str) -> ChainType {
-    let path: PathBuf = command_path.into();
-    match path.file_name().unwrap().to_str().unwrap() {
-        "ckb" => ChainType::Ckb,
-        "axon" => ChainType::Axon,
-        chain => unimplemented!("unknown chain {:?}", chain),
-    }
-}
-
-pub fn transfer_port_id(chain_type: ChainType) -> PortId {
-    match chain_type {
-        ChainType::Ckb => {
-            // CKB only allow h256 as portId
-            let relayer_key = SecretKey::from_str(PRIVKEY).unwrap();
-            let address =
-                AddressPayload::from_pubkey(&relayer_key.public_key(&Secp256k1::default()));
-            let script: Script = (&address).into();
-            let script_hash = script.calc_script_hash();
-            PortId::from_str(&hex::encode(script_hash.as_slice())).unwrap()
-        }
-        ChainType::Axon => {
-            // Axon default port ID
-            PortId::from_str("port-0").unwrap()
-        }
-        _ => {
-            unreachable!()
-        }
-    }
 }
 
 pub fn prepare_artificials(

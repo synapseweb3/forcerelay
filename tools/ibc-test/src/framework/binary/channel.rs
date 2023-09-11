@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use ibc_test_framework::{
     framework::{
         base::*,
@@ -11,6 +13,8 @@ use ibc_test_framework::{
     },
     prelude::*,
 };
+
+use crate::framework::utils::common::{get_chain_type, transfer_port_id};
 
 use super::node::RunArbitraryBinaryNodeTest;
 
@@ -45,23 +49,49 @@ where
 
 /// This test override the default port for ckb and axon chain
 pub struct RunExtendedChannelTest<'a, Test> {
+    overrides: ExtendedChannelOverrides,
     test: &'a Test,
 }
 
 impl<'a, Test> RunExtendedChannelTest<'a, Test> {
     fn new(test: &'a Test) -> Self {
-        Self { test }
+        Self {
+            test,
+            overrides: ExtendedChannelOverrides::default(),
+        }
     }
 }
 
-impl<'a, Test, Overrides> HasOverrides for RunExtendedChannelTest<'a, Test>
-where
-    Test: HasOverrides<Overrides = Overrides>,
-{
-    type Overrides = Overrides;
+impl<'a, Test> HasOverrides for RunExtendedChannelTest<'a, Test> {
+    type Overrides = ExtendedChannelOverrides;
 
     fn get_overrides(&self) -> &Self::Overrides {
-        self.test.get_overrides()
+        &self.overrides
+    }
+}
+
+#[derive(Default)]
+pub struct ExtendedChannelOverrides {
+    test_config: RefCell<Option<TestConfig>>,
+}
+
+impl TestOverrides for ExtendedChannelOverrides {
+    fn modify_test_config(&self, config: &mut TestConfig) {
+        *self.test_config.borrow_mut() = Some(config.to_owned());
+    }
+
+    fn channel_port_a(&self) -> PortId {
+        let config_opt = self.test_config.borrow();
+        let config = config_opt.as_ref().unwrap();
+        let command = config.chain_command_paths.first().unwrap();
+        transfer_port_id(get_chain_type(command))
+    }
+
+    fn channel_port_b(&self) -> PortId {
+        let config_opt = self.test_config.borrow();
+        let config = config_opt.as_ref().unwrap();
+        let command = config.chain_command_paths.iter().last().unwrap();
+        transfer_port_id(get_chain_type(command))
     }
 }
 

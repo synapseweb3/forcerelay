@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use ibc_test_framework::prelude::*;
 use log::info;
 use tokio::runtime::Runtime;
@@ -7,39 +5,15 @@ use tokio::runtime::Runtime;
 mod utils;
 use utils::*;
 
-pub struct CKB4IbcPacketTest {
-    test_config: RefCell<Option<TestConfig>>,
-    running: bool,
-}
+pub struct CKB4IbcPacketTest;
 
 impl CKB4IbcPacketTest {
-    pub fn new(running: bool) -> Self {
-        Self {
-            test_config: Default::default(),
-            running,
-        }
+    pub fn new() -> Self {
+        Self
     }
 }
 
-impl TestOverrides for CKB4IbcPacketTest {
-    fn modify_test_config(&self, config: &mut TestConfig) {
-        *self.test_config.borrow_mut() = Some(config.to_owned());
-    }
-
-    fn channel_port_a(&self) -> PortId {
-        let config_opt = self.test_config.borrow();
-        let config = config_opt.as_ref().unwrap();
-        let command = config.chain_command_paths.first().unwrap();
-        transfer_port_id(get_chain_type(command))
-    }
-
-    fn channel_port_b(&self) -> PortId {
-        let config_opt = self.test_config.borrow();
-        let config = config_opt.as_ref().unwrap();
-        let command = config.chain_command_paths.iter().last().unwrap();
-        transfer_port_id(get_chain_type(command))
-    }
-}
+impl TestOverrides for CKB4IbcPacketTest {}
 
 impl BinaryChannelTest for CKB4IbcPacketTest {
     fn run<ChainA: ChainHandle, ChainB: ChainHandle>(
@@ -49,10 +23,6 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         chains: ConnectedChains<ChainA, ChainB>,
         channels: ConnectedChannel<ChainA, ChainB>,
     ) -> Result<(), Error> {
-        if !self.running {
-            return Ok(());
-        }
-
         println!("\n============== Start Packet Test Over Channel ============\n");
         info!(
             "send sudt packets over channel (chain_a {}: {}/{}, chain_b {}: {}/{})",
