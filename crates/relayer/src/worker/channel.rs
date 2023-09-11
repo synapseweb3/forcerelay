@@ -2,8 +2,7 @@ use core::time::Duration;
 use crossbeam_channel::Receiver;
 use tracing::{debug, error_span};
 
-use crate::chain::handle::CacheTxHashStatus;
-use crate::channel::{channel_handshake_retry, Channel as RelayChannel, ChannelError};
+use crate::channel::{channel_handshake_retry, Channel as RelayChannel};
 use crate::util::retry::RetryResult;
 use crate::util::task::{spawn_background_task, Next, TaskError, TaskHandle};
 use crate::{
@@ -31,7 +30,7 @@ fn max_block_times<ChainA: ChainHandle, ChainB: ChainHandle>(
 
 pub fn spawn_channel_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
     channel: Channel,
-    mut chains: ChainHandlePair<ChainA, ChainB>,
+    chains: ChainHandlePair<ChainA, ChainB>,
     cmd_rx: Receiver<WorkerCmd>,
 ) -> TaskHandle {
     let mut complete_handshake_on_new_block = true;
@@ -50,39 +49,6 @@ pub fn spawn_channel_worker<ChainA: ChainHandle, ChainB: ChainHandle>(
 
                         complete_handshake_on_new_block = false;
                         if let Some(event_with_height) = last_event {
-                            use ibc_relayer_types::events::IbcEvent::*;
-                            let tx_hash = event_with_height.tx_hash;
-                            let (port_id, channel_id) = match event_with_height.event.clone() {
-                                OpenInitChannel(event) => (Some(event.port_id), event.channel_id),
-                                OpenTryChannel(event) => (Some(event.port_id), event.channel_id),
-                                OpenAckChannel(event) => (Some(event.port_id), event.channel_id),
-                                OpenConfirmChannel(event) => {
-                                    (Some(event.port_id), event.channel_id)
-                                }
-                                CloseInitChannel(event) => {
-                                    (Some(event.port_id), Some(event.channel_id))
-                                }
-                                CloseConfirmChannel(event) => {
-                                    (Some(event.port_id), event.channel_id)
-                                }
-                                _ => (None, None),
-                            };
-                            if let Some(port_id) = port_id {
-                                let channel_id = channel_id.unwrap();
-                                chains
-                                    .a
-                                    .cache_ics_tx_hash(
-                                        CacheTxHashStatus::new_with_chan(channel_id, port_id),
-                                        tx_hash,
-                                    )
-                                    .map_err(|_| {
-                                        TaskError::Fatal(RunError::channel(
-                                            ChannelError::fail_cache_tx_hash(
-                                                event_with_height.event.clone(),
-                                            ),
-                                        ))
-                                    })?;
-                            };
                             retry_with_index(
                                 channel_handshake_retry::default_strategy(max_block_times),
                                 |index| match RelayChannel::restore_from_event(

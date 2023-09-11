@@ -1,0 +1,123 @@
+name: IBC test
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ibc-test.yaml
+      - Cargo.toml
+      - Cargo.lock
+      - ci/**
+      - crates/**
+      - tools/**
+  push:
+    branches: main
+      - .github/workflows/ibc-test.yaml
+      - Cargo.toml
+      - Cargo.lock
+      - ci/**
+      - crates/**
+      - tools/**
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ibc-test:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    env:
+      SRC_DIR: ${{ github.workspace }}/ibc-test-src
+      AXON_COMMIT: d03d2bb7cb3dcdc03319c3a74beeee6715e7f448
+      IBC_CONTRACT_COMMIT: 5746d048304ca4d73dc4800459ddd79d57fa124c
+    strategy:
+      fail-fast: false
+      matrix:
+        chain_a:
+          - command: ckb
+            account_prefix: ckb
+          - command: axon
+            account_prefix: axon
+        chain_b:
+          - command: ckb
+            account_prefix: ckb
+          - command: axon
+            account_prefix: axon
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Create source folder
+        run: mkdir -p $SRC_DIR
+
+      - name: Set Node.js 16.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+
+      - name: Install yarn
+        run: npm install --global yarn
+
+      - name: Prepare CKB
+        run: |
+          if [ ! -f "/tmp/ckb.tar.gz" ]; then
+            curl -L https://github.com/nervosnetwork/ckb/releases/download/v0.110.0/ckb_v0.110.0_x86_64-unknown-linux-gnu.tar.gz -o /tmp/ckb.tar.gz
+          fi
+          tar -zxf /tmp/ckb.tar.gz -C /tmp
+          echo "/tmp/ckb_v0.110.0_x86_64-unknown-linux-gnu" >> $GITHUB_PATH
+
+      - name: Prepare Axon source
+        run: git clone --recursive https://github.com/axonweb3/axon.git $SRC_DIR/axon && cd $SRC_DIR/axon && git checkout $AXON_COMMIT
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+
+      - name: Cache axon bin
+        id: cache-axon-bin
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-axon-bin
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ${{env.SRC_DIR}}/axon/target/release/axon
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ env.AXON_COMMIT }}
+  
+      - name: Build Axon
+        if: ${{ steps.cache-axon-bin.outputs.cache-hit != 'true' }}
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --manifest-path ${{env.SRC_DIR}}/axon/Cargo.toml
+      
+      - name: Add axon bin to path
+        run: echo "${{env.SRC_DIR}}/axon/target/release/" >> $GITHUB_PATH
+
+      - name: Prepare IBC contracts
+        run: git clone --recursive https://github.com/synapseweb3/ibc-solidity-contract.git $SRC_DIR/ibc-solidity-contract && cd $SRC_DIR/ibc-solidity-contract && git checkout $IBC_CONTRACT_COMMIT
+
+      - name: Compile IBC contracts
+        working-directory: ${{env.SRC_DIR}}/ibc-solidity-contract
+        run: yarn install && yarn compile
+
+      - name: Compile tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p ibc-test --tests --jobs=4
+
+      - name: Run IBC tests
+        uses: actions-rs/cargo@v1
+        env:
+          CHAIN_COMMAND_PATHS: ${{ matrix.chain_a.command }},${{ matrix.chain_b.command }}
+          ACCOUNT_PREFIXES: ${{ matrix.chain_a.account_prefix }},${{ matrix.chain_b.account_prefix }}
+          AXON_SRC_PATH: ${{env.SRC_DIR}}/axon
+          IBC_CONTRACTS_SRC_PATH: ${{env.SRC_DIR}}/ibc-solidity-contract
+          RUST_LOG: info
+          RUST_BACKTRACE: 1
+        with:
+          command: test
+          args: -p ibc-test -- --nocapture

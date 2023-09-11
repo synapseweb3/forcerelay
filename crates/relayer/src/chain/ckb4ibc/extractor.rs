@@ -3,9 +3,7 @@ use std::time::Duration;
 
 use crate::error::Error;
 
-use ckb_ics_axon::handler::{
-    get_channel_id_str, IbcChannel as CkbIbcChannel, IbcConnections, IbcPacket,
-};
+use ckb_ics_axon::handler::{IbcChannel as CkbIbcChannel, IbcConnections, IbcPacket};
 use ckb_ics_axon::message::{Envelope, MsgType};
 use ckb_ics_axon::object::{
     ConnectionEnd as CkbConnectionEnd, Ordering as CkbOrdering, State as CkbState,
@@ -25,14 +23,15 @@ use ibc_relayer_types::core::ics04_channel::channel::{
     State as ChannelState,
 };
 use ibc_relayer_types::core::ics04_channel::version::Version as ChanVersion;
+use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
 
-use super::utils::get_connection_id;
+use super::utils::{generate_channel_id, generate_connection_id};
 
 pub fn extract_channel_end_from_tx(
     tx: TransactionView,
 ) -> Result<(IdentifiedChannelEnd, CkbIbcChannel), Error> {
-    let idx = get_object_idx(&tx, ObjectType::ChannelEnd)?;
+    let idx = get_object_index(&tx, ObjectType::ChannelEnd)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
         .map_err(|_| Error::ckb_decode_witness_args())?;
@@ -41,12 +40,11 @@ pub fn extract_channel_end_from_tx(
             .map_err(|_| Error::extract_chan_tx_error(tx.hash.to_string()))?;
 
     let channel_end = convert_channel_end(ckb_channel_end.clone())?;
-
     Ok((channel_end, ckb_channel_end))
 }
 
 pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnections, Error> {
-    let idx = get_object_idx(&tx, ObjectType::IbcConnections)?;
+    let idx = get_object_index(&tx, ObjectType::IbcConnections)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes()).unwrap();
     let ibc_connection_cells =
@@ -58,30 +56,32 @@ pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnect
 
 pub fn extract_connections_from_tx(
     tx: TransactionView,
+    prefix: &CommitmentPrefix,
 ) -> Result<(Vec<IdentifiedConnectionEnd>, IbcConnections), Error> {
     let ibc_connection_cell = extract_ibc_connections_from_tx(tx)?;
     let result = ibc_connection_cell
         .connections
         .iter()
         .enumerate()
-        .flat_map(|(idx, connection)| convert_connection_end(connection.clone(), idx))
+        .flat_map(|(idx, connection)| convert_connection_end(connection.clone(), idx, prefix))
         .collect();
     Ok((result, ibc_connection_cell))
 }
 
-pub fn extract_ibc_packet_from_tx(tx: TransactionView) -> Result<IbcPacket, Error> {
-    let idx = get_object_idx(&tx, ObjectType::IbcPacket)?;
+pub fn extract_ibc_packet_from_tx(tx: TransactionView) -> Result<(IbcPacket, Vec<u8>), Error> {
+    let envelope = get_envelope(&tx)?;
+    let idx = navigate(&envelope.msg_type, &ObjectType::IbcPacket);
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
         .map_err(|_| Error::ckb_decode_witness_args())?;
     let ibc_packet =
         rlp::decode::<IbcPacket>(&witness_args.output_type().to_opt().unwrap().raw_data())
             .map_err(|_| Error::extract_chan_tx_error(tx.hash.to_string()))?;
-    Ok(ibc_packet)
+    Ok((ibc_packet, envelope.content))
 }
 
-fn navigate(t: MsgType, object_type: ObjectType) -> usize {
-    match (&t, &object_type) {
+fn navigate(t: &MsgType, object_type: &ObjectType) -> usize {
+    match (t, object_type) {
         (MsgType::MsgClientCreate, ObjectType::IbcConnections) => 0,
         (MsgType::MsgConnectionOpenInit, ObjectType::IbcConnections) => 0,
         (MsgType::MsgConnectionOpenTry, ObjectType::IbcConnections) => 0,
@@ -98,22 +98,23 @@ fn navigate(t: MsgType, object_type: ObjectType) -> usize {
         (MsgType::MsgSendPacket, ObjectType::ChannelEnd) => 0,
         (MsgType::MsgRecvPacket, ObjectType::ChannelEnd) => 0,
         (MsgType::MsgAckPacket, ObjectType::ChannelEnd) => 0,
-        (MsgType::MsgAckOutboxPacket, ObjectType::ChannelEnd) => 0, // only input
-        (MsgType::MsgAckInboxPacket, ObjectType::ChannelEnd) => 0,  // only input
-        (MsgType::MsgFinishPacket, ObjectType::ChannelEnd) => todo!(),
-        (MsgType::MsgTimeoutPacket, ObjectType::ChannelEnd) => todo!(),
+        (MsgType::MsgWriteAckPacket, ObjectType::ChannelEnd) => 0,
+        (MsgType::MsgTimeoutPacket, ObjectType::ChannelEnd) => 0,
         (MsgType::MsgSendPacket, ObjectType::IbcPacket) => 1,
         (MsgType::MsgRecvPacket, ObjectType::IbcPacket) => 1,
         (MsgType::MsgAckPacket, ObjectType::IbcPacket) => 1,
-        _ => unreachable!(),
+        (MsgType::MsgWriteAckPacket, ObjectType::IbcPacket) => 1,
+        (MsgType::MsgTimeoutPacket, ObjectType::IbcPacket) => 1,
+        _ => unreachable!("navigate: {t:?}, {object_type:?}"),
     }
 }
 
 fn convert_connection_end(
     connection: CkbConnectionEnd,
     idx: usize,
+    prefix: &CommitmentPrefix,
 ) -> Result<IdentifiedConnectionEnd, Error> {
-    let connection_id = get_connection_id(idx as u16);
+    let connection_id = generate_connection_id(idx as u16, &connection.client_id);
     let state = match connection.state {
         CkbState::Unknown => ConnectionState::Uninitialized,
         CkbState::Init => ConnectionState::Init,
@@ -139,11 +140,7 @@ fn convert_connection_end(
         connection_end: ConnectionEnd::new(
             state,
             client_id,
-            ConnectionCounterparty::new(
-                remote_client_id,
-                remote_connection_id,
-                vec![0u8].try_into().unwrap(),
-            ),
+            ConnectionCounterparty::new(remote_client_id, remote_connection_id, prefix.clone()),
             vec![ConnVersion::default()],
             Duration::from_secs(delay_period),
         ),
@@ -183,8 +180,9 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
         ckb_channel_end
             .connection_hops
             .into_iter()
-            .map(|c| get_connection_id(c as u16))
-            .collect::<Vec<_>>()
+            .map(|c| c.parse())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| Error::other_error("bad connection_hops".to_owned()))?
     };
     let channel_end = ChannelEnd {
         state,
@@ -196,10 +194,7 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
 
     let port_id =
         PortId::from_str(&ckb_channel_end.port_id).map_err(|_| Error::convert_channel_end())?;
-
-    let channel_id = get_channel_id_str(ckb_channel_end.num);
-    let channel_id =
-        ChannelId::from_str(&channel_id).map_err(|_| Error::ckb_chan_id_invalid(channel_id))?;
+    let channel_id = generate_channel_id(ckb_channel_end.number);
 
     let result = IdentifiedChannelEnd {
         port_id,
@@ -216,7 +211,12 @@ enum ObjectType {
     IbcPacket,
 }
 
-fn get_object_idx(tx: &TransactionView, object_type: ObjectType) -> Result<usize, Error> {
+fn get_object_index(tx: &TransactionView, object_type: ObjectType) -> Result<usize, Error> {
+    let envelope = get_envelope(tx)?;
+    Ok(navigate(&envelope.msg_type, &object_type))
+}
+
+fn get_envelope(tx: &TransactionView) -> Result<Envelope, Error> {
     let msg = tx.inner.witnesses.last().ok_or(Error::ckb_none_witness())?;
 
     let bytes = msg.as_bytes();
@@ -229,6 +229,5 @@ fn get_object_idx(tx: &TransactionView, object_type: ObjectType) -> Result<usize
 
     let envelope =
         rlp::decode::<Envelope>(&envelope_slice).map_err(|_| Error::ckb_decode_envelope())?;
-
-    Ok(navigate(envelope.msg_type, object_type))
+    Ok(envelope)
 }

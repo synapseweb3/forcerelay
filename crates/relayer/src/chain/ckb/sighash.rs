@@ -2,7 +2,7 @@
 // https://github.com/cryptape/kabletop-ckb-sdk/blob/master/src/ckb/transaction/genesis.rs
 
 #[cfg(not(test))]
-mod no_test {
+pub mod no_test {
     use super::super::prelude::CkbReader;
     use crate::error::Error;
     use ckb_jsonrpc_types::TransactionView;

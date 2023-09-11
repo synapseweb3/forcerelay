@@ -100,7 +100,7 @@ pub trait CellSearcher: CkbReader {
                 .objects
                 .into_iter()
                 .filter_map(|cell| {
-                    if searched_capacity < need_capacity {
+                    if searched_capacity < need_capacity && cell.output.type_.is_none() {
                         searched_capacity += Into::<u64>::into(cell.output.capacity);
                         Some(cell.into())
                     } else {

@@ -11,6 +11,8 @@ pub mod requests;
 pub mod runtime;
 pub mod tracking;
 
+pub const SEC_TO_NANO: u64 = 1_000_000_000;
+
 use serde::{de::Error, Deserialize, Serialize};
 
 // NOTE(new): When adding a variant to `ChainType`, make sure to update
@@ -71,6 +73,6 @@ mod tests {
 
         // NOTE(new): Add tests here
 
-        assert!(matches!(parse("hello-world"), Err(_)));
+        assert!(parse("hello-world").is_err());
     }
 }

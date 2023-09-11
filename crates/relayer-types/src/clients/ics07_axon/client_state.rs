@@ -17,12 +17,12 @@ use serde::{Deserialize, Serialize};
 pub const AXON_CLIENT_STATE_TYPE_URL: &str = "/axon.client.v1.state";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ClientState {
+pub struct AxonClientState {
     pub chain_id: ChainId,
     pub latest_height: Height,
 }
 
-impl Ics02ClientState for ClientState {
+impl Ics02ClientState for AxonClientState {
     fn chain_id(&self) -> ChainId {
         self.chain_id.clone()
     }
@@ -53,23 +53,23 @@ impl Ics02ClientState for ClientState {
     }
 }
 
-impl Protobuf<Any> for ClientState {}
+impl Protobuf<Any> for AxonClientState {}
 
-impl TryFrom<Any> for ClientState {
+impl TryFrom<Any> for AxonClientState {
     type Error = Ics02Error;
 
     fn try_from(any: Any) -> Result<Self, Self::Error> {
         if any.type_url != AXON_CLIENT_STATE_TYPE_URL {
             return Err(Ics02Error::unknown_client_type("axon".to_owned()));
         }
-        let client: ClientState = serde_json::from_slice(&any.value)
+        let client: AxonClientState = serde_json::from_slice(&any.value)
             .map_err(|e| Ics02Error::unknown_client_state_type(e.to_string()))?;
         Ok(client)
     }
 }
 
-impl From<ClientState> for Any {
-    fn from(client: ClientState) -> Self {
+impl From<AxonClientState> for Any {
+    fn from(client: AxonClientState) -> Self {
         let json = serde_json::to_string(&client).expect("jsonify axon client");
         Any {
             type_url: AXON_CLIENT_STATE_TYPE_URL.to_owned(),

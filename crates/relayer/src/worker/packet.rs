@@ -17,10 +17,9 @@ use tracing::{error, error_span, trace};
 
 use ibc_relayer_types::Height;
 
-use crate::chain::handle::{CacheTxHashStatus, ChainHandle};
+use crate::chain::handle::ChainHandle;
 use crate::config::filter::FeePolicy;
 use crate::event::monitor::EventBatch;
-use crate::event::IbcEventWithHeight;
 use crate::foreign_client::HasExpiredOrFrozenError;
 use crate::link::Resubmit;
 use crate::link::{error::LinkError, Link};
@@ -173,53 +172,6 @@ fn handle_packet_cmd<ChainA: ChainHandle, ChainB: ChainHandle>(
     // Handle packet clearing which is triggered from a command
     let (do_clear, maybe_height) = match &cmd {
         WorkerCmd::IbcEvents { batch } => {
-            let cache_tx_hash = |event: &IbcEventWithHeight| -> Result<(), TaskError<RunError>> {
-                use ibc_relayer_types::events::IbcEvent::*;
-                let tx_hash = event.tx_hash;
-                let (port_id, channel_id, sequence) = match event.event.clone() {
-                    SendPacket(event) => {
-                        let packet = event.packet;
-                        (
-                            Some(packet.source_port),
-                            Some(packet.source_channel),
-                            Some(packet.sequence),
-                        )
-                    }
-                    ReceivePacket(event) => {
-                        let packet = event.packet;
-                        (
-                            Some(packet.source_port),
-                            Some(packet.source_channel),
-                            Some(packet.sequence),
-                        )
-                    }
-                    _ => (None, None, None),
-                };
-                if let Some(port_id) = port_id {
-                    let channel_id = channel_id.unwrap();
-                    let sequence = sequence.unwrap().into();
-                    link.a_to_b
-                        .src_chain()
-                        .clone()
-                        .cache_ics_tx_hash(
-                            CacheTxHashStatus::new_with_packet(channel_id, port_id, sequence),
-                            tx_hash,
-                        )
-                        .map_err(|_| {
-                            TaskError::Fatal(RunError::link(LinkError::fail_cache_tx_hash(
-                                event.event.clone(),
-                            )))
-                        })?;
-                }
-                Ok(())
-            };
-
-            let _ = batch
-                .events
-                .iter()
-                .map(cache_tx_hash)
-                .collect::<Result<Vec<_>, _>>()?;
-
             if *should_clear_on_start {
                 (true, Some(batch.height))
             } else {

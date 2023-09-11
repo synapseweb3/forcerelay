@@ -217,8 +217,8 @@ impl ChainConfig {
             ChainConfig::Cosmos(c) => &c.packet_filter,
             ChainConfig::Eth(_) => todo!(),
             ChainConfig::Ckb(_) => todo!(),
-            ChainConfig::Axon(_) => todo!(),
-            ChainConfig::Ckb4Ibc(_) => todo!(),
+            ChainConfig::Axon(c) => &c.packet_filter,
+            ChainConfig::Ckb4Ibc(c) => &c.packet_filter,
         }
     }
 
@@ -237,6 +237,14 @@ impl ChainConfig {
             c
         } else {
             panic!("Not a cosmos chain")
+        }
+    }
+
+    pub fn downcast_ckb4ibc(self) -> Ckb4IbcChainConfig {
+        if let ChainConfig::Ckb4Ibc(c) = self {
+            c
+        } else {
+            panic!("Not a ckb4ibc chain")
         }
     }
 
@@ -268,7 +276,7 @@ impl ChainConfig {
         if let ChainConfig::Ckb4Ibc(c) = self {
             c
         } else {
-            panic!("Not a cosmos chain")
+            panic!("Not a ckb4ibc chain")
         }
     }
 
@@ -293,10 +301,7 @@ impl ChainConfig {
     pub fn max_block_time(&self) -> Duration {
         match self {
             ChainConfig::Cosmos(c) => c.max_block_time,
-            ChainConfig::Eth(_) => todo!(),
-            ChainConfig::Ckb(_) => todo!(),
-            ChainConfig::Axon(_) => Duration::from_secs(90),
-            ChainConfig::Ckb4Ibc(_) => Duration::from_secs(90),
+            _ => Duration::from_secs(90),
         }
     }
 }
@@ -466,13 +471,16 @@ impl Config {
     ) -> bool {
         match self.find_chain(chain_id) {
             Some(chain_config) => {
-                if !matches!(chain_config, ChainConfig::Cosmos(_)) {
-                    false
-                } else {
+                if matches!(chain_config, ChainConfig::Cosmos(_))
+                    || matches!(chain_config, ChainConfig::Ckb4Ibc(_))
+                    || matches!(chain_config, ChainConfig::Axon(_))
+                {
                     chain_config
                         .packet_filter()
                         .channel_policy
                         .is_allowed(port_id, channel_id)
+                } else {
+                    false
                 }
             }
             None => false,
@@ -726,9 +734,7 @@ mod tests {
             "/tests/config/fixtures/relayer_conf_example.toml"
         );
 
-        let config = load(path).expect("could not parse config");
-
-        dbg!(config);
+        let _config = load(path).expect("could not parse config");
     }
 
     #[test]
@@ -738,9 +744,7 @@ mod tests {
             "/tests/config/fixtures/relayer_conf_example_fee_filter.toml"
         );
 
-        let config = load(path).expect("could not parse config");
-
-        dbg!(config);
+        let _config = load(path).expect("could not parse config");
     }
 
     #[test]

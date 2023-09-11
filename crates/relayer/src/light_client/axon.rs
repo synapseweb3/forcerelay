@@ -2,10 +2,11 @@
 
 use std::sync::Arc;
 
+use axon_tools::types::AxonHeader as AxonChainHeader;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
 use futures::TryFutureExt;
-use ibc_relayer_types::clients::ics07_axon::header::Header;
+use ibc_relayer_types::clients::ics07_axon::{header::AxonHeader, light_block::AxonLightBlock};
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tokio::runtime::Runtime as TokioRuntime;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -24,7 +25,7 @@ use super::Verified;
 pub struct LightClient {
     rt: Arc<TokioRuntime>,
     chain_id: ChainId,
-    header_updaters: Arc<RwLock<Vec<Sender<Header>>>>,
+    header_updaters: Arc<RwLock<Vec<Sender<AxonChainHeader>>>>,
 }
 
 impl LightClient {
@@ -36,7 +37,7 @@ impl LightClient {
         })
     }
 
-    pub fn subscribe(&mut self) -> Receiver<Header> {
+    pub fn subscribe(&mut self) -> Receiver<AxonChainHeader> {
         let (tx, rx) = channel(1);
         self.rt.block_on(self.header_updaters.write()).push(tx);
         rx
@@ -72,10 +73,10 @@ impl LightClient {
                         block.header.number
                     );
                     for emitter in emitters.read().await.iter() {
-                        let header = Header {
-                            axon_header: block.header.clone(),
-                        };
-                        emitter.send(header).await.expect("send axon header");
+                        emitter
+                            .send(block.header.clone())
+                            .await
+                            .expect("send axon header");
                     }
                 }
             }
@@ -92,7 +93,7 @@ impl super::LightClient<AxonChain> for LightClient {
         trusted: ibc_relayer_types::Height,
         target: ibc_relayer_types::Height,
         client_state: &AnyClientState,
-    ) -> Result<Verified<Header>, Error> {
+    ) -> Result<Verified<AxonHeader>, Error> {
         todo!()
     }
 
@@ -101,8 +102,11 @@ impl super::LightClient<AxonChain> for LightClient {
         trusted: ibc_relayer_types::Height,
         target: ibc_relayer_types::Height,
         client_state: &AnyClientState,
-    ) -> Result<Verified<<AxonChain as ChainEndpoint>::LightBlock>, Error> {
-        todo!()
+    ) -> Result<Verified<AxonLightBlock>, Error> {
+        Ok(Verified {
+            target: AxonLightBlock::default(),
+            supporting: vec![],
+        })
     }
 
     fn check_misbehaviour(
@@ -110,13 +114,10 @@ impl super::LightClient<AxonChain> for LightClient {
         update: &ibc_relayer_types::core::ics02_client::events::UpdateClient,
         client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
-        todo!()
+        Ok(None)
     }
 
-    fn fetch(
-        &mut self,
-        height: ibc_relayer_types::Height,
-    ) -> Result<<AxonChain as ChainEndpoint>::LightBlock, Error> {
+    fn fetch(&mut self, height: ibc_relayer_types::Height) -> Result<AxonLightBlock, Error> {
         todo!()
     }
 }

@@ -1,0 +1,48 @@
+[package]
+name = "ibc-test"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+ckb-sdk = "2.5.0"
+ckb-jsonrpc-types = "0.108.0"
+ckb-types = "0.108.0"
+ckb-chain-spec = "0.108.0"
+hex = "0.4"
+eyre = "0.6.8"
+
+relayer = { version = "*", package = "ibc-relayer", path = "../../crates/relayer" }
+tendermint-rpc = { version = "0.30.0", features = [
+    "http-client",
+    "websocket-client",
+] }
+tokio = { version = "1.0", features = [
+    "rt-multi-thread",
+    "time",
+    "sync",
+    "parking_lot",
+] }
+
+reqwest = { version = "0.11", features = ["json"] }
+jsonrpc-core = "18.0"
+futures = "0.3.27"
+serde_json = { version = "1", default-features = false }
+serde = { version = "1.0", default-features = false }
+ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "56b09fa" }
+rlp = "0.5.2"
+secp256k1 = "0.24"
+ckb-hash = "0.106"
+tiny-keccak = { version = "2.0.2", features = [
+    "keccak",
+], default-features = false }
+axon-types = { git = "https://github.com/axonweb3/axon-contract", rev = "8c2338a" }
+
+ibc-test-framework = { path = "../test-framework" }
+toml = "=0.5.11"
+anyhow = "1.0.72"
+log = "0.4.19"
+toml_edit = "0.19.14"
+lazy_static = "1.4.0"
+ethers = { version = "2.0.2", features = ["rustls", "ws"] }
+
+forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "576755d" }

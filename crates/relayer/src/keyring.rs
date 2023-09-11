@@ -2,7 +2,7 @@ pub mod errors;
 pub use any_signing_key_pair::AnySigningKeyPair;
 pub use ed25519_key_pair::Ed25519KeyPair;
 pub use key_type::KeyType;
-pub use secp256k1_key_pair::Secp256k1KeyPair;
+pub use secp256k1_key_pair::{Secp256k1AddressType, Secp256k1KeyPair};
 pub use signing_key_pair::{SigningKeyPair, SigningKeyPairSized};
 
 mod any_signing_key_pair;

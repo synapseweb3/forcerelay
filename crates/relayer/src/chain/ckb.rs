@@ -16,13 +16,13 @@ use ibc_relayer_storage::prelude::{StorageAsMMRStore as _, StorageReader as _};
 use ibc_relayer_storage::{Slot, Storage};
 use ibc_relayer_types::applications::ics31_icq::response::CrossChainQueryResponse;
 use ibc_relayer_types::clients::ics07_ckb::{
-    client_state::ClientState as CkbClientState,
-    consensus_state::ConsensusState as CkbConsensusState, header::Header as CkbHeader,
-    light_block::LightBlock as CkbLightBlock,
+    client_state::CkbClientState, consensus_state::CkbConsensusState, header::CkbHeader,
+    light_block::CkbLightBlock,
 };
 use ibc_relayer_types::clients::ics07_eth::{
-    client_state::ClientState as EthClientState, types::Update as EthUpdate,
+    client_state::EthClientState, types::Update as EthUpdate,
 };
+use ibc_relayer_types::core::ics02_client::height::Height;
 use ibc_relayer_types::{
     core::{
         ics02_client::events::UpdateClient,
@@ -217,10 +217,11 @@ impl CkbChain {
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
         let chain_id = self.id().to_string();
         let client_type_args: PackedClientTypeArgs = {
-            let Some(type_id) = self.config.client_type_args.type_id.as_ref()
-            else {
+            let Some(type_id) = self.config.client_type_args.type_id.as_ref() else {
                 // TODO: better error
-                return Err(Error::other_error("no type id in client type args".to_owned()));
+                return Err(Error::other_error(
+                    "no type id in client type args".to_owned(),
+                ));
             };
             let type_id = PackedHash::from_slice(type_id.0.as_slice()).expect("build type id");
             PackedClientTypeArgs::new_builder()
@@ -229,16 +230,10 @@ impl CkbChain {
                 .build()
         };
 
-        let Some(update_cells) = self
-            .rt
-            .block_on(
-                self
-                    .rpc_client
-                    .fetch_update_cells(
-                        &self.config.lightclient_contract_typeargs,
-                        &client_type_args
-                    )
-            )?
+        let Some(update_cells) = self.rt.block_on(self.rpc_client.fetch_update_cells(
+            &self.config.lightclient_contract_typeargs,
+            &client_type_args,
+        ))?
         else {
             return Err(Error::other_error("no multi-client cells found".to_owned()));
         };
@@ -651,6 +646,7 @@ impl ChainEndpoint for CkbChain {
                 client_id: Default::default(),
                 client_state: AnyClientState::Ckb(CkbClientState {
                     chain_id: self.id(),
+                    latest_height: Height::default(),
                 }),
             };
             clients.push(client_state);

@@ -455,7 +455,7 @@ impl CosmosSdkChain {
         ))?;
 
         // TODO - Verify response proof, if requested.
-        if prove {}
+        // if prove {}
 
         Ok(response)
     }
@@ -1818,7 +1818,7 @@ impl ChainEndpoint for CosmosSdkChain {
     ) -> Result<Self::ClientState, Error> {
         let settings = match settings {
             ClientSettings::Tendermint(settings) => settings,
-            ClientSettings::Other => return Err(Error::build_client_state_failure()),
+            _ => return Err(Error::build_client_state_failure()),
         };
         let unbonding_period = self.unbonding_period()?;
         let trusting_period = settings

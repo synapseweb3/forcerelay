@@ -47,8 +47,6 @@ use crate::keyring::{AnySigningKeyPair, KeyRing, SigningKeyPairSized};
 use crate::light_client::AnyHeader;
 use crate::misbehaviour::MisbehaviourEvidence;
 
-use super::handle::CacheTxHashStatus;
-
 /// The result of a health check.
 #[derive(Debug)]
 pub enum HealthCheck {
@@ -687,12 +685,4 @@ pub trait ChainEndpoint: Sized {
         &self,
         request: QueryIncentivizedPacketRequest,
     ) -> Result<QueryIncentivizedPacketResponse, Error>;
-
-    fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
-        &mut self,
-        _cached_status: CacheTxHashStatus,
-        _tx_hash: T,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
 }

@@ -1,7 +1,7 @@
 name: Forcerelay
 on:
   pull_request:
-    path:
+    paths:
       - .github/workflows/forcerelay-test.yaml
       - Cargo.toml
       - Cargo.lock

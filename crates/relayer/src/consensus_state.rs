@@ -4,9 +4,11 @@ use ibc_proto::ibc::lightclients::tendermint::v1::ConsensusState as RawConsensus
 #[cfg(test)]
 use ibc_proto::ibc::mock::ConsensusState as RawMockConsensusState;
 use ibc_proto::protobuf::Protobuf;
-use ibc_relayer_types::clients::ics07_axon::consensus_state::ConsensusState as AxonConsensusState;
+use ibc_relayer_types::clients::ics07_axon::consensus_state::{
+    AxonConsensusState, AXON_CONSENSUS_STATE_TYPE_URL,
+};
 use ibc_relayer_types::clients::ics07_ckb::consensus_state::{
-    ConsensusState as CkbConsensusState, CKB_CONSENSUS_STATE_TYPE_URL,
+    CkbConsensusState, CKB_CONSENSUS_STATE_TYPE_URL,
 };
 use ibc_relayer_types::clients::ics07_eth::consensus_state::ConsensusState as EthConsensusState;
 use ibc_relayer_types::clients::ics07_tendermint::consensus_state::{
@@ -107,7 +109,14 @@ impl From<AnyConsensusState> for Any {
                     value: json.into_bytes(),
                 }
             }
-            AnyConsensusState::Axon(_) => todo!(),
+            AnyConsensusState::Axon(value) => {
+                let json = serde_json::to_string(&value)
+                    .expect("encoding to `Any` from `AnyConsensusState::Axon`");
+                Any {
+                    type_url: AXON_CONSENSUS_STATE_TYPE_URL.to_string(),
+                    value: json.into_bytes(),
+                }
+            }
             #[cfg(test)]
             AnyConsensusState::Mock(value) => Any {
                 type_url: MOCK_CONSENSUS_STATE_TYPE_URL.to_string(),

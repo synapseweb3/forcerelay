@@ -7,8 +7,8 @@ use core::ops::Deref;
 use ibc_proto::google::protobuf::Any;
 use ibc_proto::ibc::lightclients::tendermint::v1::Header as RawTmHeader;
 use ibc_proto::protobuf::Protobuf as ErasedProtobuf;
-use ibc_relayer_types::clients::ics07_axon::header::Header as AxonHeader;
-use ibc_relayer_types::clients::ics07_ckb::header::Header as CkbHeader;
+use ibc_relayer_types::clients::ics07_axon::header::AxonHeader;
+use ibc_relayer_types::clients::ics07_ckb::header::CkbHeader;
 use ibc_relayer_types::clients::ics07_eth::header::Header as EthHeader;
 use ibc_relayer_types::clients::ics07_tendermint::header::{
     decode_header as tm_decode_header, Header as TendermintHeader, TENDERMINT_HEADER_TYPE_URL,

@@ -16,6 +16,7 @@ use crate::conclude::Output;
 use crate::error::Error;
 use crate::prelude::*;
 
+#[allow(clippy::redundant_closure_call)]
 macro_rules! tx_chan_cmd {
     ($dbg_string:literal, $func:ident, $self:expr, $chan:expr) => {
         let config = app_config();

@@ -8,9 +8,13 @@ use eyre::eyre;
 use eyre::Report as Error;
 use ibc_relayer::chain::ChainType;
 use ibc_relayer::config;
+use ibc_relayer::config::ckb4ibc::LightClientItem;
 use ibc_relayer::config::cosmos::gas_multiplier::GasMultiplier;
 use ibc_relayer::keyring::Store;
+use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tendermint_rpc::Url;
 use tendermint_rpc::WebSocketClientUrl;
@@ -18,6 +22,7 @@ use tendermint_rpc::WebSocketClientUrl;
 use crate::chain::chain_type::ChainType as TestedChainType;
 use crate::chain::driver::ChainDriver;
 use crate::ibc::denom::Denom;
+use crate::types::axon::DeployedContracts;
 use crate::types::env::{prefix_writer, EnvWriter, ExportEnv};
 use crate::types::process::ChildProcess;
 use crate::types::tagged::*;
@@ -116,12 +121,124 @@ impl<'a, Chain> TaggedFullNodeExt<Chain> for MonoTagged<Chain, &'a FullNode> {
     }
 }
 
+fn h256_env(key: &str) -> [u8; 32] {
+    let value = std::env::var(key).expect("get type_args env");
+    let raw = hex::decode(value).expect("decode hex");
+    raw.try_into().expect("convert to h256")
+}
+
 impl FullNode {
     /**
        Generate the relayer's chain config based on the configuration of
        the full node.
     */
     pub fn generate_chain_config(
+        &self,
+        chain_type: &TestedChainType,
+    ) -> Result<config::ChainConfig, Error> {
+        match chain_type {
+            TestedChainType::Ckb => self.generate_ckb_chain_config(chain_type),
+            TestedChainType::Axon => self.generate_axon_chain_config(chain_type),
+            _ => self.generate_cosmos_chain_config(chain_type),
+        }
+    }
+
+    // should keep `use_random_id` flag equals FALSE
+    fn generate_ckb_chain_config(
+        &self,
+        _chain_type: &TestedChainType,
+    ) -> Result<config::ChainConfig, Error> {
+        let ckb_rpc = Url::from_str(self.chain_driver.rpc_address().as_str())?;
+        let this_chain_id = self.chain_driver.chain_id.clone();
+        let mut onchain_light_clients = HashMap::default();
+
+        // normally we cannot put same `client_cell_type_args` in config.toml, because
+        // Forcerelay/Axon assumes each counterparty chain has its own unique `client_id`
+        // to figure out unique `client_type` and `chain_id`
+        if std::env::var("ACCOUNT_PREFIXES").unwrap().contains("axon") {
+            let counterparty_chain_id = if this_chain_id.to_string() == "ckb4ibc-0" {
+                ChainId::from_string("axon-1")
+            } else {
+                ChainId::from_string("axon-0")
+            };
+            onchain_light_clients.insert(
+                ClientType::Axon,
+                LightClientItem {
+                    chain_id: counterparty_chain_id,
+                    client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
+                },
+            );
+        } else {
+            let counterparty_chain_id = if this_chain_id.to_string() == "ckb4ibc-0" {
+                ChainId::from_string("ckb4ibc-1")
+            } else {
+                ChainId::from_string("ckb4ibc-0")
+            };
+            onchain_light_clients.insert(
+                ClientType::Ckb4Ibc,
+                LightClientItem {
+                    chain_id: counterparty_chain_id,
+                    client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
+                },
+            );
+        }
+
+        let ckb_config = config::ckb4ibc::ChainConfig {
+            id: this_chain_id,
+            ckb_rpc: ckb_rpc.clone(),
+            ckb_indexer_rpc: ckb_rpc,
+            key_name: "relayer_ckb_wallet".to_string(),
+            store_prefix: "forcerelay".to_string(),
+            client_code_hash: h256_env("CLIENT_CODE_HASH").into(),
+            connection_type_args: h256_env("CONNECTION_TYPE_ARGS").into(),
+            channel_type_args: h256_env("CHANNEL_TYPE_ARGS").into(),
+            packet_type_args: h256_env("PACKET_TYPE_ARGS").into(),
+            onchain_light_clients,
+            packet_filter: Default::default(),
+        };
+
+        Ok(config::ChainConfig::Ckb4Ibc(ckb_config))
+    }
+
+    fn generate_axon_chain_config(
+        &self,
+        _chain_type: &TestedChainType,
+    ) -> Result<config::ChainConfig, Error> {
+        let rpc_addr = Url::from_str(self.chain_driver.rpc_address().as_str())?;
+        let websocket_addr = WebSocketClientUrl::from_str(
+            format!("ws://localhost:{}", self.chain_driver.rpc_port + 1).as_str(),
+        )?;
+        let restore_block_count = 42;
+
+        let deployed_contracts: DeployedContracts = {
+            let mut path: PathBuf = self.chain_driver.home_path.clone().into();
+            path.push("deployed_contracts.toml");
+            let content = std::fs::read_to_string(path)?;
+            toml::from_str(content.as_str())?
+        };
+
+        let DeployedContracts {
+            contract_address,
+            image_cell_contract_address,
+            ckb_light_client_contract_address,
+        } = deployed_contracts;
+
+        let axon_config = config::axon::AxonChainConfig {
+            id: self.chain_driver.chain_id.clone(),
+            key_name: "relayer".to_string(),
+            store_prefix: "forcerelay".to_string(),
+            packet_filter: Default::default(),
+            websocket_addr,
+            rpc_addr,
+            contract_address,
+            restore_block_count,
+            ckb_light_client_contract_address,
+            image_cell_contract_address,
+        };
+        Ok(config::ChainConfig::Axon(axon_config))
+    }
+
+    fn generate_cosmos_chain_config(
         &self,
         chain_type: &TestedChainType,
     ) -> Result<config::ChainConfig, Error> {

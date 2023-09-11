@@ -307,7 +307,7 @@ pub async fn wait_ckb_transaction_committed(
     interval: Duration,
     confirms: u8,
     time_limit: Duration,
-) -> Result<(), Error> {
+) -> Result<u64, Error> {
     let mut block_number = 0u64;
     let mut time_used = Duration::from_secs(0);
     loop {
@@ -345,7 +345,7 @@ pub async fn wait_ckb_transaction_committed(
             }
         }
     }
-    Ok(())
+    Ok(block_number)
 }
 
 // Calculate type id for multi-client creation.

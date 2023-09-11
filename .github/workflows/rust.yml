@@ -81,7 +81,7 @@ jobs:
 
   test-stable:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -96,7 +96,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --no-fail-fast --workspace --exclude ibc-integration-test -- --nocapture
+          args: --all-features --no-fail-fast --workspace --exclude ibc-integration-test --exclude ibc-test -- --nocapture
 
   # test-coverage:
   #   runs-on: ubuntu-latest

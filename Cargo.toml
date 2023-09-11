@@ -15,7 +15,7 @@ members = [
     "tools/check-guide",
     "tools/query-events",
     "tools/forcerelay-test",
-    "tools/ckb4ibc-test",
+    "tools/ibc-test"
 ]
 
 [patch.crates-io]
@@ -27,3 +27,8 @@ arbitrary = { git = "https://github.com/michaelsproul/arbitrary", rev="f002b9998
 # tendermint-light-client          = { git = "https://github.com/informalsystems/tendermint-rs", branch = "main" }
 # tendermint-light-client-verifier = { git = "https://github.com/informalsystems/tendermint-rs", branch = "main" }
 # tendermint-testgen               = { git = "https://github.com/informalsystems/tendermint-rs", branch = "main" }
+
+# Make librocksdb.a and all test binaries that link with it smaller, to save disk space in CI.
+[profile.dev.package.ckb-librocksdb-sys]
+opt-level = 1
+debug = false
