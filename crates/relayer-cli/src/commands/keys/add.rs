@@ -11,7 +11,7 @@ use eyre::eyre;
 use hdpath::StandardHDPath;
 use ibc_relayer::{
     chain::ChainType,
-    config::{ChainConfig, Config},
+    config::{AddressType, ChainConfig, Config},
     keyring::{
         AnySigningKeyPair, KeyRing, Secp256k1KeyPair, SigningKeyPair, SigningKeyPairSized, Store,
     },
@@ -291,12 +291,37 @@ pub fn restore_key(
 }
 
 pub fn parse_key_from_secret(
-    _secret_file: &Path,
-    _key_name: &str,
-    _config: &ChainConfig,
-    _overwrite: bool,
+    secret_file: &Path,
+    key_name: &str,
+    config: &ChainConfig,
+    overwrite: bool,
 ) -> eyre::Result<AnySigningKeyPair> {
-    unimplemented!()
+    let secret_key =
+        fs::read_to_string(secret_file).map_err(|_| eyre!("error reading the secret file"))?;
+
+    let (account_prefix, address_type) = match config.r#type() {
+        ChainType::CosmosSdk => (config.cosmos().account_prefix.as_str(), AddressType::Cosmos),
+        ChainType::Eth => (
+            "eth",
+            AddressType::Ethermint {
+                pk_type: Default::default(),
+            },
+        ),
+        ChainType::Axon => ("axon", AddressType::Axon),
+        ChainType::Ckb => ("ckb", AddressType::Ckb),
+        ChainType::Ckb4Ibc => ("ckb4ibc", AddressType::Ckb),
+    };
+    let key_pair = {
+        let mut keyring = KeyRing::new_secp256k1(Store::Test, account_prefix, config.id())?;
+
+        check_key_exists(&keyring, key_name, overwrite);
+
+        let key_pair = Secp256k1KeyPair::from_secret_key(secret_key.trim(), &address_type)?;
+
+        keyring.add_key(key_name, key_pair.clone())?;
+        key_pair.into()
+    };
+    Ok(key_pair)
 }
 
 /// Check if the key with the given key name already exists.

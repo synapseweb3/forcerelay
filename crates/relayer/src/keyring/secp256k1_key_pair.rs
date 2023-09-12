@@ -1,4 +1,5 @@
 use core::any::Any;
+use std::str::FromStr;
 
 use bip39::{Language, Mnemonic, Seed};
 use bitcoin::{
@@ -96,8 +97,8 @@ impl TryFrom<&AddressType> for Secp256k1AddressType {
                 Ok(Self::Ethermint)
             }
             AddressType::Cosmos | AddressType::Ethermint { pk_type: _ } => Ok(Self::Cosmos),
-            AddressType::Ckb { .. } => Ok(Self::Ckb),
-            AddressType::Axon { .. } => Ok(Self::Axon),
+            AddressType::Ckb => Ok(Self::Ckb),
+            AddressType::Axon => Ok(Self::Axon),
         }
     }
 }
@@ -284,8 +285,26 @@ impl Secp256k1KeyPair {
 impl SigningKeyPair for Secp256k1KeyPair {
     const KEY_TYPE: KeyType = KeyType::Secp256k1;
 
-    fn from_secret_key(_secret_key: &str) -> Result<Self, Error> {
-        unimplemented!()
+    fn from_secret_key(secret_key: &str, address_type: &AddressType) -> Result<Self, Error> {
+        let private_key =
+            SecretKey::from_str(secret_key).map_err(|e| Error::secp256k1(e.to_string()))?;
+        let public_key = private_key.public_key(&Secp256k1::signing_only());
+        let address_type: Secp256k1AddressType = address_type.try_into()?;
+        let address = get_address(&public_key, address_type);
+        let account = if address_type == Secp256k1AddressType::Cosmos {
+            return Err(Error::secp256k1(
+                "--secret-key not support Cosmos chain".to_owned(),
+            ));
+        } else {
+            hex::encode(address)
+        };
+        Ok(Self {
+            private_key,
+            public_key,
+            address,
+            address_type,
+            account,
+        })
     }
 
     fn from_key_file(key_file: KeyFile, hd_path: &StandardHDPath) -> Result<Self, Error> {

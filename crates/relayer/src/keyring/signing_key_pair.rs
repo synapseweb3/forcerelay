@@ -9,7 +9,7 @@ use crate::config::AddressType;
 pub trait SigningKeyPair {
     const KEY_TYPE: KeyType;
 
-    fn from_secret_key(secret_key: &str) -> Result<Self, Error>
+    fn from_secret_key(secret_key: &str, address_type: &AddressType) -> Result<Self, Error>
     where
         Self: Sized;
 

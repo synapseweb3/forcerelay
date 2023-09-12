@@ -670,12 +670,8 @@ pub enum AddressType {
     Ethermint {
         pk_type: String,
     },
-    Ckb {
-        is_mainnet: bool,
-    },
-    Axon {
-        pk_type: String,
-    },
+    Ckb,
+    Axon,
 }
 
 impl Display for AddressType {
@@ -683,8 +679,8 @@ impl Display for AddressType {
         match self {
             AddressType::Cosmos => write!(f, "cosmos"),
             AddressType::Ethermint { .. } => write!(f, "ethermint"),
-            AddressType::Ckb { .. } => write!(f, "ckb"),
-            AddressType::Axon { .. } => write!(f, "axon"),
+            AddressType::Ckb => write!(f, "ckb"),
+            AddressType::Axon => write!(f, "axon"),
         }
     }
 }

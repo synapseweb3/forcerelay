@@ -109,7 +109,7 @@ impl Ed25519KeyPair {
 impl SigningKeyPair for Ed25519KeyPair {
     const KEY_TYPE: KeyType = KeyType::Ed25519;
 
-    fn from_secret_key(_secret_key: &str) -> Result<Self, Error> {
+    fn from_secret_key(_secret_key: &str, _address_type: &AddressType) -> Result<Self, Error> {
         unimplemented!()
     }
 
