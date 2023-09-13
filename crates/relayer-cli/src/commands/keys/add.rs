@@ -34,6 +34,10 @@ use crate::conclude::Output;
 ///
 /// `keys add [OPTIONS] --chain <CHAIN_ID> --mnemonic-file <MNEMONIC_FILE>`
 ///
+/// The command to restore a key from a file containing secret key:
+///
+/// `keys add [OPTIONS] --chain <CHAIN_ID> --secret-file <SECRET_FILE>`
+///
 /// The key-file and mnemonic-file flags can't be given at the same time, this will cause a terminating error.
 /// If successful the key will be created or restored, depending on which flag was given.
 #[derive(Clone, Command, Debug, Parser, PartialEq, Eq)]
