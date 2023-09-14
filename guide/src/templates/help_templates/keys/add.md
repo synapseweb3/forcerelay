@@ -15,7 +15,14 @@ OPTIONS:
         --overwrite              Overwrite the key if there is already one with the same key name
 
 FLAGS:
-        --chain <CHAIN_ID>                 Identifier of the chain
-        --key-file <KEY_FILE>              Path to the key file
-        --mnemonic-file <MNEMONIC_FILE>    Path to file containing mnemonic to restore the key from
-        --secret-file <SECRET_FILE>        Path to file containing hex-encoded secret key to restore from
+        --chain <CHAIN_ID>
+            Identifier of the chain
+
+        --key-file <KEY_FILE>
+            Path to the key file
+
+        --mnemonic-file <MNEMONIC_FILE>
+            Path to file containing mnemonic to restore the key from
+
+        --secret-file <SECRET_FILE>
+            Path to file containing hex-encoded secret key to restore from

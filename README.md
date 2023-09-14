@@ -7,12 +7,12 @@ Forcerelay is an IBC-Compatible bridge that aims to open up the Nervos ecosystem
 
 Forcerelay is built on [Hermes](https://github.com/informalsystems/hermes), this means we will keep continue to track and update the latest version of Hermes, and won't stop it on any specific old version.
 
-Currently, Forcerelay only supports Axon, CKB and Cosmos-SDK chains, but not support other mainstream EVM chains, like Ethereum, Arbitrum and BSC, because it's not easy to run a light-client from any chains above on EVM. However, the implementation of mainstream EVM chains is on our future plan, we will keep you up-to-date with this.
+At present, Forcerelay exclusively supports Axon, CKB, and Cosmos-SDK chains, prioritizing their seamless operation. While it currently doesn't encompass other well-established EVM chains, such as Ethereum, Arbitrum, and BSC, this is primarily due to the intricacies of running a light-client from these chains on EVM. Nevertheless, our roadmap includes plans for implementing mainstream EVM chains, and we'll keep you informed on our progress in this regard.
 
 ## Progress Tracking
-Forcerelay is in development, any issues and PRs are welcome. Here is where we are in gerneral:
-- [ ] Upgrade the underline Hermes from v1.4.0 to the latest v1.6.0
+Forcerelay is actively under development, and we welcome any issues and pull requests. Here's an overview of our current progress:
 - [x] Implement connection and channel layer of IBC protocol between Axon and CKB
+- [ ] Upgrade the underline Hermes from v1.4.0 to the latest v1.6.0
 - [ ] Implement packet layer of IBC protocol between Axon and CKB
 - [ ] Implement entire IBC protocol between Axon and Cosmos-SDK chains
 - [ ] Implement entire IBC protocol between CKB and Cosmos-SDK chains
@@ -41,7 +41,7 @@ $ yarn migrate > migrate.log | tail -f migrate.log
 After running `yarn migrate`, the `OwnableIBCHandler` address is listing in console, we record it and mark as **`YOUR_IBC_AXON_ADDRESS`** to use later.
 
 ### Contract Deployment on CKB
-Detailed deployment steps can be found in [ibc-ckb-contracts](https://github.com/synapseweb3/ibc-ckb-contracts), or pre-deployed contracts `TYPE_ARGS` on testnet and mainnet can be found here:
+Detailed deployment steps can be found in [ibc-ckb-contracts](https://github.com/synapseweb3/ibc-ckb-contracts). Alternatively, you can find pre-deployed contracts TYPE_ARGS on both testnet and mainnet:
 ||Mainnet|Testnet|
 |-|-|-|
 |connection|WIP|WIP|
@@ -50,14 +50,14 @@ Detailed deployment steps can be found in [ibc-ckb-contracts](https://github.com
 |utility|WIP|WIP|
 |escrow|WIP|WIP|
 
-### Register Business Module
-When deploying the solidity contract on Axon, an initial ICS20 transfer module has been registered in `OwnableIBCHandler` on port `port-0` while contract migration, and it's open to everyone to register their own business module, [here](https://github.com/synapseweb3/ibc-solidity-contract) is the detailed registry steps.
+### Business Module Registration
+When deploying the Solidity contract on Axon, an initial ICS20 transfer module is automatically registered in `OwnableIBCHandler` on port `port-0` during the contract migration process. This registration is open to all users. For detailed instructions on how to register your own business module, visit [ibc-solidity-contract](https://github.com/synapseweb3/ibc-solidity-contract) repository.
 
-Unlike Axon, modules cannot be registered directly in contract on CKB. To fix that, we introduce [forcerelay-ckb-sdk](https://github.com/synapseweb3/forcerelay-ckb-sdk), which is designed to complete the distribution and calling of custom modules.
+Unlike Axon, business modules cannot be registered directly with a contract on CKB. To address this, we have introduced [forcerelay-ckb-sdk](https://github.com/synapseweb3/forcerelay-ckb-sdk), designed to facilitate the distribution and calling of custom modules.
 
-Which needs to be noticed is, IBC port on CKB currently is the `LOCK_HASH` of your wallet cell on CKB, we mark it as `WALLET_LOCK_HASH` and use later.
+It's important to note that the IBC port on CKB corresponds to the `LOCK_HASH` of your wallet cell on CKB, which we will refer to as `WALLET_LOCK_HASH` for future use.
 
-### Installation and Settings
+### Installation and Setting
 We recommand you to download the pre-compiled binary, or you can compile mannully from the source code, which requires `Rust ^v1.56.0` installed:
 
 ```
@@ -67,7 +67,7 @@ $ cargo install -p ibc-relayer-cli
 $ forcerelay --version
 ```
 
-Forcerelay can run by specifying a configuration file in the command line, or the `~/.hermes/config.toml` file will be accessed. An [example](https://github.com/synapseweb3/forcerelay/blob/main/config.toml) configuration file written for Axon and CKB (Testnet) have been pre-generated, and only minimal modifications are required to support running Forcerelay:
+Forcerelay can be executed by specifying a configuration file in the command line, otherwise it will access the `~/.hermes/config.toml`. We provide a pre-generated [example](https://github.com/synapseweb3/forcerelay/blob/main/config.toml) configuration file written for Axon and CKB (Testnet). To run Forcerelay, only minimal modifications are needed to this configuration:
 
 ```
 websocket_addr = "ws://<YOUR_AXON_URL>:<WS_PORT>"
@@ -76,14 +76,14 @@ contract_address = "<YOUR_IBC_AXON_ADDRESS>"
 ```
 
 ### Import Secret Key
-Before running Forcerelay, accounts at both sides of blockchains should be prepared and imported. In the scenario of Axon and CKB, Forcerelay needs its own Axon and CKB accounts with sufficient tokens. Here are steps to import Secp256k1 secret keys:
+Before running Forcerelay, accounts should be prepared on both blockchain networks and imported accordingly. In the case of Axon and CKB, Forcerelay needs its own Axon and CKB accounts with a sufficient amount of token balance. Follow these steps to import Secp256k1 secret keys:
 
 ```
 $ forcerelay keys add --chain axon-0 --secret-file <SECRET_KEY_PATH>
 $ forcerelay keys add --chain ckb4ibc-0 --secret-file <SECRET_KEY_PATH>
 ```
 
-### Connecting and Start Forcerelay
+### Connect and Start Forcerelay
 Establishing IBC channels on both sides of Axon and CKB is required to run Forcerelay:
 
 ```

@@ -82,7 +82,7 @@ pub struct KeysAddCmd {
         required = true,
         value_name = "SECRET_FILE",
         help_heading = "FLAGS",
-        help = "Path to file containing secret key to restore from",
+        help = "Path to file containing hex-encoded secret key to restore from",
         group = "add-restore"
     )]
     secret_file: Option<PathBuf>,
