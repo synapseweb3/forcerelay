@@ -5,12 +5,12 @@
 
 Forcerelay is an IBC-Compatible bridge that aims to open up the Nervos ecosystem and the Cosmos ecosystem, and it also serves as a standard cross-chain solution within the Nervos ecosystem.
 
-Forcerelay is built on [Hermes](https://github.com/informalsystems/hermes), this means we will keep continue to track and update the latest version of Hermes, and won't stop it on any specific old version.
+Forcerelay is built on [Hermes](https://github.com/informalsystems/hermes), and will continuously adapt to newer `Hermes` versions.
 
 At present, Forcerelay exclusively supports Axon, CKB, and Cosmos-SDK chains, prioritizing their seamless operation. While it currently doesn't encompass other well-established EVM chains, such as Ethereum, Arbitrum, and BSC, this is primarily due to the intricacies of running a light-client from these chains on EVM. Nevertheless, our roadmap includes plans for implementing mainstream EVM chains, and we'll keep you informed on our progress in this regard.
 
 ## Progress Tracking
-Forcerelay is actively under development, and we welcome any issues and pull requests. Here's an overview of our current progress:
+Forcerelay is under active development, and we welcome any issues and pull requests. Here's an overview of our current progress:
 - [x] Implement connection and channel layer of IBC protocol between Axon and CKB
 - [ ] Upgrade the underline Hermes from v1.4.0 to the latest v1.6.0
 - [ ] Implement packet layer of IBC protocol between Axon and CKB
@@ -58,7 +58,7 @@ Unlike Axon, business modules cannot be registered directly with a contract on C
 It's important to note that the IBC port on CKB corresponds to the `LOCK_HASH` of your wallet cell on CKB, which we will refer to as `WALLET_LOCK_HASH` for future use.
 
 ### Installation and Setting
-We recommand you to download the pre-compiled binary, or you can compile mannully from the source code, which requires `Rust ^v1.56.0` installed:
+We recommand you to download the pre-compiled binary, or you can compile mannully from the source code, which requires `Rust ^v1.72.0` installed:
 
 ```
 $ git clone https://github.com/synapseweb3/forcerelay
