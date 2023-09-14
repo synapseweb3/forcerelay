@@ -3825,6 +3825,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ibc-solidity-abi"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.10.0",
+ "ethers",
+ "eyre",
+ "log",
+ "tokio",
+]
+
+[[package]]
 name = "ibc-telemetry"
 version = "0.23.0"
 dependencies = [
@@ -3859,6 +3870,7 @@ dependencies = [
  "futures",
  "hex",
  "ibc-relayer",
+ "ibc-solidity-abi",
  "ibc-test-framework",
  "jsonrpc-core",
  "lazy_static",

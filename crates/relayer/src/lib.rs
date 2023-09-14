@@ -49,3 +49,6 @@ pub mod transfer;
 pub mod upgrade_chain;
 pub mod util;
 pub mod worker;
+
+/// TODO move ibc contract abi to a standalone crate
+pub use chain::axon::contract as ibc_contract;

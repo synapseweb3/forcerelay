@@ -14,8 +14,8 @@ use secp256k1::{Secp256k1, SecretKey};
 
 use toml_edit::{value, Document, Table};
 
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
 
 use std::fs;
 use std::time::Duration;
@@ -27,7 +27,7 @@ const AXON_CONTRACTS_CONFIG_PATH: &str = "deployed_contracts.toml";
 const AXON_SRC_PATH: &str = "AXON_SRC_PATH";
 const IBC_CONTRACTS_SRC_PATH: &str = "IBC_CONTRACTS_SRC_PATH";
 
-pub fn prepare_axon_chain(
+pub(crate) fn prepare_axon_chain(
     dir_path: &str,
     port: u32,
     genesis_wallets: &[(&Wallet, u64)],
@@ -121,41 +121,18 @@ pub fn prepare_axon_chain(
             .output()
             .with_context(|| "yarn migrate")?;
         // get contract address from output
-        let contract_address: Option<ethers::types::H160> = if output.status.success() {
-            let output = String::from_utf8(output.stdout.clone())?;
-            output
-                .lines()
-                .filter(|line| line.starts_with("Done Deployment OwnableIBCHandler"))
-                .filter_map(|line| {
-                    line.split("at").last().map(|s| {
-                        let s = s.trim().trim_start_matches("0x");
-                        let bytes = hex::decode(s).expect("decode hex address");
-                        ethers::types::H160::from_slice(&bytes)
-                    })
-                })
-                .next()
-        } else {
-            None
-        };
+        check_command_output(&output, &working_dir)?;
+        let output = String::from_utf8(output.stdout.clone())?;
+        let contract_address = parsing_contract_address_from_output(&output, "OwnableIBCHandler")?;
+        let mock_transfer_contract_address =
+            parsing_contract_address_from_output(&output, "MockTransfer")?;
 
-        if contract_address.is_none() {
-            let log_path = working_dir.join("deploy.log");
-            let err_log_path = working_dir.join("deploy.err.log");
-            fs::write(&log_path, output.stdout)?;
-            fs::write(&err_log_path, output.stderr)?;
-            bail!(
-                "failed to parse deployed contract address from logs: {}, log: {}, err log: {}",
-                output.status.to_string(),
-                log_path.to_string_lossy(),
-                err_log_path.to_string_lossy()
-            );
-        }
-        let contract_address = contract_address.unwrap();
         println!("ibc handler deployed at {:#x}", contract_address);
 
         // write deployment info
         let deployment = DeployedContracts {
             contract_address,
+            mock_transfer_contract_address,
             image_cell_contract_address: ethers::types::H160::default(),
             ckb_light_client_contract_address: ethers::types::H160::default(),
         };
@@ -165,6 +142,46 @@ pub fn prepare_axon_chain(
     }
 
     Ok(chain_process)
+}
+
+pub fn read_deployed_contracts<P: AsRef<Path>>(chain_dir: P) -> Result<DeployedContracts> {
+    let path = chain_dir.as_ref().join(AXON_CONTRACTS_CONFIG_PATH);
+    let content = std::fs::read_to_string(path)?;
+    toml::from_str(&content).map_err(Into::into)
+}
+
+fn check_command_output(output: &Output, working_dir: &Path) -> Result<()> {
+    if !output.status.success() {
+        let log_path = working_dir.join("deploy.log");
+        let err_log_path = working_dir.join("deploy.err.log");
+        fs::write(&log_path, &output.stdout)?;
+        fs::write(&err_log_path, &output.stderr)?;
+        bail!(
+            "command return error status: {}, log: {}, err log: {}",
+            output.status.to_string(),
+            log_path.to_string_lossy(),
+            err_log_path.to_string_lossy()
+        );
+    }
+    Ok(())
+}
+
+fn parsing_contract_address_from_output(
+    output: &str,
+    contract: &str,
+) -> Result<ethers::types::H160> {
+    output
+        .lines()
+        .filter(|line| line.starts_with(format!("Done Deployment {contract}").as_str()))
+        .filter_map(|line| {
+            line.split("at").last().map(|s| {
+                let s = s.trim().trim_start_matches("0x");
+                let bytes = hex::decode(s).expect("decode hex address");
+                ethers::types::H160::from_slice(&bytes)
+            })
+        })
+        .next()
+        .ok_or(anyhow!("failed to parsing {}", contract))
 }
 
 fn wait_for_port(port: u32) {

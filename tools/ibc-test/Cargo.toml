@@ -38,6 +38,7 @@ tiny-keccak = { version = "2.0.2", features = [
 axon-types = { git = "https://github.com/axonweb3/axon-contract", rev = "8c2338a" }
 
 ibc-test-framework = { path = "../test-framework" }
+ibc-solidity-abi = { path = "../ibc-solidity-abi" }
 toml = "=0.5.11"
 anyhow = "1.0.72"
 log = "0.4.19"

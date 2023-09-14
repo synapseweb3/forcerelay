@@ -95,7 +95,7 @@ use super::{
 };
 use tokio::runtime::Runtime as TokioRuntime;
 
-mod contract;
+pub mod contract;
 mod monitor;
 mod msg;
 mod rpc;

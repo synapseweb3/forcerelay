@@ -35,6 +35,12 @@ fn test_channel() -> Result<(), Error> {
 }
 
 #[test]
+fn test_transfer() -> Result<(), Error> {
+    init_envs()?;
+    run_arbitrary_binary_channel_test(&ibc::transfer::TransferTest::new())
+}
+
+#[test]
 fn test_ckb_packet() -> Result<(), Error> {
     init_envs()?;
     let value = std::env::var("ACCOUNT_PREFIXES")
