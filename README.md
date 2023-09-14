@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?logo=apache)](LICENSE)
 
 
-Forcerelay is an IBC-Compatible bridge that aims to open up the Nervos ecosystem and the Cosmos ecosystem, and it also serves as a standard cross-chain solution within the Nervos ecosystem.
+Forcerelay is an IBC-Compatible bridge that aims to connect the Nervos ecosystem and the Cosmos ecosystem, and it also serves as a standard cross-chain solution within the Nervos ecosystem.
 
 Forcerelay is built on [Hermes](https://github.com/informalsystems/hermes), and will continuously adapt to newer `Hermes` versions.
 
