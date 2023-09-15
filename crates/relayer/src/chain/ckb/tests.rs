@@ -146,7 +146,7 @@ fn test_create_eth_multi_client(case_id: usize) {
             let network = chain.network().unwrap();
             let is_mainnet = network == NetworkType::Mainnet;
             let account_prefix = if is_mainnet { "ckb" } else { "ckt" };
-            let address_type = AddressType::Ckb { is_mainnet };
+            let address_type = AddressType::Ckb;
             Secp256k1KeyPair::from_mnemonic(mnemonic, &hd_path, &address_type, account_prefix)
                 .unwrap()
         };

@@ -42,7 +42,7 @@ serde = "1.0"
 serde_derive = "1.0"
 thiserror = "1.0.40"
 toml = "0.5"
-tracing = "0.1.36"
+tracing = { version = "0.1.36", features = ["log"] }
 tokio = { version = "1.0", features = [
     "rt-multi-thread",
     "time",

@@ -65,10 +65,8 @@ impl ChainType {
             Self::Evmos => AddressType::Ethermint {
                 pk_type: "/ethermint.crypto.v1.ethsecp256k1.PubKey".to_string(),
             },
-            Self::Ckb => AddressType::Ckb { is_mainnet: false },
-            Self::Axon => AddressType::Axon {
-                pk_type: "/axon.crypto.v1.ethsecp256k1.PubKey".to_string(),
-            },
+            Self::Ckb => AddressType::Ckb,
+            Self::Axon => AddressType::Axon,
         }
     }
 }
