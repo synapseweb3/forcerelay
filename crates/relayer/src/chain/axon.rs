@@ -1017,12 +1017,10 @@ impl AxonChain {
             .rt
             .block_on(self.get_proofs_ingredients(block_number))?;
 
-        // FIXME: keep it commentted until Axon team fixed this verify issue
-        //
         // check the validation of receipts mpt proof
-        // let key = rlp::encode(&receipt.transaction_index.as_u64());
-        // axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
-        //     .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
+        let key = rlp::encode(&receipt.transaction_index.as_u64());
+        axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
+            .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
 
         let object_proof =
             to_ckb_like_object_proof(&receipt, &receipt_proof, &block, &state_root, &block_proof)
