@@ -1049,7 +1049,7 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=0a7f9eb#0a7f9eb7b07b4eadc435fc84675599bba7e49ee5"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=aa075a5#aa075a50f22a1c7e774fa7cf851faaa3e7f6e69c"
 dependencies = [
  "bytes",
  "ethereum-types",
@@ -1061,7 +1061,7 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=56b09fa#56b09fafea22f77d646a7e2706753bbe1e1fc3e5"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=bfd8ab46a1f1fc#bfd8ab46a1f1fcef7c5610916849381c61122b90"
 dependencies = [
  "bytes",
  "ethereum-types",
@@ -2859,13 +2859,13 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "forcerelay-ckb-sdk"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=576755d#576755daaf6c36afdb89b7a7b19cdb52a795860a"
+source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=86e797b60311#86e797b603119987906d348d8c33a29905e28330"
 dependencies = [
  "anyhow",
  "async-stream",
  "bytes",
  "ckb-fixed-hash 0.108.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=0a7f9eb)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=bfd8ab46a1f1fc)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3643,7 +3643,7 @@ dependencies = [
  "bs58 0.4.0",
  "bytes",
  "ckb-hash 0.108.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=56b09fa)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=aa075a5)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3850,7 +3850,7 @@ dependencies = [
  "axon-types",
  "ckb-chain-spec",
  "ckb-hash 0.106.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=56b09fa)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=aa075a5)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",

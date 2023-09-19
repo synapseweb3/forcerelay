@@ -89,6 +89,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         packet,
         tx_hash: None,
         status: PacketStatus::Recv,
+        ack: None,
     });
 
     let (channel_input, input_capacity) =
@@ -135,7 +136,6 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
 
     let ack_packet = CkbMsgAckPacket {
         proofs: convert_proof(msg.proofs)?,
-        acknowledgement: msg.acknowledgement.as_ref().to_vec(),
     };
     let envelope = Envelope {
         msg_type: MsgType::MsgAckPacket,
@@ -155,6 +155,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         packet,
         tx_hash: None,
         status: PacketStatus::Ack,
+        ack: Some(msg.acknowledgement.into()),
     });
     let (channel_input, channel_capacity) =
         converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port)?;
