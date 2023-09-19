@@ -2,6 +2,7 @@ use core::time::Duration;
 
 use ibc_relayer_types::core::ics04_channel::packet::Packet;
 
+use crate::chain::chain_type::ChainType;
 use crate::chain::cli::transfer::local_transfer_token;
 use crate::chain::driver::ChainDriver;
 use crate::chain::tagged::TaggedChainDriverExt;
@@ -81,18 +82,41 @@ impl<'a, Chain: Send> ChainTransferMethodsExt<Chain> for MonoTagged<Chain, &'a C
         recipient: &MonoTagged<Counterparty, &WalletAddress>,
         token: &TaggedTokenRef<Chain>,
     ) -> Result<Packet, Error> {
-        let rpc_client = self.rpc_client()?;
-        self.value().runtime.block_on(ibc_token_transfer(
-            rpc_client.as_ref(),
-            &self.tx_config(),
-            port_id,
-            channel_id,
-            sender,
-            recipient,
-            token,
-            None,
-            None,
-        ))
+        match self.value().chain_type {
+            ChainType::Axon => {
+                let websocket_addr = self.value().websocket_address();
+                let home_path = self.value().home_path.clone();
+                self.value()
+                    .runtime
+                    .block_on(crate::relayer::axon::transfer::ibc_token_transfer(
+                        websocket_addr,
+                        home_path,
+                        port_id,
+                        channel_id,
+                        sender,
+                        recipient,
+                        token,
+                        None,
+                    ))
+            }
+            ChainType::Ckb => {
+                unimplemented!("Do not support ibc transfer token")
+            }
+            _ => {
+                let rpc_client = self.rpc_client()?;
+                self.value().runtime.block_on(ibc_token_transfer(
+                    rpc_client.as_ref(),
+                    &self.tx_config(),
+                    port_id,
+                    channel_id,
+                    sender,
+                    recipient,
+                    token,
+                    None,
+                    None,
+                ))
+            }
+        }
     }
 
     fn ibc_transfer_token_with_memo_and_timeout<Counterparty>(
@@ -105,18 +129,41 @@ impl<'a, Chain: Send> ChainTransferMethodsExt<Chain> for MonoTagged<Chain, &'a C
         memo: Option<String>,
         timeout: Option<Duration>,
     ) -> Result<Packet, Error> {
-        let rpc_client = self.rpc_client()?;
-        self.value().runtime.block_on(ibc_token_transfer(
-            rpc_client.as_ref(),
-            &self.tx_config(),
-            port_id,
-            channel_id,
-            sender,
-            recipient,
-            token,
-            memo,
-            timeout,
-        ))
+        match self.value().chain_type {
+            ChainType::Axon => {
+                let websocket_addr = self.value().websocket_address();
+                let home_path = self.value().home_path.clone();
+                self.value()
+                    .runtime
+                    .block_on(crate::relayer::axon::transfer::ibc_token_transfer(
+                        websocket_addr,
+                        home_path,
+                        port_id,
+                        channel_id,
+                        sender,
+                        recipient,
+                        token,
+                        None,
+                    ))
+            }
+            ChainType::Ckb => {
+                unimplemented!("Do not support ibc transfer token")
+            }
+            _ => {
+                let rpc_client = self.rpc_client()?;
+                self.value().runtime.block_on(ibc_token_transfer(
+                    rpc_client.as_ref(),
+                    &self.tx_config(),
+                    port_id,
+                    channel_id,
+                    sender,
+                    recipient,
+                    token,
+                    memo,
+                    timeout,
+                ))
+            }
+        }
     }
 
     fn ibc_transfer_token_multiple<Counterparty>(
@@ -129,18 +176,45 @@ impl<'a, Chain: Send> ChainTransferMethodsExt<Chain> for MonoTagged<Chain, &'a C
         num_msgs: usize,
         memo: Option<String>,
     ) -> Result<(), Error> {
-        let rpc_client = self.rpc_client()?;
-        self.value().runtime.block_on(batched_ibc_token_transfer(
-            rpc_client.as_ref(),
-            &self.tx_config(),
-            port_id,
-            channel_id,
-            sender,
-            recipient,
-            token,
-            num_msgs,
-            memo,
-        ))
+        match self.value().chain_type {
+            ChainType::Axon => {
+                let websocket_addr = self.value().websocket_address();
+                let home_path = self.value().home_path.clone();
+                self.value().runtime.block_on(async {
+                    for _ in 0..num_msgs {
+                        crate::relayer::axon::transfer::ibc_token_transfer(
+                            websocket_addr.clone(),
+                            home_path.clone(),
+                            port_id,
+                            channel_id,
+                            sender,
+                            recipient,
+                            token,
+                            None,
+                        )
+                        .await?;
+                    }
+                    Ok(())
+                })
+            }
+            ChainType::Ckb => {
+                unimplemented!("Do not support ibc transfer token")
+            }
+            _ => {
+                let rpc_client = self.rpc_client()?;
+                self.value().runtime.block_on(batched_ibc_token_transfer(
+                    rpc_client.as_ref(),
+                    &self.tx_config(),
+                    port_id,
+                    channel_id,
+                    sender,
+                    recipient,
+                    token,
+                    num_msgs,
+                    memo,
+                ))
+            }
+        }
     }
 
     fn local_transfer_token(
@@ -150,14 +224,22 @@ impl<'a, Chain: Send> ChainTransferMethodsExt<Chain> for MonoTagged<Chain, &'a C
         token: &TaggedTokenRef<Chain>,
     ) -> Result<(), Error> {
         let driver = *self.value();
-        local_transfer_token(
-            driver.chain_id.as_str(),
-            &driver.command_path,
-            &driver.home_path,
-            &driver.rpc_listen_address(),
-            sender.value().address.as_str(),
-            recipient.value().as_str(),
-            &token.value().to_string(),
-        )
+        match driver.chain_type {
+            ChainType::Axon | ChainType::Ckb => {
+                unimplemented!(
+                    "chain_type {:?} not support local_transfer_token",
+                    driver.chain_type
+                )
+            }
+            _ => local_transfer_token(
+                driver.chain_id.as_str(),
+                &driver.command_path,
+                &driver.home_path,
+                &driver.rpc_listen_address(),
+                sender.value().address.as_str(),
+                recipient.value().as_str(),
+                &token.value().to_string(),
+            ),
+        }
     }
 }

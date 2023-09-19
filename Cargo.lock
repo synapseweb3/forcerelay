@@ -3904,6 +3904,7 @@ dependencies = [
  "ibc-relayer",
  "ibc-relayer-cli",
  "ibc-relayer-types",
+ "ibc-solidity-abi",
  "itertools 0.10.5",
  "prost",
  "rand 0.8.5",
