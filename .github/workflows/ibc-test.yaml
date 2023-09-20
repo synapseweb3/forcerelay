@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 60
     env:
       SRC_DIR: ${{ github.workspace }}/ibc-test-src
-      AXON_COMMIT: d03d2bb7cb3dcdc03319c3a74beeee6715e7f448
+      AXON_COMMIT: 7ae0a826647d07e0b25b4adb440a8c97231d6a04
       IBC_CONTRACT_COMMIT: 5746d048304ca4d73dc4800459ddd79d57fa124c
     strategy:
       fail-fast: false
