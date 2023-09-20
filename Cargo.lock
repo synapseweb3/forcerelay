@@ -3828,11 +3828,7 @@ dependencies = [
 name = "ibc-solidity-abi"
 version = "0.1.0"
 dependencies = [
- "env_logger 0.10.0",
  "ethers",
- "eyre",
- "log",
- "tokio",
 ]
 
 [[package]]
