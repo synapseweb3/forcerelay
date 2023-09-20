@@ -100,7 +100,7 @@ impl<'a, Chain: Send> ChainTransferMethodsExt<Chain> for MonoTagged<Chain, &'a C
                     ))
             }
             ChainType::Ckb => {
-                unimplemented!("Do not support ibc transfer token")
+                unimplemented!("ibc_transfer_token not support")
             }
             _ => {
                 let rpc_client = self.rpc_client()?;
@@ -147,7 +147,7 @@ impl<'a, Chain: Send> ChainTransferMethodsExt<Chain> for MonoTagged<Chain, &'a C
                     ))
             }
             ChainType::Ckb => {
-                unimplemented!("Do not support ibc transfer token")
+                unimplemented!("ibc_transfer_token not support")
             }
             _ => {
                 let rpc_client = self.rpc_client()?;
@@ -198,7 +198,7 @@ impl<'a, Chain: Send> ChainTransferMethodsExt<Chain> for MonoTagged<Chain, &'a C
                 })
             }
             ChainType::Ckb => {
-                unimplemented!("Do not support ibc transfer token")
+                unimplemented!("ibc_transfer_token not support")
             }
             _ => {
                 let rpc_client = self.rpc_client()?;

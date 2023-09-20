@@ -144,12 +144,6 @@ pub(crate) fn prepare_axon_chain(
     Ok(chain_process)
 }
 
-pub fn read_deployed_contracts<P: AsRef<Path>>(chain_dir: P) -> Result<DeployedContracts> {
-    let path = chain_dir.as_ref().join(AXON_CONTRACTS_CONFIG_PATH);
-    let content = std::fs::read_to_string(path)?;
-    toml::from_str(&content).map_err(Into::into)
-}
-
 fn check_command_output(output: &Output, working_dir: &Path) -> Result<()> {
     if !output.status.success() {
         let log_path = working_dir.join("deploy.log");
