@@ -3825,13 +3825,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ibc-solidity-abi"
-version = "0.1.0"
-dependencies = [
- "ethers",
-]
-
-[[package]]
 name = "ibc-telemetry"
 version = "0.23.0"
 dependencies = [
@@ -3899,7 +3892,6 @@ dependencies = [
  "ibc-relayer",
  "ibc-relayer-cli",
  "ibc-relayer-types",
- "ibc-solidity-abi",
  "itertools 0.10.5",
  "prost",
  "rand 0.8.5",

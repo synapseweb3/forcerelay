@@ -16,7 +16,6 @@ members = [
     "tools/query-events",
     "tools/forcerelay-test",
     "tools/ibc-test",
-    "tools/ibc-solidity-abi"
 ]
 
 [patch.crates-io]

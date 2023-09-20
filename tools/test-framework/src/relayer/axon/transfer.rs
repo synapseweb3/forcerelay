@@ -13,7 +13,13 @@ use ibc_relayer::{
     ibc_contract::OwnableIBCHandlerEvents, keyring::Secp256k1KeyPair,
 };
 use ibc_relayer_types::{core::ics04_channel::packet::Packet, events::IbcEvent, Height};
-use ibc_solidity_abi::generated::mock_transfer::MockTransfer;
+
+abigen!(
+    MockTransfer,
+    r"[
+        function sendTransfer(string calldata denom,uint64 amount,address receiver,string calldata sourcePort,string calldata sourceChannel,uint64 timeoutHeight) external
+    ]"
+);
 
 async fn new_mock_contract(
     client: Provider<Ws>,

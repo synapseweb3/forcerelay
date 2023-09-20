@@ -44,4 +44,3 @@ tonic = { version = "0.8", features = ["tls", "tls-roots"] }
 hdpath = "0.6.1"
 ethers = { version = "2.0.2", features = ["rustls", "ws"] }
 ckb-fixed-hash = "0"
-ibc-solidity-abi = { path = "../ibc-solidity-abi" }
