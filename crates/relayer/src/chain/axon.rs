@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, sync::Arc, thread};
+use std::{collections::HashMap, str::FromStr, sync::Arc, thread, time::Duration};
 
 use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
 use eth2_types::Hash256;
@@ -1189,15 +1189,28 @@ impl AxonChain {
             .checked_add(1u64.into())
             .expect("bad block_number");
 
-        let block = self.rpc_client.get_block_by_id(block_number.into()).await?;
+        let block = self
+            .rpc_client
+            .get_block_by_id(block_number.into())
+            .await?
+            // XXX: proper error handling.
+            .unwrap();
         let state_root = self
             .rpc_client
             .get_block_by_id(previous_number.into())
             .await?
+            // XXX: proper error handling.
+            .unwrap()
             .header
             .state_root;
-        // FIXME: maybe we won't get proof because the next block isn't mined yet, so here needs double check
-        let proof = self.rpc_client.get_proof_by_id(next_number.into()).await?;
+        let proof = loop {
+            match self.rpc_client.get_proof_by_id(next_number.into()).await? {
+                None => {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                Some(p) => break p,
+            }
+        };
         let validators = self
             .rpc_client
             .get_current_metadata()

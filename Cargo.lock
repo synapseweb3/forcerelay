@@ -1049,18 +1049,6 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=aa075a5#aa075a50f22a1c7e774fa7cf851faaa3e7f6e69c"
-dependencies = [
- "bytes",
- "ethereum-types",
- "rlp",
- "rlp-derive",
- "tiny-keccak",
-]
-
-[[package]]
-name = "ckb-ics-axon"
-version = "0.1.0"
 source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=bfd8ab46a1f1fc#bfd8ab46a1f1fcef7c5610916849381c61122b90"
 dependencies = [
  "bytes",
@@ -2865,7 +2853,7 @@ dependencies = [
  "async-stream",
  "bytes",
  "ckb-fixed-hash 0.108.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=bfd8ab46a1f1fc)",
+ "ckb-ics-axon",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3605,7 +3593,7 @@ dependencies = [
  "ibc-relayer",
  "ibc-relayer-types",
  "ibc-test-framework",
- "prost",
+ "prost 0.11.9",
  "serde",
  "serde_json",
  "tempfile",
@@ -3623,7 +3611,7 @@ dependencies = [
  "base64 0.13.1",
  "bytes",
  "flex-error",
- "prost",
+ "prost 0.11.9",
  "serde",
  "subtle-encoding",
  "tendermint-proto",
@@ -3643,7 +3631,7 @@ dependencies = [
  "bs58 0.4.0",
  "bytes",
  "ckb-hash 0.108.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=aa075a5)",
+ "ckb-ics-axon",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3677,7 +3665,7 @@ dependencies = [
  "moka",
  "num-bigint",
  "num-rational",
- "prost",
+ "prost 0.11.9",
  "rand 0.8.5",
  "regex",
  "reqwest",
@@ -3803,7 +3791,7 @@ dependencies = [
  "itertools 0.10.5",
  "num-rational",
  "primitive-types",
- "prost",
+ "prost 0.11.9",
  "safe-regex",
  "serde",
  "serde_derive",
@@ -3848,9 +3836,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axon-types",
+ "bytes",
  "ckb-chain-spec",
  "ckb-hash 0.106.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=aa075a5)",
+ "ckb-ics-axon",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3864,6 +3853,7 @@ dependencies = [
  "jsonrpc-core",
  "lazy_static",
  "log",
+ "prost 0.12.1",
  "reqwest",
  "rlp",
  "secp256k1",
@@ -3894,7 +3884,7 @@ dependencies = [
  "ibc-relayer-cli",
  "ibc-relayer-types",
  "itertools 0.10.5",
- "prost",
+ "prost 0.11.9",
  "rand 0.8.5",
  "semver",
  "serde",
@@ -3920,7 +3910,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "hex",
- "prost",
+ "prost 0.11.9",
  "ripemd",
  "sha2 0.10.7",
  "sha3",
@@ -5568,7 +5558,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b82eaa1d779e9a4bc1c3217db8ffbeabaae1dca241bf70183242128d48681cd"
 dependencies = [
  "bytes",
- "prost-derive",
+ "prost-derive 0.11.9",
+]
+
+[[package]]
+name = "prost"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4fdd22f3b9c31b53c060df4a0613a1c7f062d4115a2b984dd15b1858f7e340d"
+dependencies = [
+ "bytes",
+ "prost-derive 0.12.1",
 ]
 
 [[package]]
@@ -5585,12 +5585,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-derive"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "265baba7fabd416cf5078179f7d2cbeca4ce7a9041111900675ea7c4cb8a4c32"
+dependencies = [
+ "anyhow",
+ "itertools 0.11.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.31",
+]
+
+[[package]]
 name = "prost-types"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213622a1460818959ac1181aaeb2dc9c7f63df720db7d788b3e24eacd1983e13"
 dependencies = [
- "prost",
+ "prost 0.11.9",
 ]
 
 [[package]]
@@ -7176,7 +7189,7 @@ dependencies = [
  "k256 0.11.6",
  "num-traits",
  "once_cell",
- "prost",
+ "prost 0.11.9",
  "prost-types",
  "ripemd",
  "serde",
@@ -7251,7 +7264,7 @@ dependencies = [
  "flex-error",
  "num-derive",
  "num-traits",
- "prost",
+ "prost 0.11.9",
  "prost-types",
  "serde",
  "serde_bytes",
@@ -7697,8 +7710,8 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding",
  "pin-project",
- "prost",
- "prost-derive",
+ "prost 0.11.9",
+ "prost-derive 0.11.9",
  "rustls-native-certs 0.6.3",
  "rustls-pemfile",
  "tokio",

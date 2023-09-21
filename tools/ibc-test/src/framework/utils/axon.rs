@@ -126,6 +126,8 @@ pub(crate) fn prepare_axon_chain(
         let contract_address = parsing_contract_address_from_output(&output, "OwnableIBCHandler")?;
         let mock_transfer_contract_address =
             parsing_contract_address_from_output(&output, "MockTransfer")?;
+        let transfer_contract_address =
+            parsing_contract_address_from_output(&output, "ICS20TransferERC20")?;
 
         println!("ibc handler deployed at {:#x}", contract_address);
 
@@ -133,6 +135,7 @@ pub(crate) fn prepare_axon_chain(
         let deployment = DeployedContracts {
             contract_address,
             mock_transfer_contract_address,
+            transfer_contract_address,
             image_cell_contract_address: ethers::types::H160::default(),
             ckb_light_client_contract_address: ethers::types::H160::default(),
         };

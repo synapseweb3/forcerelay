@@ -5,6 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 pub struct DeployedContracts {
     pub contract_address: H160,
     pub mock_transfer_contract_address: H160,
+    pub transfer_contract_address: H160,
     pub image_cell_contract_address: H160,
     pub ckb_light_client_contract_address: H160,
 }

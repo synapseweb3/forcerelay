@@ -12,9 +12,9 @@ pub type Response<T> = Result<T, Error>;
 
 #[async_trait]
 pub trait AxonRpc {
-    async fn get_block_by_id(&self, block_id: BlockId) -> Response<AxonBlock>;
+    async fn get_block_by_id(&self, block_id: BlockId) -> Response<Option<AxonBlock>>;
 
-    async fn get_proof_by_id(&self, block_id: BlockId) -> Response<Proof>;
+    async fn get_proof_by_id(&self, block_id: BlockId) -> Response<Option<Proof>>;
 
     async fn get_metadata_by_number(&self, block_number: BlockNumber) -> Response<Metadata>;
 
@@ -77,12 +77,12 @@ macro_rules! jsonrpc {
 
 #[async_trait]
 impl AxonRpc for AxonRpcClient {
-    async fn get_block_by_id(&self, block_id: BlockId) -> Response<AxonBlock> {
-        jsonrpc!("axon_getBlockById", self, AxonBlock, block_id)
+    async fn get_block_by_id(&self, block_id: BlockId) -> Response<Option<AxonBlock>> {
+        jsonrpc!("axon_getBlockById", self, Option<AxonBlock>, block_id)
     }
 
-    async fn get_proof_by_id(&self, block_id: BlockId) -> Response<Proof> {
-        jsonrpc!("axon_getProofById", self, Proof, block_id)
+    async fn get_proof_by_id(&self, block_id: BlockId) -> Response<Option<Proof>> {
+        jsonrpc!("axon_getProofById", self, Option<Proof>, block_id)
     }
 
     async fn get_metadata_by_number(&self, block_number: BlockNumber) -> Response<Metadata> {
