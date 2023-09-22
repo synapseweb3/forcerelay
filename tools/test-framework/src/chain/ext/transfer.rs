@@ -143,7 +143,7 @@ impl<'a, Chain: Send> ChainTransferMethodsExt<Chain> for MonoTagged<Chain, &'a C
                         sender,
                         recipient,
                         token,
-                        None,
+                        timeout,
                     ))
             }
             ChainType::Ckb => {
