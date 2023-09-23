@@ -48,7 +48,7 @@ impl BinaryChannelTest for ChannelTest {
         channel: ConnectedChannel<ChainA, ChainB>,
     ) -> Result<(), Error> {
         info!(
-            "check conneciton and channel on-chain status ({}: {}/{}, {}: {}/{})",
+            "check connection and channel on-chain status ({}: {}/{}, {}: {}/{})",
             chains.chain_id_a(),
             channel.connection.connection_id_a,
             channel.channel_id_a,

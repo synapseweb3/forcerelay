@@ -120,4 +120,4 @@ jobs:
           RUST_BACKTRACE: 1
         with:
           command: test
-          args: -p ibc-test -- --nocapture
+          args: -p ibc-test -- --nocapture --test-threads=1

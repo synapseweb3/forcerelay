@@ -18,6 +18,7 @@
    the original code.
 */
 
+pub mod axon;
 pub mod chain;
 pub mod channel;
 pub mod connection;

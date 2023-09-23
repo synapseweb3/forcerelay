@@ -248,6 +248,14 @@ impl ChainConfig {
         }
     }
 
+    pub fn downcast_axon(self) -> AxonChainConfig {
+        if let ChainConfig::Axon(c) = self {
+            c
+        } else {
+            panic!("Not a axon chain")
+        }
+    }
+
     pub fn rpc_addr(&self) -> &Url {
         if let ChainConfig::Cosmos(c) = &self {
             &c.rpc_addr

@@ -2,12 +2,16 @@ use std::{collections::HashMap, str::FromStr, sync::Arc, thread};
 
 use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
 use eth2_types::Hash256;
+use k256::ecdsa::SigningKey;
 use rlp::Encodable;
 use tracing::warn;
 
 use crate::{
     account::Balance,
-    chain::{axon::contract::HeightData, requests::QueryHeight},
+    chain::{
+        axon::contract::HeightData,
+        requests::{Qualified, QueryHeight},
+    },
     client_state::{AnyClientState, IdentifiedAnyClientState},
     config::{axon::AxonChainConfig, ChainConfig},
     connection::ConnectionMsgType,
@@ -15,16 +19,16 @@ use crate::{
     denom::DenomTrace,
     error::Error,
     event::{monitor::TxMonitorCmd, IbcEventWithHeight},
+    ibc_contract::OwnableIBCHandlerEvents,
     keyring::{KeyRing, Secp256k1KeyPair},
     light_client::{axon::LightClient as AxonLightClient, LightClient},
     misbehaviour::MisbehaviourEvidence,
 };
 use eth_light_client_in_ckb_prover::Receipts;
 use ethers::{
-    prelude::{k256::ecdsa::SigningKey, EthLogDecode, SignerMiddleware},
+    prelude::*,
     providers::{Middleware, Provider, Ws},
     signers::{Signer as _, Wallet},
-    types::{BlockNumber, TransactionRequest, TxHash, U64},
     utils::rlp,
 };
 use ibc_proto::{
@@ -60,7 +64,7 @@ use ibc_relayer_types::{
         ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
         ics24_host::identifier::{ChainId, ChannelId, ClientId, ConnectionId, PortId},
     },
-    events::IbcEvent,
+    events::{IbcEvent, WithBlockDataType},
     proofs::{ConsensusProof, Proofs},
     signer::Signer,
     timestamp::Timestamp,
@@ -95,11 +99,11 @@ use super::{
 };
 use tokio::runtime::Runtime as TokioRuntime;
 
-mod contract;
+pub mod contract;
 mod monitor;
 mod msg;
 mod rpc;
-mod utils;
+pub mod utils;
 
 pub use rpc::AxonRpc;
 use utils::*;
@@ -130,15 +134,22 @@ pub struct AxonChain {
 }
 
 impl AxonChain {
-    fn contract(&self) -> Result<Contract, Error> {
-        let key_entry = self
-            .keybase
-            .get_key(&self.config.key_name)
-            .map_err(Error::key_base)?;
+    fn get_wallet(&self, key_name: &str) -> Result<Wallet<SigningKey>, Error> {
+        let key_entry = self.keybase.get_key(key_name).map_err(Error::key_base)?;
         let wallet = key_entry.into_ether_wallet().with_chain_id(self.chain_id);
-        let client = Arc::new(SignerMiddleware::new(self.client.clone(), wallet));
-        let contract = Contract::new(self.config.contract_address, Arc::clone(&client));
-        Ok(contract)
+        Ok(wallet)
+    }
+
+    fn contract_provider(&self) -> Result<Arc<ContractProvider>, Error> {
+        let wallet = self.get_wallet(&self.config.key_name)?;
+        Ok(Arc::new(SignerMiddleware::new(self.client.clone(), wallet)))
+    }
+
+    fn contract(&self) -> Result<Contract, Error> {
+        Ok(Contract::new(
+            self.config.contract_address,
+            self.contract_provider()?,
+        ))
     }
 }
 
@@ -194,7 +205,10 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn health_check(&self) -> Result<HealthCheck, Error> {
-        Ok(HealthCheck::Healthy)
+        match self.rt.block_on(self.rpc_client.get_current_metadata()) {
+            Ok(_) => Ok(HealthCheck::Healthy),
+            Err(err) => Ok(HealthCheck::Unhealthy(Box::new(err))),
+        }
     }
 
     fn subscribe(&mut self) -> Result<Subscription, Error> {
@@ -288,8 +302,14 @@ impl ChainEndpoint for AxonChain {
         _key_name: Option<&str>,
         _denom: Option<&str>,
     ) -> Result<Balance, Error> {
-        // TODO: implement the real `query_balance` function later
-        warn!("axon query_balance() cannot implement");
+        // // TODO: this should be configurable
+        // const DEFAULT_DENOM: &str = "AT";
+
+        // let key_name = key_name.unwrap_or(&self.config.key_name);
+        // let denom = denom.unwrap_or(DEFAULT_DENOM);
+        // let contract = self.ics20_contract()?;
+        // let wallet =  self.get_wallet(key_name);
+
         Ok(Balance {
             amount: "100".to_owned(),
             denom: "AT".to_owned(),
@@ -778,11 +798,121 @@ impl ChainEndpoint for AxonChain {
 
     fn query_packet_events(
         &self,
-        _request: QueryPacketEventDataRequest,
+        request: QueryPacketEventDataRequest,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        // TODO
-        warn!("axon query_packet_events() not support");
-        Ok(vec![])
+        let QueryPacketEventDataRequest {
+            event_id,
+            source_channel_id,
+            source_port_id,
+            destination_channel_id,
+            destination_port_id,
+            sequences,
+            height,
+        } = request;
+
+        let mut filter = Filter::new().address(self.config.contract_address);
+        // filter height
+        match height {
+            Qualified::SmallerEqual(QueryHeight::Latest)
+            | Qualified::Equal(QueryHeight::Latest) => {
+                // until the latest block
+            }
+            Qualified::SmallerEqual(QueryHeight::Specific(height)) => {
+                filter = filter.to_block(height.revision_height());
+            }
+            Qualified::Equal(QueryHeight::Specific(height)) => {
+                filter = filter
+                    .from_block(height.revision_height())
+                    .to_block(height.revision_height());
+            }
+        }
+
+        let logs = self
+            .rt
+            .block_on(self.client.get_logs(&filter))
+            .map_err(|e| Error::other_error(e.to_string()))?;
+
+        let logs_iter = logs.into_iter().map(|log| {
+            let height = {
+                let number = log.block_number.expect("no block number").as_u64();
+                Height::from_noncosmos_height(number)
+            };
+            let tx_hash: [u8; 32] = log.transaction_hash.expect("no tx hash").into();
+            let event = OwnableIBCHandlerEvents::decode_log(&log.into()).expect("parse log");
+            (height, tx_hash, event)
+        });
+
+        let packet_filter = |packet: &contract::PacketData| {
+            if !sequences.is_empty() && sequences.contains(&Sequence::from(packet.sequence)) {
+                return false;
+            }
+            if packet.destination_channel != destination_channel_id.to_string() {
+                return false;
+            }
+            if packet.source_channel != source_channel_id.to_string() {
+                return false;
+            }
+            if packet.destination_port != destination_port_id.to_string() {
+                return false;
+            }
+            if packet.source_port != source_port_id.to_string() {
+                return false;
+            }
+            true
+        };
+
+        let events: Vec<_> = match event_id {
+            WithBlockDataType::CreateClient => logs_iter
+                .filter_map(|(height, tx_hash, event)| {
+                    if matches!(event, OwnableIBCHandlerEvents::CreateClientFilter(..)) {
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event).unwrap()
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            WithBlockDataType::UpdateClient => logs_iter
+                .filter_map(|(height, tx_hash, event)| {
+                    if matches!(event, OwnableIBCHandlerEvents::UpdateClientFilter(..)) {
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event).unwrap()
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            WithBlockDataType::SendPacket => logs_iter
+                .filter_map(|(height, tx_hash, event)| {
+                    if let OwnableIBCHandlerEvents::SendPacketFilter(contract::SendPacketFilter {
+                        packet,
+                    }) = &event
+                    {
+                        if !packet_filter(packet) {
+                            return None;
+                        }
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event).unwrap()
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            WithBlockDataType::WriteAck => logs_iter
+                .filter_map(|(height, tx_hash, event)| {
+                    if let OwnableIBCHandlerEvents::WriteAcknowledgementFilter(
+                        contract::WriteAcknowledgementFilter { packet, .. },
+                    ) = &event
+                    {
+                        if !packet_filter(packet) {
+                            return None;
+                        }
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event).unwrap()
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        };
+
+        Ok(events)
     }
 
     fn query_host_consensus_state(

@@ -144,7 +144,14 @@ impl ChainDriver {
 
     /// Returns the full URL for the WebSocket address.
     pub fn websocket_address(&self) -> String {
-        format!("ws://localhost:{}/websocket", self.rpc_port)
+        let port = if self.chain_type == ChainType::Axon {
+            // The Chaindriver doesn't support config websocket port,
+            // so we assume the rpc_port + 1 is ws port for Axon.1 is ws port for Axon.
+            self.rpc_port + 1
+        } else {
+            self.rpc_port
+        };
+        format!("ws://localhost:{}/websocket", port)
     }
 
     /// Returns the full URL for the GRPC address.
