@@ -20,10 +20,10 @@ use ckb_types::{
 };
 use forcerelay_ckb_sdk::{
     config::AddressOrScript,
-    search::{get_latest_cell_by_type_script, IbcChannelCell},
+    search::{get_latest_cell_by_type_script, IbcChannelCell, PacketCell},
     transaction::{
-        add_ibc_envelope, assemble_send_packet_partial_transaction,
-        assemble_write_ack_partial_transaction,
+        add_ibc_envelope, assemble_consume_ack_packet_partial_transaction,
+        assemble_send_packet_partial_transaction, assemble_write_ack_partial_transaction,
     },
 };
 use futures::TryStreamExt;
@@ -295,16 +295,44 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         assert!(status.success());
         log::info!("checked ERC20 balance and sent back");
 
-        // TODO: ckb consume ack
+        log::info!("consume ack");
+        let ack_packets = PacketCell::subscribe(sdk_client.clone(), sdk_config.clone())
+            .try_filter(|cell| futures::future::ready(cell.is_ack_packet()));
+        tokio::pin!(ack_packets);
+        let ack_packet = rt.block_on(ack_packets.try_next()).unwrap().unwrap();
+        let (tx, envelope) = assemble_consume_ack_packet_partial_transaction(
+            simple_dep(packet_contract_cell.out_point.clone().into()),
+            ack_packet,
+        )
+        .unwrap();
+        let tx: TransactionView = tx
+            .input(simple_input(st_cell))
+            .output(st_cell_output.clone())
+            .output_data(999u128.to_le_bytes().pack())
+            .cell_dep(sudt_cell_dep.clone())
+            .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()))
+            .build();
+        let st_cell_idx = tx.outputs().len() - 1;
+        let send_packet_tx = complete_tx_with_envelope(
+            &ckb_url,
+            &tx,
+            envelope,
+            ckb_sender_lock_script.clone(),
+            ckb_sender_key.clone(),
+        )
+        .unwrap();
+        let st_cell = packed::OutPoint::new_builder()
+            .tx_hash(send_packet_tx.hash())
+            .index(st_cell_idx.pack())
+            .build();
+        send_transaction(&ckb_url, send_packet_tx).unwrap();
+        log::info!("consumed ack");
 
         // Receive sudt on ckb (write ack with forcerelay-ckb-sdk, transfer SUDT
         // from st-lock to receiver)
         log::info!("Receive SUDT");
-        let recv_packets = forcerelay_ckb_sdk::search::PacketCell::subscribe(
-            sdk_client.clone(),
-            sdk_config.clone(),
-        )
-        .try_filter(|cell| futures::future::ready(cell.is_recv_packet()));
+        let recv_packets = PacketCell::subscribe(sdk_client.clone(), sdk_config.clone())
+            .try_filter(|cell| futures::future::ready(cell.is_recv_packet()));
         tokio::pin!(recv_packets);
         let recv_packet = rt.block_on(recv_packets.try_next()).unwrap().unwrap();
         let channel = rt
@@ -348,6 +376,9 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         .unwrap();
         send_transaction(&ckb_url, tx).unwrap();
         log::info!("Received SUDT");
+
+        // Sleep some time so the ack can be written to axon.
+        std::thread::sleep(Duration::from_secs(60));
 
         Ok(())
     }
