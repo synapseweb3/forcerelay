@@ -29,7 +29,8 @@ use forcerelay_ckb_sdk::{
 use futures::TryStreamExt;
 use ibc_test_framework::{
     bootstrap::binary::channel::{bootstrap_channel_with_connection, BootstrapChannelOptions},
-    prelude::*, relayer::axon::transfer::read_deployed_contracts,
+    prelude::*,
+    relayer::axon::transfer::read_deployed_contracts,
 };
 use prost::Message;
 use tokio::runtime::Runtime;
