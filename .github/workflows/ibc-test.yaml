@@ -29,9 +29,7 @@ jobs:
     env:
       SRC_DIR: ${{ github.workspace }}/ibc-test-src
       AXON_COMMIT: d03d2bb7cb3dcdc03319c3a74beeee6715e7f448
-      # commit fe226b288ccb7ddb9226ab674232bfddbe4f6e82 (HEAD -> ics20-erc20, origin/ics20-erc20)
-      # Add script for transfer test
-      IBC_CONTRACT_COMMIT: fe226b288ccb7ddb9226ab674232bfddbe4f6e82
+      IBC_CONTRACT_COMMIT: f407f44289ef8abea31860b963f758dae1c16071
     strategy:
       fail-fast: false
       matrix:
