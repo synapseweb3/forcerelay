@@ -29,14 +29,13 @@ use forcerelay_ckb_sdk::{
 use futures::TryStreamExt;
 use ibc_test_framework::{
     bootstrap::binary::channel::{bootstrap_channel_with_connection, BootstrapChannelOptions},
-    prelude::*,
+    prelude::*, relayer::axon::transfer::read_deployed_contracts,
 };
 use prost::Message;
 use tokio::runtime::Runtime;
 
 use crate::{
     consts::CLIENT_TYPE_ARGS,
-    framework::utils::axon::read_deployed_contracts,
     generator::{get_lock_script, PRIVKEY},
     tests::ckb::packet::utils::search_sudt_cells,
 };
@@ -193,7 +192,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             &ckb_url,
             &tx,
             ckb_sender_lock_script.clone(),
-            ckb_sender_key.clone(),
+            ckb_sender_key,
         )
         .unwrap();
         let tx_hash = send_transaction(&ckb_url, tx).unwrap();
@@ -259,7 +258,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             &send_packet_tx,
             envelope,
             ckb_sender_lock_script.clone(),
-            ckb_sender_key.clone(),
+            ckb_sender_key,
         )
         .unwrap();
         let st_cell = packed::OutPoint::new_builder()
@@ -318,7 +317,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             &tx,
             envelope,
             ckb_sender_lock_script.clone(),
-            ckb_sender_key.clone(),
+            ckb_sender_key,
         )
         .unwrap();
         let st_cell = packed::OutPoint::new_builder()
@@ -371,7 +370,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             &tx,
             envelope,
             ckb_sender_lock_script.clone(),
-            ckb_sender_key.clone(),
+            ckb_sender_key,
         )
         .unwrap();
         send_transaction(&ckb_url, tx).unwrap();
