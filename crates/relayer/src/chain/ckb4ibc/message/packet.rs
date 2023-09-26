@@ -93,7 +93,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     });
 
     let (channel_input, input_capacity) =
-        converter.get_ibc_channel_input(&channel_id, &msg.packet.source_port)?;
+        converter.get_ibc_channel_input(&channel_id, &msg.packet.destination_port)?;
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
     let packet_lock = get_packet_lock_script(converter, packet_args.to_args());
 
