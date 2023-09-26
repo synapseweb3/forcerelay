@@ -21,8 +21,12 @@ use ckb_types::{
 use forcerelay_ckb_sdk::{
     config::AddressOrScript,
     search::{get_latest_cell_by_type_script, IbcChannelCell},
-    transaction::{add_ibc_envelope, assemble_send_packet_partial_transaction},
+    transaction::{
+        add_ibc_envelope, assemble_send_packet_partial_transaction,
+        assemble_write_ack_partial_transaction,
+    },
 };
+use futures::TryStreamExt;
 use ibc_test_framework::{
     bootstrap::binary::channel::{bootstrap_channel_with_connection, BootstrapChannelOptions},
     prelude::*,
@@ -61,9 +65,8 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         // First account of ibc-solidity-contract axon network hd provider.
         let axon_receiver = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
         let axon_sender_address_binary = hex::decode(&axon_receiver[2..]).unwrap();
-        assert_eq!(axon_sender_address_binary.len(), 20);
 
-        // Deploy ibc-sudt-transfer contract
+        log::info!("deploy ibc-sudt-transfer contract");
         let ibc_sudt_transfer = include_bytes!("../../../contracts/ibc-sudt-transfer");
         let mut query = CellQueryOptions::new_lock(ckb_sender_lock_script.clone());
         query.data_len_range = Some(ValueRangeOption::new_exact(0));
@@ -71,9 +74,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         let (cells, _) = DefaultCellCollector::new(&ckb_url.to_string())
             .collect_live_cells(&query, false)
             .unwrap();
-        let first_input = packed::CellInput::new_builder()
-            .previous_output(cells[0].out_point.clone())
-            .build();
+        let first_input = simple_input(cells[0].out_point.clone());
         let ibc_sudt_transfer_type_id_args = {
             let mut hasher = ckb_hash::new_blake2b();
             hasher.update(first_input.as_slice());
@@ -116,6 +117,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             .build();
 
         // Create channel (ibc-sudt-transfer (st-lock) <-> ICS20TransferERC20)
+        log::info!("create channel");
         let zero = &[0u8; 32];
         let args = Args {
             channel_contract_code_hash: zero,
@@ -150,6 +152,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         .unwrap();
 
         // Send sudt ckb -> axon
+        log::info!("send ckb SUDT -> axon ERC20");
         let metadata_script = packed::Script::new_builder()
             .code_hash(ckb_config.client_code_hash.pack())
             .hash_type(ScriptHashType::Type.into())
@@ -175,6 +178,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         let sudt_type_script = sudt_output.type_().to_opt().unwrap();
 
         // Create st-cell.
+        log::info!("create st-cell");
         let st_cell_output = packed::CellOutput::new_builder()
             .lock(ibc_sudt_transfer_lock.clone())
             .type_(Some(sudt_type_script.clone()).pack())
@@ -194,6 +198,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         .unwrap();
         let tx_hash = send_transaction(&ckb_url, tx).unwrap();
         log::info!("deployed st-cell");
+        log::info!("send transfer packet");
         let st_cell = packed::OutPoint::new_builder()
             .tx_hash(tx_hash.pack())
             .index(0u32.pack())
@@ -227,15 +232,12 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
                 sdk_config.packet_contract_type_script().into(),
             ))
             .unwrap();
-        fn simple_dep(o: packed::OutPoint) -> packed::CellDep {
-            packed::CellDep::new_builder().out_point(o).build()
-        }
         let channel = rt
             .block_on(IbcChannelCell::get_latest(&sdk_client, &sdk_config))
             .unwrap();
         let (send_packet_tx, envelope) = assemble_send_packet_partial_transaction(
-            simple_dep(metadata_cell.out_point.into()),
-            simple_dep(channel_contract_cell.out_point.into()),
+            simple_dep(metadata_cell.out_point.clone().into()),
+            simple_dep(channel_contract_cell.out_point.clone().into()),
             &sdk_config,
             channel,
             packet_data,
@@ -245,16 +247,13 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         .unwrap();
         let send_packet_tx = send_packet_tx
             .input(sudt_input)
-            .cell_dep(sudt_cell_dep)
+            .cell_dep(sudt_cell_dep.clone())
             .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()))
-            .input(
-                packed::CellInput::new_builder()
-                    .previous_output(st_cell)
-                    .build(),
-            )
-            .output(st_cell_output)
+            .input(simple_input(st_cell))
+            .output(st_cell_output.clone())
             .output_data(999u128.to_le_bytes().pack())
             .build();
+        let st_cell_idx = send_packet_tx.outputs().len() - 1;
         let send_packet_tx = complete_tx_with_envelope(
             &ckb_url,
             &send_packet_tx,
@@ -263,29 +262,20 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             ckb_sender_key.clone(),
         )
         .unwrap();
+        let st_cell = packed::OutPoint::new_builder()
+            .tx_hash(send_packet_tx.hash())
+            .index(st_cell_idx.pack())
+            .build();
         send_transaction(&ckb_url, send_packet_tx).unwrap();
         log::info!("sent transfer");
 
-        // Check sudt received on axon and send back with a truffle script.
+        // Check balance on axon and send back with a truffle script.
+        log::info!("check ERC20 balance and send back");
         let transfer_contract_address =
             read_deployed_contracts(&chains.node_b.0.chain_driver.home_path)
                 .unwrap()
                 .transfer_contract_address;
         let axon_port = chains.node_b.0.chain_driver.rpc_port;
-        println!(
-            "export AXON_HTTP_RPC_URL={}",
-            format!("http://localhost:{axon_port}")
-        );
-        println!(
-            "export TRANSFER_CONTRACT_ADDRESS={}",
-            format!("0x{}", hex::encode(transfer_contract_address))
-        );
-        println!("export DENOM={denom}");
-        println!("export CHANNEL={}", channels.channel_id_b.0.as_str());
-        println!(
-            "export SENDER={}",
-            format!("0x{}", hex::encode(&ckb_sender_hash_20))
-        );
         let status = Command::new("yarn")
             .arg("truffle")
             .arg("exec")
@@ -303,15 +293,72 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             .env("DENOM", &denom)
             .status()?;
         assert!(status.success());
-        std::thread::sleep(Duration::from_secs(86400));
+        log::info!("checked ERC20 balance and sent back");
 
         // TODO: ckb consume ack
 
-        // TODO: receive sudt on ckb (write ack with forcerelay-ckb-sdk,
-        // transfer SUDT from st-lock to receiver)
+        // Receive sudt on ckb (write ack with forcerelay-ckb-sdk, transfer SUDT
+        // from st-lock to receiver)
+        log::info!("Receive SUDT");
+        let recv_packets = forcerelay_ckb_sdk::search::PacketCell::subscribe(
+            sdk_client.clone(),
+            sdk_config.clone(),
+        )
+        .try_filter(|cell| futures::future::ready(cell.is_recv_packet()));
+        tokio::pin!(recv_packets);
+        let recv_packet = rt.block_on(recv_packets.try_next()).unwrap().unwrap();
+        let channel = rt
+            .block_on(IbcChannelCell::get_latest(&sdk_client, &sdk_config))
+            .unwrap();
+        let (tx, envelope) = assemble_write_ack_partial_transaction(
+            simple_dep(metadata_cell.out_point.into()),
+            simple_dep(channel_contract_cell.out_point.into()),
+            simple_dep(packet_contract_cell.out_point.into()),
+            &sdk_config,
+            channel,
+            recv_packet,
+            vec![1],
+        )
+        .unwrap();
+        let tx = tx
+            // st-cell input/output
+            .input(simple_input(st_cell))
+            .output(st_cell_output)
+            // 999 - 499 = 500.
+            .output_data(500u128.to_le_bytes().pack())
+            // received sudt output.
+            .output(
+                packed::CellOutput::new_builder()
+                    .lock(ckb_sender_lock_script.clone())
+                    .type_(Some(sudt_type_script.clone()).pack())
+                    .build_exact_capacity(Capacity::bytes(16).unwrap())
+                    .unwrap(),
+            )
+            .output_data(499u128.to_le_bytes().pack())
+            .cell_dep(sudt_cell_dep)
+            .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()))
+            .build();
+        let tx = complete_tx_with_envelope(
+            &ckb_url,
+            &tx,
+            envelope,
+            ckb_sender_lock_script.clone(),
+            ckb_sender_key.clone(),
+        )
+        .unwrap();
+        send_transaction(&ckb_url, tx).unwrap();
+        log::info!("Received SUDT");
 
-        todo!()
+        Ok(())
     }
+}
+
+fn simple_dep(o: packed::OutPoint) -> packed::CellDep {
+    packed::CellDep::new_builder().out_point(o).build()
+}
+
+fn simple_input(o: packed::OutPoint) -> packed::CellInput {
+    packed::CellInput::new_builder().previous_output(o).build()
 }
 
 // Balance and sign tx with ckb sdk. Modified from ckb sdk example.
