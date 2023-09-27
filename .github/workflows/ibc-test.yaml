@@ -82,7 +82,6 @@ jobs:
         env:
           cache-name: cache-axon-bin
         with:
-          # npm cache files are stored in `~/.npm` on Linux/macOS
           path: ${{env.SRC_DIR}}/axon/target/release/axon
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ env.AXON_COMMIT }}
   
