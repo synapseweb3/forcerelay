@@ -201,6 +201,9 @@ impl ChainEndpoint for AxonChain {
 
     fn shutdown(self) -> Result<(), Error> {
         tracing::debug!("runtime of axon chain endpoint shutdown");
+        if let Some(monitor_tx) = self.tx_monitor_cmd {
+            monitor_tx.shutdown().map_err(Error::event_monitor)?;
+        }
         Ok(())
     }
 
