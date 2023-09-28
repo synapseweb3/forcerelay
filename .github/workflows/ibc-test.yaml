@@ -9,7 +9,8 @@ on:
       - crates/**
       - tools/**
   push:
-    branches: main
+    branches: [main, '*test*']
+    paths:
       - .github/workflows/ibc-test.yaml
       - Cargo.toml
       - Cargo.lock
