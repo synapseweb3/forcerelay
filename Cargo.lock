@@ -2847,7 +2847,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "forcerelay-ckb-sdk"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=86e797b60311#86e797b603119987906d348d8c33a29905e28330"
+source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=cd82be97#cd82be972ad85fbcbd9807dd221d8ee42c1bc718"
 dependencies = [
  "anyhow",
  "async-stream",
