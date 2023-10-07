@@ -374,11 +374,26 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             ckb_sender_key,
         )
         .unwrap();
+        let axon_events = chains.handle_b.subscribe().unwrap();
         send_transaction(&ckb_url, tx).unwrap();
         log::info!("Received SUDT");
 
-        // Sleep some time so the ack can be written to axon.
-        std::thread::sleep(Duration::from_secs(60));
+        log::info!("check ack on axon");
+        loop {
+            let batch = axon_events.recv().unwrap();
+            if (*batch)
+                .as_ref()
+                .unwrap()
+                .events
+                .iter()
+                // Use string comparison instead of enum matching because
+                // relayer_types is not a direct dep.
+                .any(|e| e.event.event_type().as_str() == "acknowledge_packet")
+            {
+                break;
+            }
+        }
+        log::info!("checked ack on axon");
 
         Ok(())
     }

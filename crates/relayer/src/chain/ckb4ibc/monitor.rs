@@ -361,7 +361,7 @@ impl Ckb4IbcEventMonitor {
                 true
             })
             .map(
-                |(((packet, content), tx), block_number)| match packet.status {
+                |(((packet, _content), tx), block_number)| match packet.status {
                     PacketStatus::Send => {
                         info!(
                             "🫡  {} received SendPacket({}) event, from {}/{} to {}/{}",
@@ -392,8 +392,11 @@ impl Ckb4IbcEventMonitor {
                         );
                         IbcEventWithHeight {
                             event: IbcEvent::WriteAcknowledgement(WriteAcknowledgement {
+                                ack: packet
+                                    .ack
+                                    .clone()
+                                    .expect("write ack packet should have ack"),
                                 packet: convert_packet(packet),
-                                ack: content,
                             }),
                             height: Height::from_noncosmos_height(block_number),
                             tx_hash: tx.into(),

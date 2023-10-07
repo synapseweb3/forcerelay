@@ -755,11 +755,14 @@ impl ChainEndpoint for AxonChain {
     ) -> Result<Vec<Sequence>, Error> {
         let mut sequences: Vec<Sequence> = vec![];
         for seq in request.packet_ack_sequences {
+            // The packet hasn't been acknowledged if packet commitment is
+            // found. (Packet commitment is deleted after the packet is
+            // acknowledged.)
             let (_, found) = self
                 .rt
                 .block_on(
                     self.contract()?
-                        .get_hashed_packet_acknowledgement_commitment(
+                        .get_hashed_packet_commitment(
                             request.port_id.to_string(),
                             request.channel_id.to_string(),
                             seq.into(),
@@ -767,7 +770,7 @@ impl ChainEndpoint for AxonChain {
                         .call(),
                 )
                 .map_err(convert_err)?;
-            if !found {
+            if found {
                 sequences.push(seq);
             }
         }
