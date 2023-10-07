@@ -160,7 +160,7 @@ impl Ckb4IbcEventMonitor {
         }
         let client_id = self
             .config
-            .lc_client_id(ClientType::Ckb4Ibc)
+            .lc_client_id(self.counterparty_client_type)
             .expect("ckb4ibc client_id");
         self.cache_set.write().unwrap().insert(tx_hash.clone());
         let events = ibc_connection_cell
