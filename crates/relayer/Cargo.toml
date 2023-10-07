@@ -49,6 +49,7 @@ tokio = { version = "1.0", features = [
     "sync",
     "parking_lot",
 ] }
+tokio-stream = "0.1"
 serde_json = { version = "1" }
 bytes = "1.4.0"
 prost = { version = "0.11" }

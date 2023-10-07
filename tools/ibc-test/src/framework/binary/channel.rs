@@ -108,6 +108,10 @@ where
         chains: ConnectedChains<ChainA, ChainB>,
         channel: ConnectedChannel<ChainA, ChainB>,
     ) -> Result<(), Error> {
-        self.test.run(config, relayer, chains, channel)
+        self.test.run(config, relayer, chains.clone(), channel)?;
+        log::info!("check monitor threads are still working");
+        let _ = chains.handle_a().subscribe().map_err(Error::relayer)?;
+        let _ = chains.handle_b().subscribe().map_err(Error::relayer)?;
+        Ok(())
     }
 }

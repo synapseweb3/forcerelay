@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use super::contract::*;
 use crate::chain::axon::cache_ics_tx_hash_with_event;
@@ -10,6 +11,7 @@ use ethers::prelude::*;
 use ethers::providers::Middleware;
 use ethers::types::Address;
 use ibc_relayer_types::Height;
+use tokio_stream::StreamExt;
 use OwnableIBCHandler as Contract;
 use OwnableIBCHandlerEvents as ContractEvents;
 
@@ -155,20 +157,28 @@ impl AxonEventMonitor {
     }
 
     fn run_loop(&mut self) -> Next {
+        const TIMEOUT_MILLIS: u64 = 300;
+
         let contract = Arc::new(Contract::new(
             self.contract_address,
             Arc::clone(&self.client),
         ));
         let events = contract.events().from_block(self.start_block_number);
-        if let Ok(stream) = self.rt.block_on(events.stream()) {
-            let mut meta_stream = stream.with_meta();
+        if let Ok(mut meta_stream) = self.rt.block_on(async {
+            events.stream().await.map(|stream| {
+                let meta_stream = stream.with_meta().timeout_repeating(tokio::time::interval(
+                    Duration::from_millis(TIMEOUT_MILLIS),
+                ));
+                meta_stream
+            })
+        }) {
             debug!("setup IBC contract events streaming process");
             loop {
                 if let Next::Abort = self.update_subscribe(true) {
                     return Next::Abort;
                 }
 
-                if let Some(ret) = self.rt.block_on(meta_stream.next()) {
+                if let Some(Ok(ret)) = self.rt.block_on(meta_stream.next()) {
                     match ret {
                         Ok((event, meta)) => {
                             self.process_event(event, meta).unwrap_or_else(|e| {
