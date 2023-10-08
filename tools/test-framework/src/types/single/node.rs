@@ -155,7 +155,8 @@ impl FullNode {
         // normally we cannot put same `client_cell_type_args` in config.toml, because
         // Forcerelay/Axon assumes each counterparty chain has its own unique `client_id`
         // to figure out unique `client_type` and `chain_id`
-        if std::env::var("ACCOUNT_PREFIXES").unwrap().contains("axon") {
+        let chains_str = std::env::var("ACCOUNT_PREFIXES").unwrap();
+        if chains_str.contains("axon") {
             let counterparty_chain_id = if this_chain_id.to_string() == "ckb4ibc-0" {
                 ChainId::from_string("axon-1")
             } else {
@@ -168,7 +169,8 @@ impl FullNode {
                     client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
                 },
             );
-        } else {
+        }
+        if chains_str.contains("ckb") {
             let counterparty_chain_id = if this_chain_id.to_string() == "ckb4ibc-0" {
                 ChainId::from_string("ckb4ibc-1")
             } else {
