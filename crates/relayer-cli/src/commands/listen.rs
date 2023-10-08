@@ -1,7 +1,6 @@
 use alloc::sync::Arc;
 use core::{
     fmt::{Display, Error as FmtError, Formatter},
-    ops::Deref,
     str::FromStr,
 };
 use std::thread;
@@ -93,7 +92,7 @@ impl ListenCmd {
 impl Runnable for ListenCmd {
     fn run(&self) {
         self.cmd()
-            .unwrap_or_else(|e| fatal_error(app_reader().deref(), &*e));
+            .unwrap_or_else(|e| fatal_error(app_reader(), &*e));
     }
 }
 

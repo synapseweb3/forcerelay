@@ -138,18 +138,25 @@ impl AxonEventMonitor {
     }
 
     fn update_subscribe(&mut self, use_try: bool) -> Next {
-        let result = if use_try {
-            self.rx_cmd.try_recv().ok()
+        let cmd = if use_try {
+            match self.rx_cmd.try_recv() {
+                Ok(cmd) => cmd,
+                Err(e) if e.is_disconnected() => return Next::Abort,
+                // No command yet.
+                Err(_) => return Next::Continue,
+            }
         } else {
-            self.rx_cmd.recv().ok()
+            match self.rx_cmd.recv() {
+                Ok(cmd) => cmd,
+                // Disconnected.
+                Err(_) => return Next::Abort,
+            }
         };
-        if let Some(cmd) = result {
-            match cmd {
-                MonitorCmd::Shutdown => return Next::Abort,
-                MonitorCmd::Subscribe(tx) => {
-                    if let Err(e) = tx.send(self.event_bus.subscribe()) {
-                        error!("failed to send back subscription: {e}");
-                    }
+        match cmd {
+            MonitorCmd::Shutdown => return Next::Abort,
+            MonitorCmd::Subscribe(tx) => {
+                if let Err(e) = tx.send(self.event_bus.subscribe()) {
+                    error!("failed to send back subscription: {e}");
                 }
             }
         }

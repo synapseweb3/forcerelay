@@ -2,9 +2,11 @@ use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ibc_test_framework::prelude::Error;
 
 use crate::consts::{CHANNEL_TYPE_ARGS, CLIENT_TYPE_ARGS, CONNECTION_TYPE_ARGS, PACKET_TYPE_ARGS};
-use crate::framework::binary::channel::run_arbitrary_binary_channel_test;
+use crate::framework::binary::channel::{
+    run_arbitrary_binary_channel_test, run_arbitrary_binary_connection_test,
+};
 
-mod ckb;
+pub mod ckb;
 mod ibc;
 
 macro_rules! env_vars {
@@ -50,6 +52,20 @@ fn test_ckb_packet() -> Result<(), Error> {
         run_arbitrary_binary_channel_test(&ckb::packet::CKB4IbcPacketTest::new())
     } else {
         log::info!("Ignore ckb packet tests for {}", value);
+        Ok(())
+    }
+}
+
+#[test]
+fn test_sudt_erc20_transfer() -> Result<(), Error> {
+    init_envs()?;
+    let value = std::env::var("ACCOUNT_PREFIXES")
+        .map_err(|e| eyre::eyre!("no ENV entry \"ACCOUNT_PREFIXES\": {e}"))?;
+    if value == "ckb,axon" {
+        println!("Run sudt erc20 transfer test for {}", value);
+        run_arbitrary_binary_connection_test(&ibc::sudt_erc20_transfer::SudtErc20TransferTest)
+    } else {
+        println!("Ignore sudt erc20 transfer test for {}", value);
         Ok(())
     }
 }

@@ -125,14 +125,15 @@ impl Ckb4IbcEventMonitor {
 
     async fn fetch_connection_events(&self) -> Result<EventBatch> {
         let connection_code_hash = get_script_hash(&self.config.connection_type_args);
-        let client_id = self
+        let client_type_hash = self
             .config
             .lc_client_type_hash(self.counterparty_client_type)
             .map_err(|e| Error::collect_events_failed(e.to_string()))?;
+        let client_id: ClientId = hex::encode(client_type_hash.0).parse().unwrap();
         let script = Script::new_builder()
             .code_hash(connection_code_hash)
             .hash_type(ScriptHashType::Type.into())
-            .args(client_id.as_bytes().pack())
+            .args(client_type_hash.as_bytes().pack())
             .build();
         let key = get_prefix_search_key(script);
         let ((ibc_connection_cell, tx_hash), block_number) = self
@@ -158,10 +159,6 @@ impl Ckb4IbcEventMonitor {
                 events: vec![],
             });
         }
-        let client_id = self
-            .config
-            .lc_client_id(ClientType::Ckb4Ibc)
-            .expect("ckb4ibc client_id");
         self.cache_set.write().unwrap().insert(tx_hash.clone());
         let events = ibc_connection_cell
             .connections

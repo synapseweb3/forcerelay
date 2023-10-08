@@ -61,6 +61,7 @@ impl LightClient {
                 let block = rpc
                     .get_block_by_id(block_hash.into())
                     .await
+                    .expect("watch axon block failed")
                     .expect("watch axon block failed");
                 info!(
                     "axon: new block {} with hash {:?}",

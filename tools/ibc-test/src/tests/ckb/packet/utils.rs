@@ -154,7 +154,7 @@ fn complete_partial_transaction(
     Ok(signed_tx)
 }
 
-fn search_sudt_cells(
+pub fn search_sudt_cells(
     rt: &Runtime,
     ckb_url: &str,
 ) -> EyreResult<(CellDep, CellInput, CellOutput, u128)> {

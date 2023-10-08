@@ -2,7 +2,7 @@ use ibc_test_framework::prelude::*;
 use log::info;
 use tokio::runtime::Runtime;
 
-mod utils;
+pub mod utils;
 use utils::*;
 
 pub struct CKB4IbcPacketTest;

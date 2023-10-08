@@ -221,7 +221,7 @@ impl FullNode {
             contract_address,
             image_cell_contract_address,
             ckb_light_client_contract_address,
-            mock_transfer_contract_address: _,
+            ..
         } = deployed_contracts;
 
         let axon_config = config::axon::AxonChainConfig {

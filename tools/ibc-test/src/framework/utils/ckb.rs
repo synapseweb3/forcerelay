@@ -32,7 +32,8 @@ use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use toml_edit::{value, Document};
 
 use super::common::{gen_secp256k1_private_key, wait_task};
-use std::path::Path;
+use std::env::set_current_dir;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::str::FromStr;
 use std::time::Duration;
@@ -135,7 +136,9 @@ pub fn prepare_ckb_chain(
 ) -> (ChildProcess, ChildProcess) {
     println!("\n========== Prepare Ckb node on port {port} ==========\n");
 
-    let mut working_dir = std::env::current_dir().unwrap();
+    let mut working_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // So that we can debug tests in e.g. vscode.
+    set_current_dir(&working_dir).unwrap();
     working_dir.push(ckb_path);
 
     let _ = std::fs::remove_dir_all(ckb_path);

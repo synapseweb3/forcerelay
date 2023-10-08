@@ -47,6 +47,23 @@ where
     )))
 }
 
+pub fn run_arbitrary_binary_connection_test<Test, Overrides>(test: &Test) -> Result<(), Error>
+where
+    Test: BinaryConnectionTest,
+    Test: HasOverrides<Overrides = Overrides>,
+    Overrides: TestConfigOverride
+        + NodeConfigOverride
+        + NodeGenesisOverride
+        + RelayerConfigOverride
+        + ClientOptionsOverride
+        + SupervisorOverride
+        + ConnectionDelayOverride,
+{
+    run_arbitrary_binary_node_test(&RunBinaryChainTest::new(&RunBinaryConnectionTest::new(
+        &RunWithSupervisor::new(test),
+    )))
+}
+
 /// This test override the default port for ckb and axon chain
 pub struct RunExtendedChannelTest<'a, Test> {
     overrides: ExtendedChannelOverrides,
