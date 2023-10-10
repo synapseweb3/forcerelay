@@ -1,0 +1,13 @@
+{
+  "cell_recipes": [
+    {
+      "name": "ibc-sudt-transfer",
+      "tx_hash": "0x07abbe878595c4b78bdb958e5583c6f2a6d7615131bf1df43621f4ac1ecf983c",
+      "index": 0,
+      "occupied_capacity": 8133400000000,
+      "data_hash": "0xf6e11d4b08b75e1e4059dd8681ca2da450a2b7cfe61c298ecdaf133601312966",
+      "type_id": "0x12b7f23d284e3221fe0730ca5753c28f9302c7368d83101637684c424b242a95"
+    }
+  ],
+  "dep_group_recipes": []
+}

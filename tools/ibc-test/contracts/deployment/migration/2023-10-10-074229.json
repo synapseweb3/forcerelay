@@ -1,0 +1,13 @@
+{
+  "cell_recipes": [
+    {
+      "name": "ics-channel",
+      "tx_hash": "0xdbc4fd1d0f9a39a16d624bc8859b84f1d79b50668aa45bc67ca22e2c46a6a626",
+      "index": 0,
+      "occupied_capacity": 29944600000000,
+      "data_hash": "0x354ff4b05f1d77c89345bf4a325bf0ea999c51fefc6f6415c0a0bea813c048a8",
+      "type_id": "0xdfb2ba5929e39fb6cbdedf4e075055fb3a49c7e4cdda32e2fb3d501de26d8266"
+    }
+  ],
+  "dep_group_recipes": []
+}

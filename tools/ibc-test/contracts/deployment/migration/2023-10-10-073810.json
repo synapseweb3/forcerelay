@@ -1,0 +1,13 @@
+{
+  "cell_recipes": [
+    {
+      "name": "ics-packet",
+      "tx_hash": "0x6f0272c0bf948d6e8db140e4a223a9c06ad58e17692e9ee235d4be4a9d665afd",
+      "index": 0,
+      "occupied_capacity": 29939800000000,
+      "data_hash": "0xd9ed53374a7c5f640f2adc69e1c67d2b8935ff8413e06d972ebb41637d5422e1",
+      "type_id": "0x98c977f6ac8a76520dc5993d938248897433b6e6de6ee9957ab216e32a2709fc"
+    }
+  ],
+  "dep_group_recipes": []
+}
