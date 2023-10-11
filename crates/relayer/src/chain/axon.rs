@@ -187,6 +187,8 @@ impl ChainEndpoint for AxonChain {
         // let epoch_len = metadata.version.end - metadata.version.start + 1;
         // light_client.bootstrap(client.clone(), rpc_client.clone(), epoch_len)?;
 
+        // FIXME remove the light client or fully implement it
+
         Ok(Self {
             rt,
             config,
@@ -246,6 +248,10 @@ impl ChainEndpoint for AxonChain {
     }
 
     fn ibc_version(&self) -> Result<Option<semver::Version>, Error> {
+        // TODO @jjy
+        // The cosmos implementation simply returns the application version
+        // We want the version to imply the supported ibc feature,
+        // so IMO the best choice is using IBC solidity contract to store the version.
         Ok(None)
     }
 
@@ -281,6 +287,7 @@ impl ChainEndpoint for AxonChain {
         Ok(responses)
     }
 
+    // TODO the light client is unimplemented
     fn verify_header(
         &mut self,
         trusted: Height,
@@ -292,6 +299,7 @@ impl ChainEndpoint for AxonChain {
             .map(|v| v.target)
     }
 
+    // TODO the light client is unimplemented
     fn check_misbehaviour(
         &mut self,
         update: &UpdateClient,
@@ -300,12 +308,12 @@ impl ChainEndpoint for AxonChain {
         self.light_client.check_misbehaviour(update, client_state)
     }
 
+    // FIXME implement this after use a real ics token contract
     fn query_balance(
         &self,
         _key_name: Option<&str>,
         _denom: Option<&str>,
     ) -> Result<Balance, Error> {
-        // // TODO: this should be configurable
         // const DEFAULT_DENOM: &str = "AT";
 
         // let key_name = key_name.unwrap_or(&self.config.key_name);
@@ -319,12 +327,14 @@ impl ChainEndpoint for AxonChain {
         })
     }
 
+    // FIXME implement this after use a real ics token contract
     fn query_all_balances(&self, _key_name: Option<&str>) -> Result<Vec<Balance>, Error> {
         // TODO: implement the real `query_all_balances` function later
         warn!("axon query_all_balances() cannot implement");
         Ok(vec![])
     }
 
+    // FIXME implement this after use a real ics token contract
     fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {
         // TODO: implement the real `query_denom_trace` function later
         warn!("axon query_denom_trace() cannot implement");
@@ -377,49 +387,43 @@ impl ChainEndpoint for AxonChain {
         Ok(client_states)
     }
 
+    // TODO verify proof
     fn query_client_state(
         &self,
         request: QueryClientStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
-        if matches!(request.height, QueryHeight::Specific(_)) {
-            warn!("query client state at specific height will fallback to latest");
+        let mut call_builder = self
+            .contract()?
+            .get_client_state(request.client_id.to_string());
+        if let QueryHeight::Specific(height) = request.height {
+            call_builder = call_builder.block(height.revision_height())
         }
-        let (client_state, _) = self
-            .rt
-            .block_on(
-                self.contract()?
-                    .get_client_state(request.client_id.to_string())
-                    .call(),
-            )
-            .map_err(convert_err)?;
+        let (client_state, _) = self.rt.block_on(call_builder.call()).map_err(convert_err)?;
 
         let (_, client_state) = to_any_client_state(&client_state)?;
         Ok((client_state, None))
     }
 
+    // TODO verify proof
     fn query_consensus_state(
         &self,
         request: QueryConsensusStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyConsensusState, Option<MerkleProof>), Error> {
-        if matches!(request.query_height, QueryHeight::Specific(_)) {
-            warn!("query consensus state at specific height will fallback to latest");
-        }
         let client_id: String = request.client_id.to_string();
-        let height = request.consensus_height;
-        let height = HeightData {
-            revision_number: height.revision_number(),
-            revision_height: height.revision_height(),
+        let height = {
+            let height = request.consensus_height;
+            HeightData {
+                revision_number: height.revision_number(),
+                revision_height: height.revision_height(),
+            }
         };
-        let (consensus_state, _) = self
-            .rt
-            .block_on(
-                self.contract()?
-                    .get_consensus_state(client_id, height)
-                    .call(),
-            )
-            .map_err(convert_err)?;
+        let mut call_builder = self.contract()?.get_consensus_state(client_id, height);
+        if let QueryHeight::Specific(height) = request.query_height {
+            call_builder = call_builder.block(height.revision_height());
+        }
+        let (consensus_state, _) = self.rt.block_on(call_builder.call()).map_err(convert_err)?;
         Ok((to_any_consensus_state(&consensus_state)?, None))
     }
 
@@ -444,6 +448,7 @@ impl ChainEndpoint for AxonChain {
         Ok(heights)
     }
 
+    // TODO do we need to implement this?
     fn query_upgraded_client_state(
         &self,
         _request: QueryUpgradedClientStateRequest,
@@ -451,6 +456,7 @@ impl ChainEndpoint for AxonChain {
         unimplemented!("not support")
     }
 
+    // TODO do we need to implement this?
     fn query_upgraded_consensus_state(
         &self,
         _request: QueryUpgradedConsensusStateRequest,
@@ -493,19 +499,19 @@ impl ChainEndpoint for AxonChain {
         Ok(connection_ids)
     }
 
+    // TODO verify proof
     fn query_connection(
         &self,
         request: QueryConnectionRequest,
         _include_proof: IncludeProof,
     ) -> Result<(ConnectionEnd, Option<MerkleProof>), Error> {
-        let (connection_end, _) = self
-            .rt
-            .block_on(
-                self.contract()?
-                    .get_connection(request.connection_id.to_string())
-                    .call(),
-            )
-            .map_err(convert_err)?;
+        let mut call_builder = self
+            .contract()?
+            .get_connection(request.connection_id.to_string());
+        if let QueryHeight::Specific(height) = request.height {
+            call_builder = call_builder.block(height.revision_height());
+        }
+        let (connection_end, _) = self.rt.block_on(call_builder.call()).map_err(convert_err)?;
         let connection_end = connection_end.into();
         Ok((connection_end, None))
     }
@@ -544,23 +550,20 @@ impl ChainEndpoint for AxonChain {
         Ok(channels)
     }
 
+    // TODO verify proof
     fn query_channel(
         &self,
         request: QueryChannelRequest,
         _include_proof: IncludeProof,
     ) -> Result<(ChannelEnd, Option<MerkleProof>), Error> {
-        if matches!(request.height, QueryHeight::Specific(_)) {
-            // TODO: no implemention for specific channel query
-            warn!("query channel at specific height will fallback to latest");
+        let mut call_builder = self
+            .contract()?
+            .get_channel(request.port_id.to_string(), request.channel_id.to_string());
+        if let QueryHeight::Specific(height) = request.height {
+            call_builder = call_builder.block(height.revision_height())
         }
-        let (channel_end, _) = self
-            .rt
-            .block_on(
-                self.contract()?
-                    .get_channel(request.port_id.to_string(), request.channel_id.to_string())
-                    .call(),
-            )
-            .map_err(convert_err)?;
+
+        let (channel_end, _) = self.rt.block_on(call_builder.call()).map_err(convert_err)?;
         let channel_end = channel_end.into();
         Ok((channel_end, None))
     }
@@ -588,23 +591,21 @@ impl ChainEndpoint for AxonChain {
         }
     }
 
+    // TODO verify proof
     fn query_packet_commitment(
         &self,
         request: QueryPacketCommitmentRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        let (commitment, _) = self
-            .rt
-            .block_on(
-                self.contract()?
-                    .get_hashed_packet_commitment(
-                        request.port_id.to_string(),
-                        request.channel_id.to_string(),
-                        request.sequence.into(),
-                    )
-                    .call(),
-            )
-            .map_err(convert_err)?;
+        let mut call_builder = self.contract()?.get_hashed_packet_commitment(
+            request.port_id.to_string(),
+            request.channel_id.to_string(),
+            request.sequence.into(),
+        );
+        if let QueryHeight::Specific(height) = request.height {
+            call_builder = call_builder.block(height.revision_height());
+        }
+        let (commitment, _) = self.rt.block_on(call_builder.call()).map_err(convert_err)?;
         Ok((commitment.to_vec(), None))
     }
 
@@ -631,23 +632,21 @@ impl ChainEndpoint for AxonChain {
         Ok((commitment_sequences, Height::default()))
     }
 
+    // TODO verify proof
     fn query_packet_receipt(
         &self,
         request: QueryPacketReceiptRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        let has_receipt = self
-            .rt
-            .block_on(
-                self.contract()?
-                    .has_packet_receipt(
-                        request.port_id.to_string(),
-                        request.channel_id.to_string(),
-                        request.sequence.into(),
-                    )
-                    .call(),
-            )
-            .map_err(convert_err)?;
+        let mut call_builder = self.contract()?.has_packet_receipt(
+            request.port_id.to_string(),
+            request.channel_id.to_string(),
+            request.sequence.into(),
+        );
+        if let QueryHeight::Specific(height) = request.height {
+            call_builder = call_builder.block(height.revision_height());
+        }
+        let has_receipt = self.rt.block_on(call_builder.call()).map_err(convert_err)?;
         if has_receipt {
             Ok((vec![1u8], None))
         } else {
@@ -704,23 +703,23 @@ impl ChainEndpoint for AxonChain {
         Ok(sequences)
     }
 
+    // TODO verify proof
     fn query_packet_acknowledgement(
         &self,
         request: QueryPacketAcknowledgementRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        let (commitment, _) = self
-            .rt
-            .block_on(
-                self.contract()?
-                    .get_hashed_packet_acknowledgement_commitment(
-                        request.port_id.to_string(),
-                        request.channel_id.to_string(),
-                        request.sequence.into(),
-                    )
-                    .call(),
-            )
-            .map_err(convert_err)?;
+        let mut call_builder = self
+            .contract()?
+            .get_hashed_packet_acknowledgement_commitment(
+                request.port_id.to_string(),
+                request.channel_id.to_string(),
+                request.sequence.into(),
+            );
+        if let QueryHeight::Specific(height) = request.height {
+            call_builder = call_builder.block(height.revision_height());
+        }
+        let (commitment, _) = self.rt.block_on(call_builder.call()).map_err(convert_err)?;
         Ok((commitment.to_vec(), None))
     }
 
@@ -774,27 +773,24 @@ impl ChainEndpoint for AxonChain {
         Ok(sequences)
     }
 
+    // TODO verify proof
     fn query_next_sequence_receive(
         &self,
         request: QueryNextSequenceReceiveRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Sequence, Option<MerkleProof>), Error> {
-        let sequence = self
-            .rt
-            .block_on(
-                self.contract()?
-                    .get_next_sequence_recvs(
-                        request.port_id.to_string(),
-                        request.channel_id.to_string(),
-                    )
-                    .call(),
-            )
-            .map_err(convert_err)?;
+        let mut call_builder = self
+            .contract()?
+            .get_next_sequence_recvs(request.port_id.to_string(), request.channel_id.to_string());
+        if let QueryHeight::Specific(height) = request.height {
+            call_builder = call_builder.block(height.revision_height());
+        }
+        let sequence = self.rt.block_on(call_builder.call()).map_err(convert_err)?;
         Ok((sequence.into(), None))
     }
 
+    // TODO do we need to implement this?
     fn query_txs(&self, _request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
-        // TODO
         warn!("axon query_txs() not support");
         Ok(vec![])
     }
@@ -918,6 +914,7 @@ impl ChainEndpoint for AxonChain {
         Ok(events)
     }
 
+    // TODO do we need to implement this?
     fn query_host_consensus_state(
         &self,
         _request: QueryHostConsensusStateRequest,
@@ -927,6 +924,7 @@ impl ChainEndpoint for AxonChain {
         Ok(AxonConsensusState {})
     }
 
+    // TODO do we need to implement this?
     fn query_incentivized_packet(
         &self,
         _request: QueryIncentivizedPacketRequest,
@@ -952,6 +950,7 @@ impl ChainEndpoint for AxonChain {
         }
     }
 
+    // TODO do we need to implement this?
     fn build_consensus_state(
         &self,
         _light_block: Self::LightBlock,
@@ -959,6 +958,7 @@ impl ChainEndpoint for AxonChain {
         Ok(AxonConsensusState {})
     }
 
+    // TODO do we need to implement this?
     fn build_header(
         &mut self,
         _trusted_height: Height,
@@ -968,6 +968,7 @@ impl ChainEndpoint for AxonChain {
         Ok((AxonHeader {}, vec![]))
     }
 
+    // TODO do we need to implement this?
     fn maybe_register_counterparty_payee(
         &mut self,
         _channel_id: &ChannelId,
@@ -979,6 +980,7 @@ impl ChainEndpoint for AxonChain {
         Ok(())
     }
 
+    // TODO do we need to implement this?
     fn cross_chain_query(
         &self,
         _requests: Vec<CrossChainQueryRequest>,
@@ -988,6 +990,7 @@ impl ChainEndpoint for AxonChain {
         Ok(vec![])
     }
 
+    // TODO do we need to implement this?
     fn build_connection_proofs_and_client_state(
         &self,
         message_type: ConnectionMsgType,
