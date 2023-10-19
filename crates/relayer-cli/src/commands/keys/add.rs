@@ -276,6 +276,13 @@ pub fn restore_key(
         ChainType::Ckb => "ckb",
         ChainType::Ckb4Ibc => "ckb4ibc",
     };
+    let address_type = match config.r#type() {
+        ChainType::CosmosSdk => &config.cosmos().address_type,
+        ChainType::Eth => todo!(),
+        ChainType::Axon => &AddressType::Axon,
+        ChainType::Ckb | ChainType::Ckb4Ibc => &AddressType::Ckb,
+    };
+
     let key_pair = {
         let mut keyring = KeyRing::new_secp256k1(Store::Test, account_prefix, config.id())?;
 
@@ -284,7 +291,7 @@ pub fn restore_key(
         let key_pair = Secp256k1KeyPair::from_mnemonic(
             &mnemonic_content,
             hdpath,
-            &config.cosmos().address_type,
+            address_type,
             keyring.account_prefix(),
         )?;
 
