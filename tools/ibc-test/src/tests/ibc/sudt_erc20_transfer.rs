@@ -1,7 +1,6 @@
 use std::{collections::HashMap, process::Command};
 
 use bytes::Bytes;
-use ckb_ics_axon::message::Envelope;
 use ckb_sdk::{
     constants::{SIGHASH_TYPE_HASH, TYPE_ID_CODE_HASH},
     traits::{
@@ -68,13 +67,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
 
         log::info!("deploy ibc-sudt-transfer contract");
         let ibc_sudt_transfer = include_bytes!("../../../contracts/ibc-sudt-transfer");
-        let mut query = CellQueryOptions::new_lock(ckb_sender_lock_script.clone());
-        query.data_len_range = Some(ValueRangeOption::new_exact(0));
-        query.secondary_script_len_range = Some(ValueRangeOption::new_exact(0));
-        let (cells, _) = DefaultCellCollector::new(&ckb_url.to_string())
-            .collect_live_cells(&query, false)
-            .unwrap();
-        let first_input = simple_input(cells[0].out_point.clone());
+        let first_input = get_capacity_input(&ckb_url, ckb_sender_lock_script.clone())?;
         let ibc_sudt_transfer_type_id_args = {
             let mut hasher = ckb_hash::new_blake2b();
             hasher.update(first_input.as_slice());
@@ -93,14 +86,11 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             .type_(Some(ibc_sudt_transfer_type_script.clone()).pack())
             .build_exact_capacity(Capacity::bytes(ibc_sudt_transfer.len()).unwrap())
             .unwrap();
-        let placeholder_witness = packed::WitnessArgs::new_builder()
-            .lock(Some(Bytes::from_static(&[0u8; 65])).pack())
-            .build();
         let tx = TransactionBuilder::default()
             .input(first_input)
             .output(ibc_sudt_transfer_output)
             .output_data(ibc_sudt_transfer.pack())
-            .witness(placeholder_witness.as_bytes().pack())
+            .witness(sighash_placeholder_witness().as_bytes().pack())
             .build();
         let tx = complete_tx(
             &ckb_url,
@@ -246,18 +236,19 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         )
         .unwrap();
         let send_packet_tx = send_packet_tx
-            .input(sudt_input)
-            .cell_dep(sudt_cell_dep.clone())
-            .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()))
             .input(simple_input(st_cell))
             .output(st_cell_output.clone())
             .output_data(999u128.to_le_bytes().pack())
-            .build();
+            // Third input and third witness.
+            .input(sudt_input)
+            .witness(sighash_placeholder_witness().as_bytes().pack())
+            .cell_dep(sudt_cell_dep.clone())
+            .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()));
+        let send_packet_tx = add_ibc_envelope(send_packet_tx, &envelope).build();
         let st_cell_idx = send_packet_tx.outputs().len() - 1;
-        let send_packet_tx = complete_tx_with_envelope(
+        let send_packet_tx = complete_tx(
             &ckb_url,
             &send_packet_tx,
-            envelope,
             ckb_sender_lock_script.clone(),
             ckb_sender_key,
         )
@@ -305,18 +296,22 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             ack_packet,
         )
         .unwrap();
-        let tx: TransactionView = tx
+        let tx = tx
+            .input(get_capacity_input(
+                &ckb_url,
+                ckb_sender_lock_script.clone(),
+            )?)
+            .witness(sighash_placeholder_witness().as_bytes().pack())
             .input(simple_input(st_cell))
             .output(st_cell_output.clone())
             .output_data(999u128.to_le_bytes().pack())
             .cell_dep(sudt_cell_dep.clone())
-            .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()))
-            .build();
+            .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()));
+        let tx = add_ibc_envelope(tx, &envelope).build();
         let st_cell_idx = tx.outputs().len() - 1;
-        let send_packet_tx = complete_tx_with_envelope(
+        let send_packet_tx = complete_tx(
             &ckb_url,
             &tx,
-            envelope,
             ckb_sender_lock_script.clone(),
             ckb_sender_key,
         )
@@ -349,6 +344,12 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         )
         .unwrap();
         let tx = tx
+            // Capacity input and witness. Third input/witness.
+            .input(get_capacity_input(
+                &ckb_url,
+                ckb_sender_lock_script.clone(),
+            )?)
+            .witness(sighash_placeholder_witness().as_bytes().pack())
             // st-cell input/output
             .input(simple_input(st_cell))
             .output(st_cell_output)
@@ -364,12 +365,11 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             )
             .output_data(499u128.to_le_bytes().pack())
             .cell_dep(sudt_cell_dep)
-            .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()))
-            .build();
-        let tx = complete_tx_with_envelope(
+            .cell_dep(simple_dep(sudt_transfer_contract_out_point.clone()));
+        let tx = add_ibc_envelope(tx, &envelope).build();
+        let tx = complete_tx(
             &ckb_url,
             &tx,
-            envelope,
             ckb_sender_lock_script.clone(),
             ckb_sender_key,
         )
@@ -399,6 +399,16 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
     }
 }
 
+fn get_capacity_input(ckb_url: &str, lock: packed::Script) -> eyre::Result<packed::CellInput> {
+    let mut query = CellQueryOptions::new_lock(lock);
+    query.data_len_range = Some(ValueRangeOption::new_exact(0));
+    query.secondary_script_len_range = Some(ValueRangeOption::new_exact(0));
+    let (cells, _) = DefaultCellCollector::new(ckb_url).collect_live_cells(&query, false)?;
+    eyre::ensure!(!cells.is_empty(), "failed to get capacity input");
+    let first_input = simple_input(cells[0].out_point.clone());
+    Ok(first_input)
+}
+
 fn simple_dep(o: packed::OutPoint) -> packed::CellDep {
     packed::CellDep::new_builder().out_point(o).build()
 }
@@ -407,7 +417,10 @@ fn simple_input(o: packed::OutPoint) -> packed::CellInput {
     packed::CellInput::new_builder().previous_output(o).build()
 }
 
-// Balance and sign tx with ckb sdk. Modified from ckb sdk example.
+/// Balance and sign tx with ckb sdk. Modified from ckb sdk example.
+///
+/// Placeholder witness for the sighash inputs should have already been added if
+/// there are already sighash inputs.
 fn complete_tx(
     ckb_rpc: &str,
     tx: &TransactionView,
@@ -425,9 +438,7 @@ fn complete_tx(
     );
 
     // Build CapacityBalancer
-    let placeholder_witness = packed::WitnessArgs::new_builder()
-        .lock(Some(Bytes::from_static(&[0u8; 65])).pack())
-        .build();
+    let placeholder_witness = sighash_placeholder_witness();
     let balancer = CapacityBalancer::new_simple(sender, placeholder_witness, 1000);
 
     // Build:
@@ -463,76 +474,10 @@ fn complete_tx(
     Ok(tx)
 }
 
-// Balance tx, add envelope, rebalance, and sign. Modified from ckb sdk example.
-fn complete_tx_with_envelope(
-    ckb_rpc: &str,
-    tx: &TransactionView,
-    envelope: Envelope,
-    sender: packed::Script,
-    sender_key: secp256k1::SecretKey,
-) -> eyre::Result<TransactionView> {
-    // Build ScriptUnlocker
-    let signer = SecpCkbRawKeySigner::new_with_secret_keys(vec![sender_key]);
-    let sighash_unlocker = SecpSighashUnlocker::from(Box::new(signer) as Box<_>);
-    let sighash_script_id = ScriptId::new_type(SIGHASH_TYPE_HASH.clone());
-    let mut unlockers = HashMap::default();
-    unlockers.insert(
-        sighash_script_id,
-        Box::new(sighash_unlocker) as Box<dyn ScriptUnlocker>,
-    );
-
-    // Build CapacityBalancer
-    let placeholder_witness = packed::WitnessArgs::new_builder()
+fn sighash_placeholder_witness() -> packed::WitnessArgs {
+    packed::WitnessArgs::new_builder()
         .lock(Some(Bytes::from_static(&[0u8; 65])).pack())
-        .build();
-    // FIXME: fee rate 1000 and rebalance.
-    let balancer = CapacityBalancer::new_simple(sender, placeholder_witness, 3000);
-
-    // Build:
-    //   * CellDepResolver
-    //   * HeaderDepResolver
-    //   * CellCollector
-    //   * TransactionDependencyProvider
-    let mut ckb_client = CkbRpcClient::new(ckb_rpc);
-    let cell_dep_resolver = {
-        let genesis_block = ckb_client.get_block_by_number(0.into())?.unwrap();
-        DefaultCellDepResolver::from_genesis(&BlockView::from(genesis_block))?
-    };
-    let header_dep_resolver = DefaultHeaderDepResolver::new(ckb_rpc);
-    let mut cell_collector = DefaultCellCollector::new(ckb_rpc);
-    let tx_dep_provider = DefaultTransactionDependencyProvider::new(ckb_rpc, 10);
-
-    // Add sighash dep manually because the balancer may not add it if the tx
-    // already have inputs from sender.
-    let sighash = cell_dep_resolver.sighash_dep().unwrap().0.clone();
-    let tx = tx.as_advanced_builder().cell_dep(sighash).build();
-
-    let tx = balance_tx_capacity(
-        &tx,
-        &balancer,
-        &mut cell_collector,
-        &tx_dep_provider,
-        &cell_dep_resolver,
-        &header_dep_resolver,
-    )?;
-
-    let tx = add_ibc_envelope(tx.as_advanced_builder(), &envelope).build();
-
-    // FIXME: this doesn't work.
-    // let change_idx = tx.outputs().len() - 1;
-    // let (tx, _) = balancer.rebalance_tx_capacity(
-    //     &tx,
-    //     &mut cell_collector,
-    //     &tx_dep_provider,
-    //     &cell_dep_resolver,
-    //     &header_dep_resolver,
-    //     0,
-    //     Some(change_idx),
-    // )?;
-
-    let (tx, _) = unlock_tx(tx, &tx_dep_provider, &unlockers)?;
-
-    Ok(tx)
+        .build()
 }
 
 pub struct Args<'a> {
