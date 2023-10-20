@@ -51,7 +51,7 @@ Detailed deployment steps can be found in [ibc-ckb-contracts](https://github.com
 |escrow|WIP|WIP|
 
 ### Business Module Registration
-When deploying the Solidity contract on Axon, an initial ICS20 transfer module is automatically registered in `OwnableIBCHandler` on port `port-0` during the contract migration process. This registration is open to all users. For detailed instructions on how to register your own business module, visit [ibc-solidity-contract](https://github.com/synapseweb3/ibc-solidity-contract) repository.
+When deploying the Solidity contract on Axon, an initial ICS20 transfer module is automatically registered in `OwnableIBCHandler` on port `transfer` during the contract migration process. This registration is open to all users. For detailed instructions on how to register your own business module, visit [ibc-solidity-contract](https://github.com/synapseweb3/ibc-solidity-contract) repository.
 
 Unlike Axon, business modules cannot be registered directly with a contract on CKB. To address this, we have introduced [forcerelay-ckb-sdk](https://github.com/synapseweb3/forcerelay-ckb-sdk), designed to facilitate the distribution and calling of custom modules.
 
@@ -89,7 +89,7 @@ Establishing IBC channels on both sides of Axon and CKB is required to run Force
 ```
 $ forcerelay create channel \
     --a-chain axon-0 --b-chain ckb4ibc-0 \
-    --a-port  port-0 --b-port <WALLET_LOCK_HASH> \
+    --a-port  transfer --b-port <WALLET_LOCK_HASH> \
     --new-client-connection
 $ forcerelay start --config <YOUR_CONFIG_PATH>
 ```

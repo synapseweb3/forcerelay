@@ -609,6 +609,9 @@ impl ChainEndpoint for Ckb4IbcChain {
     }
 
     fn ibc_version(&self) -> Result<Option<Version>, Error> {
+        // TODO @jjy
+        // the ibc version should be matched with the CKB contract,
+        // IMO we can put it into the config of forcerelay or save the version in a cell
         Ok(None)
     }
 
@@ -749,6 +752,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok(responses)
     }
 
+    // TODO verify target height with Axon light client / store
     fn verify_header(
         &mut self,
         _trusted: Height,
@@ -819,6 +823,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok(vec![ckb_balance])
     }
 
+    // TODO Need to align with CKB ibc contract
     fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {
         warn!("axon query_denom_trace() cannot implement");
         Ok(DenomTrace {
@@ -849,6 +854,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .onchain_light_clients
             .keys()
             .map(|client_type| {
+                // TODO query latest_height from light client cell (for example Axon metadata cell)
                 let client_id = self.config.lc_client_id(*client_type).unwrap();
                 let chain_id = self.config.lc_chain_id(&client_id.to_string()).unwrap();
                 IdentifiedAnyClientState {
@@ -869,6 +875,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         _include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
         let chain_id = self.config.lc_chain_id(&request.client_id.to_string())?;
+        // TODO query latest_height
         let client_state = CkbClientState {
             chain_id,
             latest_height: Height::default(),

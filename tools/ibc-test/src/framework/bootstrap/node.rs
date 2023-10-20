@@ -37,34 +37,6 @@ pub fn bootstrap_single_node(
         chain_driver.rpc_address(),
     );
 
-    let (process, miner_process) = match chain_driver.chain_type {
-        ChainType::Ckb => {
-            // FIXME @jjy
-            // currently the deploy tx is hard coded, which means relayer must be a fixed pk
-            let (node, miner) = prepare_ckb_chain(
-                &chain_driver.home_path,
-                chain_driver.rpc_port as u32,
-                &[],
-                // &[(&relayer, 5_198_735_037_00000000u64)],
-            );
-            (node, Some(miner))
-        }
-        ChainType::Axon => {
-            // TODO
-            let node = prepare_axon_chain(
-                &chain_driver.home_path,
-                chain_driver.rpc_port as u32,
-                &[],
-                // &[(&relayer, 5_198_735_037_00000000u64)],
-            )
-            .unwrap();
-            (node, None)
-        }
-        _ => {
-            unreachable!()
-        }
-    };
-
     let validator = add_wallet(&chain_driver, "validator", use_random_id)?;
     let user1 = add_wallet(&chain_driver, "user1", use_random_id)?;
     let user2 = add_wallet(&chain_driver, "user2", use_random_id)?;
@@ -76,6 +48,32 @@ pub fn bootstrap_single_node(
         }
         ChainType::Axon => add_axon_devnet_relayer_wallet(&chain_driver, "relayer", use_random_id)?,
         _ => add_wallet(&chain_driver, "relayer", use_random_id)?,
+    };
+
+    let (process, miner_process, denom) = match chain_driver.chain_type {
+        ChainType::Ckb => {
+            // FIXME @jjy
+            // currently the deploy tx is hard coded, which means relayer must be a fixed pk
+            let (node, miner) =
+                prepare_ckb_chain(&chain_driver.home_path, chain_driver.rpc_port as u32, &[]);
+
+            // TODO deploy a sUDT as default denom
+            let denom = Denom::base("ckb");
+            (node, Some(miner), denom)
+        }
+        ChainType::Axon => {
+            // TODO
+            let (node, denom) = prepare_axon_chain(
+                &chain_driver.home_path,
+                chain_driver.rpc_port as u32,
+                Some((&relayer, 1000000000000u64)),
+            )
+            .unwrap();
+            (node, None, denom)
+        }
+        _ => {
+            unreachable!()
+        }
     };
 
     info!(
@@ -96,8 +94,6 @@ pub fn bootstrap_single_node(
         user1,
         user2,
     };
-
-    let denom = Denom::base("ckb");
 
     let node = FullNode {
         chain_driver,
