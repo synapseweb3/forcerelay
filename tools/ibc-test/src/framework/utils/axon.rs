@@ -12,7 +12,7 @@ use relayer::keyring::{Secp256k1AddressType, Secp256k1KeyPair};
 
 use secp256k1::{Secp256k1, SecretKey};
 
-use toml_edit::{value, Document, Table};
+use toml_edit::{value, Document};
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -30,8 +30,8 @@ const IBC_CONTRACTS_SRC_PATH: &str = "IBC_CONTRACTS_SRC_PATH";
 pub(crate) fn prepare_axon_chain(
     dir_path: &str,
     port: u32,
-    genesis_wallets: &[(&Wallet, u64)],
-) -> Result<ChildProcess> {
+    pre_mint: Option<(&Wallet, u64)>,
+) -> Result<(ChildProcess, Denom)> {
     println!("\n========== Prepare Axon node on port {port} ==========\n");
 
     // read envs
@@ -73,24 +73,10 @@ pub(crate) fn prepare_axon_chain(
     config_doc["rpc"]["http_listening_address"] = value(format!("0.0.0.0:{}", port));
     config_doc["rpc"]["ws_listening_address"] = value(format!("0.0.0.0:{}", port + 1));
     config_doc["network"]["listening_address"] = value(format!("/ip4/0.0.0.0/tcp/{}", port + 2));
-    *config_doc["network"]["bootstraps"].get_mut(0).unwrap() = value(&format!(
+    *config_doc["network"]["bootstraps"].get_mut(0).unwrap() = value(format!(
         "/ip4/127.0.0.1/tcp/{}/p2p/QmNk6bBwkLPuqnsrtxpp819XLZY3ymgjs3p1nKtxBVgqxj",
         port + 2
     ));
-
-    // genesis wallets
-    for (wallet, balance) in genesis_wallets {
-        let mut item = Table::new();
-        item.entry("address")
-            .or_insert(value(wallet.address.as_str()));
-        item.entry("balance")
-            .or_insert(value(hex::encode(balance.to_be_bytes())));
-        config_doc["accounts"]
-            .as_array_of_tables_mut()
-            .unwrap()
-            .push(item);
-    }
-
     fs::write(&chain_config_path, config_doc.to_string())
         .with_context(|| format!("write config to {:?}", &chain_config_path))?;
 
@@ -112,39 +98,59 @@ pub(crate) fn prepare_axon_chain(
     wait_for_port(port);
 
     // Deploy IBC contract
-    {
-        println!("deploying ibc contracts",);
-        let output = Command::new("yarn")
-            .arg("migrate")
-            .env("AXON_HTTP_RPC_URL", format!("http://localhost:{}", port))
-            .current_dir(&ibc_contracts_src_path)
-            .output()
-            .with_context(|| "yarn migrate")?;
-        // get contract address from output
-        check_command_output(&output, &working_dir)?;
-        let output = String::from_utf8(output.stdout.clone())?;
-        let contract_address = parsing_contract_address_from_output(&output, "OwnableIBCHandler")?;
-        let mock_transfer_contract_address =
-            parsing_contract_address_from_output(&output, "MockTransfer")?;
-        let transfer_contract_address =
-            parsing_contract_address_from_output(&output, "ICS20TransferERC20")?;
+    println!("deploying ibc contracts",);
+    let output = Command::new("yarn")
+        .arg("migrate")
+        .env("AXON_HTTP_RPC_URL", format!("http://localhost:{}", port))
+        .current_dir(&ibc_contracts_src_path)
+        .output()
+        .with_context(|| "yarn migrate")?;
+    // get contract address from output
+    check_command_output(&output, &working_dir)?;
+    let output = String::from_utf8(output.stdout.clone())?;
+    let contract_address = parsing_contract_address_from_output(&output, "OwnableIBCHandler")?;
+    let transfer_contract_address =
+        parsing_contract_address_from_output(&output, "ICS20TransferERC20")?;
 
-        println!("ibc handler deployed at {:#x}", contract_address);
+    println!("ibc handler deployed at {:#x}", contract_address);
 
-        // write deployment info
-        let deployment = DeployedContracts {
-            contract_address,
-            mock_transfer_contract_address,
-            transfer_contract_address,
-            image_cell_contract_address: ethers::types::H160::default(),
-            ckb_light_client_contract_address: ethers::types::H160::default(),
-        };
-        let path = working_dir.join(AXON_CONTRACTS_CONFIG_PATH);
-        std::fs::write(path, toml::to_string(&deployment)?)
-            .with_context(|| "write deployment info")?;
+    // deploy test ERC20 and mint token
+    let token_name = "AT";
+    let token_symbol = "AT";
+    let mut cmd = Command::new("yarn");
+    cmd.current_dir(&ibc_contracts_src_path)
+        .arg("truffle")
+        .arg("exec")
+        .arg("--network")
+        .arg("axon")
+        .arg("scripts/deploy_erc20.js")
+        .env("AXON_HTTP_RPC_URL", format!("http://localhost:{port}"))
+        .env("TOKEN_NAME", token_name)
+        .env("TOKEN_SYMBOL", token_symbol);
+    if let Some((mint_to, mint_amount)) = pre_mint {
+        cmd.env("MINT_TO", mint_to.address.as_str())
+            .env("MINT_AMOUNT", mint_amount.to_string());
     }
+    let output = cmd.output().with_context(|| "yarn truffle")?;
+    // get contract address from output
+    check_command_output(&output, &working_dir)?;
+    let output = String::from_utf8(output.stdout.clone())?;
+    let token_address = parsing_contract_address_from_output(&output, "SimpleToken")?;
+    let denom = Denom::base(&format!("{token_address:#x}"));
 
-    Ok(chain_process)
+    println!("test token deployed at {:#x}", token_address);
+
+    // write deployment info
+    let deployment = DeployedContracts {
+        contract_address,
+        transfer_contract_address,
+        image_cell_contract_address: ethers::types::H160::default(),
+        ckb_light_client_contract_address: ethers::types::H160::default(),
+    };
+    let path = working_dir.join(AXON_CONTRACTS_CONFIG_PATH);
+    std::fs::write(path, toml::to_string(&deployment)?).with_context(|| "write deployment info")?;
+
+    Ok((chain_process, denom))
 }
 
 fn check_command_output(output: &Output, working_dir: &Path) -> Result<()> {

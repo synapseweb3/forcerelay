@@ -76,7 +76,8 @@ use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use self::{contract::OwnableIBCHandler, monitor::AxonEventMonitor};
 
 type ContractProvider = SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>;
-type Contract = OwnableIBCHandler<ContractProvider>;
+type IBCContract = OwnableIBCHandler<ContractProvider>;
+type ERC20Contract = ERC20<ContractProvider>;
 
 use super::{
     client::ClientSettings,
@@ -122,6 +123,18 @@ lazy_static! {
         Mutex::new(HashMap::new());
 }
 
+abigen!(
+    ERC20,
+    r"[
+        function totalSupply() external view returns (uint256)
+        function balanceOf(address account) external view returns (uint256)
+        function transfer(address to, uint256 amount) external returns (bool)
+        function allowance(address owner, address spender) external view returns (uint256)
+        function approve(address spender, uint256 amount) external returns (bool)
+        function transferFrom(address from, address to, uint256 amount) external returns (bool)
+    ]"
+);
+
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
     config: AxonChainConfig,
@@ -145,11 +158,15 @@ impl AxonChain {
         Ok(Arc::new(SignerMiddleware::new(self.client.clone(), wallet)))
     }
 
-    fn contract(&self) -> Result<Contract, Error> {
-        Ok(Contract::new(
+    fn contract(&self) -> Result<IBCContract, Error> {
+        Ok(IBCContract::new(
             self.config.contract_address,
             self.contract_provider()?,
         ))
+    }
+
+    fn erc20_contract(&self, address: H160) -> Result<ERC20Contract, Error> {
+        Ok(ERC20::new(address, self.contract_provider()?))
     }
 }
 
@@ -308,22 +325,25 @@ impl ChainEndpoint for AxonChain {
         self.light_client.check_misbehaviour(update, client_state)
     }
 
-    // FIXME implement this after use a real ics token contract
-    fn query_balance(
-        &self,
-        _key_name: Option<&str>,
-        _denom: Option<&str>,
-    ) -> Result<Balance, Error> {
-        // const DEFAULT_DENOM: &str = "AT";
-
-        // let key_name = key_name.unwrap_or(&self.config.key_name);
-        // let denom = denom.unwrap_or(DEFAULT_DENOM);
-        // let contract = self.ics20_contract()?;
-        // let wallet =  self.get_wallet(key_name);
+    fn query_balance(&self, key_name: Option<&str>, denom: Option<&str>) -> Result<Balance, Error> {
+        let key_name = key_name.unwrap_or(&self.config.key_name);
+        let denom: &str =
+            denom.ok_or_else(|| Error::other_error("do not support default denom".into()))?;
+        let erc20_address = {
+            let denom = denom.trim_start_matches("0x");
+            let bytes = hex::decode(denom).map_err(Error::other)?;
+            H160::from_slice(&bytes)
+        };
+        let contract = self.erc20_contract(erc20_address)?;
+        let wallet = self.get_wallet(key_name)?;
+        let amount = self
+            .rt
+            .block_on(contract.balance_of(wallet.address()).call())
+            .map_err(|err| Error::query(format!("{err:?}")))?;
 
         Ok(Balance {
-            amount: "100".to_owned(),
-            denom: "AT".to_owned(),
+            amount: format!("{amount:#x}"),
+            denom: denom.to_string(),
         })
     }
 

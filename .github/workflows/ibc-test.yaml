@@ -29,7 +29,7 @@ jobs:
     env:
       SRC_DIR: ${{ github.workspace }}/ibc-test-src
       AXON_COMMIT: d03d2bb7cb3dcdc03319c3a74beeee6715e7f448
-      IBC_CONTRACT_COMMIT: f407f44289ef8abea31860b963f758dae1c16071
+      IBC_CONTRACT_COMMIT: 35290d79c9fa45583b00f228dd3ed7e8468ccc67
     strategy:
       fail-fast: false
       matrix:

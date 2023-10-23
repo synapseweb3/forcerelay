@@ -55,7 +55,7 @@ pub fn transfer_port_id(chain_type: ChainType) -> PortId {
         }
         ChainType::Axon => {
             // Axon default port ID
-            PortId::from_str("port-0").unwrap()
+            PortId::from_str("transfer").unwrap()
         }
         _ => {
             unreachable!()

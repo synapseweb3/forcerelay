@@ -15,7 +15,7 @@ We use chain-A chain-B, connection-A connection-B or channel-A channel-B to repr
 
 `gaia` chain uses a builtin `transfer` port as the default port in IBC tests.
 
-For Axon chain we use `port-0` as default port since it is defined in the [deployment script](https://github.com/synapseweb3/ibc-solidity-contract/blob/master/migrations/1_deploy_contracts.js#L84).
+For Axon chain we use `transfer` as default port.
 
 For CKB chain we uses `blake2b(b"transfer")` as default port.
 
