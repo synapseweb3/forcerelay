@@ -48,23 +48,30 @@ pub(crate) fn prepare_axon_chain(
     working_dir.push(dir_path);
     let _ = std::fs::remove_dir_all(dir_path);
     std::fs::create_dir_all(dir_path).with_context(|| format!("create_dir {:?}", dir_path))?;
+    let binding = working_dir.join("devtools/chain/specs/single_node");
+    let chain_spec_dir_path = binding.to_str().unwrap();
+    std::fs::create_dir_all(chain_spec_dir_path)
+        .with_context(|| format!("create_chain_spec_dir {:?}", chain_spec_dir_path))?;
 
     // copy configs to working dir
     for file in [
         "config.toml",
-        "genesis_single_node.json",
+        "specs/single_node/chain-spec.toml",
         "default.db-options",
+        "bls.key",
+        "net.key",
     ] {
         let src_path = axon_src_path.join("devtools/chain").join(file);
-        std::fs::copy(&src_path, working_dir.join(file))
+        std::fs::copy(&src_path, working_dir.join("devtools/chain").join(file))
             .with_context(|| format!("cp {:?} -> {:?}", &src_path, working_dir.join(file)))?;
     }
 
-    let chain_config_path = working_dir.join("config.toml");
-    let genesis_config_path = working_dir.join("genesis_single_node.json");
+    let chain_config_path = working_dir.join("devtools/chain").join("config.toml");
+    let chain_spec_path = working_dir
+        .join("devtools/chain")
+        .join("specs/single_node/chain-spec.toml");
 
     // Modify configs
-
     let mut config_doc = fs::read_to_string(&chain_config_path)
         .with_context(|| format!("read chain config from {:?}", &chain_config_path))?
         .parse::<Document>()
@@ -80,14 +87,22 @@ pub(crate) fn prepare_axon_chain(
     fs::write(&chain_config_path, config_doc.to_string())
         .with_context(|| format!("write config to {:?}", &chain_config_path))?;
 
+    // init axon
+    let _init_command = Command::new("axon")
+        .arg("init")
+        .arg("--config")
+        .arg(&chain_config_path)
+        .arg("--chain-spec")
+        .arg(&chain_spec_path)
+        .current_dir(&working_dir)
+        .output()?;
+
     // start process
     let chain_process = ChildProcess::new(
         Command::new("axon")
             .arg("run")
-            .arg("-c")
+            .arg("--config")
             .arg(&chain_config_path)
-            .arg("-g")
-            .arg(&genesis_config_path)
             .current_dir(&working_dir)
             .stdout(Stdio::null())
             .stderr(Stdio::null())

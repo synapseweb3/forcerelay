@@ -41,7 +41,7 @@ $ yarn migrate > migrate.log | tail -f migrate.log
 After running `yarn migrate`, the `OwnableIBCHandler` address is listing in console, we record it and mark as **`YOUR_IBC_AXON_ADDRESS`** to use later.
 
 ### Contract Deployment on CKB
-Detailed deployment steps can be found in [ibc-ckb-contracts](https://github.com/synapseweb3/ibc-ckb-contracts). Alternatively, you can find pre-deployed contracts TYPE_ARGS on both testnet and mainnet:
+Detailed deployment steps can be found in [forcerelay-ckb-contracts](https://github.com/synapseweb3/forcerelay-ckb-contracts). Alternatively, you can find pre-deployed contracts TYPE_ARGS on both testnet and mainnet:
 ||Mainnet|Testnet|
 |-|-|-|
 |connection|WIP|WIP|
@@ -58,7 +58,7 @@ Unlike Axon, business modules cannot be registered directly with a contract on C
 It's important to note that the IBC port on CKB corresponds to the `LOCK_HASH` of your wallet cell on CKB, which we will refer to as `WALLET_LOCK_HASH` for future use.
 
 ### Installation and Setting
-We recommand you to download the pre-compiled binary, or you can compile mannully from the source code, which requires `Rust ^v1.72.0` installed:
+We recommend you to download the pre-compiled binary, or you can compile mannully from the source code, which requires `Rust ^v1.72.0` installed:
 
 ```
 $ git clone https://github.com/synapseweb3/forcerelay

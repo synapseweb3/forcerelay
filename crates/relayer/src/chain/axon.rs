@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc, thread, time::Duration};
 
-use axon_tools::types::{AxonBlock, Proof as AxonProof, Validator};
+use axon_tools::types::{AxonBlock, Proof as AxonProof, ValidatorExtend};
 use eth2_types::Hash256;
 use k256::ecdsa::SigningKey;
 use rlp::Encodable;
@@ -1176,12 +1176,17 @@ impl AxonChain {
             .rt
             .block_on(self.get_proofs_ingredients(block_number))?;
 
-        // FIXME: keep it commentted until Axon team fixed this verify issue
-        //
         // check the validation of receipts mpt proof
-        // let key = rlp::encode(&receipt.transaction_index.as_u64());
-        // axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
-        //     .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
+        let key = rlp::encode(&receipt.transaction_index.as_u64());
+        let result =
+            axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
+                .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
+        if result.is_none() {
+            return Err(Error::rpc_response(format!(
+                "trie key: {} doesn't exist",
+                receipt.transaction_index
+            )));
+        }
 
         let object_proof =
             to_ckb_like_object_proof(&receipt, &receipt_proof, &block, &state_root, &block_proof)
@@ -1201,8 +1206,12 @@ impl AxonChain {
         .unwrap();
 
         // check the validation of Axon block
-        axon_tools::verify_proof(block, state_root, &mut validators, block_proof)
-            .map_err(|_| Error::rpc_response("unverified axon block".to_owned()))?;
+        axon_tools::verify_proof(block, state_root, &mut validators, block_proof).map_err(
+            |err| {
+                let err_msg = format!("unverified axon block, err: {:?}", err);
+                Error::rpc_response(err_msg)
+            },
+        )?;
 
         Ok(proofs)
     }
@@ -1210,7 +1219,7 @@ impl AxonChain {
     async fn get_proofs_ingredients(
         &self,
         block_number: U64,
-    ) -> Result<(AxonBlock, Hash256, AxonProof, Vec<Validator>), Error> {
+    ) -> Result<(AxonBlock, Hash256, AxonProof, Vec<ValidatorExtend>), Error> {
         let previous_number = block_number
             .checked_sub(1u64.into())
             .expect("bad block_number");
@@ -1246,8 +1255,9 @@ impl AxonChain {
             .await?
             .verifier_list
             .into_iter()
-            .map(|v| Validator {
-                bls_pub_key: v.bls_pub_key,
+            .map(|v| ValidatorExtend {
+                bls_pub_key: v.bls_pub_key.clone(),
+                pub_key: v.pub_key.clone(),
                 address: v.address,
                 propose_weight: v.propose_weight,
                 vote_weight: v.vote_weight,
