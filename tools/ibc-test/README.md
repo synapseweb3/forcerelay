@@ -27,7 +27,7 @@ Environment variables:
 
 ``` bash
 # IBC contracts
-export IBC_CONTRACTS_SRC_PATH = <ibc solidity contract source path>
+export IBC_CONTRACTS_SRC_PATH=<ibc solidity contract source path>
 cd $IBC_CONTRACTS_SRC_PATH && yarn install && yarn compile
 
 # Axon
