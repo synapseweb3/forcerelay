@@ -78,6 +78,7 @@ use self::{contract::OwnableIBCHandler, monitor::AxonEventMonitor};
 type ContractProvider = SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>;
 type IBCContract = OwnableIBCHandler<ContractProvider>;
 type ERC20Contract = ERC20<ContractProvider>;
+type ICS20TransferERC20Contract = ICS20TransferERC20<ContractProvider>;
 
 use super::{
     client::ClientSettings,
@@ -135,6 +136,14 @@ abigen!(
     ]"
 );
 
+// mapping(bytes32 => string) public denomTraces;
+abigen!(
+    ICS20TransferERC20,
+    r"[
+        function denomTraces(bytes32 hash) external view returns (string)
+    ]"
+);
+
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
     config: AxonChainConfig,
@@ -161,6 +170,13 @@ impl AxonChain {
     fn contract(&self) -> Result<IBCContract, Error> {
         Ok(IBCContract::new(
             self.config.contract_address,
+            self.contract_provider()?,
+        ))
+    }
+
+    fn transfer_contract(&self) -> Result<ICS20TransferERC20Contract, Error> {
+        Ok(ICS20TransferERC20::new(
+            self.config.transfer_contract_address,
             self.contract_provider()?,
         ))
     }
@@ -354,14 +370,18 @@ impl ChainEndpoint for AxonChain {
         Ok(vec![])
     }
 
-    // FIXME implement this after use a real ics token contract
-    fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {
-        // TODO: implement the real `query_denom_trace` function later
-        warn!("axon query_denom_trace() cannot implement");
-        Ok(DenomTrace {
-            path: "".to_owned(),
-            base_denom: "".to_owned(),
-        })
+    fn query_denom_trace(&self, hash: String) -> Result<DenomTrace, Error> {
+        let hash_bytes = H256::from_str(hash.trim_start_matches("ibc/")).map_err(Error::other)?;
+        let contract = self.transfer_contract().map_err(Error::other)?;
+        let full_path: String = self
+            .rt
+            .block_on(contract.denom_traces(hash_bytes.into()).call())
+            .map_err(|err| Error::query(format!("{err:?}")))?;
+        if full_path.is_empty() {
+            return Err(Error::empty_denom_trace(hash));
+        }
+        let dt: DenomTrace = parse_denom_trace(full_path)?;
+        Ok(dt)
     }
 
     fn query_commitment_prefix(&self) -> Result<CommitmentPrefix, Error> {
@@ -1098,6 +1118,48 @@ impl ChainEndpoint for AxonChain {
         })?;
         Ok(proofs)
     }
+}
+
+/// Modified from ibc-go https://github.com/cosmos/ibc-go/blob/main/modules/apps/transfer/types/trace.go#L31
+fn parse_denom_trace(raw_denom: String) -> Result<DenomTrace, Error> {
+    let parts: Vec<_> = raw_denom.split('/').collect();
+    if parts[0] == raw_denom {
+        return Ok(DenomTrace {
+            path: Default::default(),
+            base_denom: raw_denom,
+        });
+    }
+    let (path, base_denom) = extract_path_and_base_from_full_denom(parts);
+    Ok(DenomTrace { path, base_denom })
+}
+
+fn extract_path_and_base_from_full_denom(parts: Vec<&str>) -> (String, String) {
+    fn is_valid_channel_id(c: &str) -> bool {
+        const PREFIX: &str = "channel-";
+        if !c.starts_with(PREFIX) {
+            return false;
+        }
+        let r = c[PREFIX.len()..].parse::<usize>();
+        r.is_ok()
+    }
+
+    let mut path = Vec::new();
+    let mut base = Vec::new();
+    let len = parts.len();
+
+    for i in (0..len).step_by(2) {
+        if i < len - 1 && len > 2 && is_valid_channel_id(parts[i + 1]) {
+            path.push(parts[i]);
+            path.push(parts[i + 1]);
+        } else {
+            base.extend_from_slice(&parts[i..]);
+            break;
+        }
+    }
+    let path = path.join("/");
+    let base = base.join("/");
+
+    (path, base)
 }
 
 impl AxonChain {

@@ -12,6 +12,7 @@ pub struct AxonChainConfig {
     pub websocket_addr: WebSocketClientUrl,
     pub rpc_addr: Url,
     pub contract_address: ethers::types::Address,
+    pub transfer_contract_address: ethers::types::Address,
     pub restore_block_count: u64,
     pub key_name: String,
     pub store_prefix: String,

@@ -219,6 +219,7 @@ impl FullNode {
 
         let DeployedContracts {
             contract_address,
+            transfer_contract_address,
             image_cell_contract_address,
             ckb_light_client_contract_address,
             ..
@@ -232,6 +233,7 @@ impl FullNode {
             websocket_addr,
             rpc_addr,
             contract_address,
+            transfer_contract_address,
             restore_block_count,
             ckb_light_client_contract_address,
             image_cell_contract_address,
