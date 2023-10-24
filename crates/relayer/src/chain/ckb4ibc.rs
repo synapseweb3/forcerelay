@@ -506,7 +506,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         ) in &config.onchain_light_clients
         {
             let client_cell = rt.block_on(rpc_client.search_cell_by_typescript(
-                &TYPE_ID_CODE_HASH.pack(),
+                &config.client_code_hash.pack(),
                 &client_cell_type_args.as_bytes().to_owned(),
             ))?;
             let Some(cell) = client_cell else {
@@ -710,6 +710,13 @@ impl ChainEndpoint for Ckb4IbcChain {
             match response {
                 Ok(height) => {
                     if let Some(event) = events.get(i).unwrap().clone() {
+                        if let IbcEvent::CreateClient(e) = &event {
+                            let client_type = e.0.client_type;
+                            info!(
+                                "the counterparty client type of Ckb4Ibc is set as {client_type}"
+                            );
+                            self.sync_counterparty_client_type(client_type);
+                        }
                         let tx_hash: [u8; 32] = tx_hashes.get(i).unwrap().clone().into();
                         let ibc_event_with_height = IbcEventWithHeight {
                             event,

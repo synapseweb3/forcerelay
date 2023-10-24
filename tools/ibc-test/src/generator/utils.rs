@@ -10,15 +10,6 @@ use ckb_types::{
     H256,
 };
 use secp256k1::{Secp256k1, SecretKey};
-use tiny_keccak::{Hasher, Keccak};
-
-pub fn keccak256(slice: &[u8]) -> [u8; 32] {
-    let mut hasher = Keccak::v256();
-    hasher.update(slice);
-    let mut output = [0u8; 32];
-    hasher.finalize(&mut output);
-    output
-}
 
 pub fn get_lock_script(private: &str) -> (Script, SecretKey, Address) {
     let secret_key = SecretKey::from_str(private).unwrap();

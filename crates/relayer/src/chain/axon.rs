@@ -4,7 +4,7 @@ use axon_tools::types::{AxonBlock, Proof as AxonProof, ValidatorExtend};
 use eth2_types::Hash256;
 use k256::ecdsa::SigningKey;
 use rlp::Encodable;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     account::Balance,
@@ -1208,7 +1208,9 @@ impl AxonChain {
         // check the validation of Axon block
         axon_tools::verify_proof(block, state_root, &mut validators, block_proof).map_err(
             |err| {
-                let err_msg = format!("unverified axon block, err: {:?}", err);
+                // let block_to_persist = serde_json::to_string_pretty(&block).unwrap();
+                // let validators_to_persist = serde_json::to_string_pretty(&validators).unwrap();
+                let err_msg = format!("unverified axon block #{block_number}, err: {:?}", err);
                 Error::rpc_response(err_msg)
             },
         )?;
@@ -1380,6 +1382,11 @@ impl AxonChain {
                 .into_iter()
                 .map(Into::into)
                 .map(|log| OwnableIBCHandlerEvents::decode_log(&log));
+            debug!(
+                "Axon received '{}' with events of {}",
+                message.type_url.as_str(),
+                events.len()
+            );
             match message.type_url.as_str() {
                 create_client::TYPE_URL => {
                     events.find(|event| matches!(event, Ok(CreateClientFilter(_))))
