@@ -1,17 +1,17 @@
 <!DOCTYPE HTML>
-<html lang="en" class="sidebar-visible no-js light">
+<html lang="en" class="light" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Forcerelay (IBC Relayer CLI) Documentation</title>
-        <meta name="robots" content="noindex" />
+        <meta name="robots" content="noindex">
 
 
         <!-- Custom HTML head -->
         
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#ffffff">
 
         <link rel="icon" href="favicon.svg">
         <link rel="shortcut icon" href="favicon.png">
@@ -32,7 +32,7 @@
         <!-- Custom theme stylesheets -->
 
     </head>
-    <body>
+    <body class="sidebar-visible no-js">
     <div id="body-container">
         <!-- Provide site root to javascript -->
         <script>
@@ -62,24 +62,29 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             var html = document.querySelector('html');
-            html.classList.remove('no-js')
             html.classList.remove('light')
             html.classList.add(theme);
-            html.classList.add('js');
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
         </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
 
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
-            var html = document.querySelector('html');
+            var body = document.querySelector('body');
             var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
             } else {
                 sidebar = 'hidden';
             }
-            html.classList.remove('sidebar-visible');
-            html.classList.add("sidebar-" + sidebar);
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
         </script>
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
@@ -89,15 +94,37 @@
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
                                 <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky bordered">
+                <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
-                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
-                        </button>
+                        </label>
                         <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
                             <i class="fa fa-paint-brush"></i>
                         </button>
@@ -5461,6 +5488,8 @@ USAGE:
 
     forcerelay keys add [OPTIONS] --chain &lt;CHAIN_ID&gt; --mnemonic-file &lt;MNEMONIC_FILE&gt;
 
+    forcerelay keys add [OPTIONS] --chain &lt;CHAIN_ID&gt; --secret-file &lt;SECRET_FILE&gt;
+
 OPTIONS:
     -h, --help                   Print help information
         --hd-path &lt;HD_PATH&gt;      Derivation path for this key [default: m/44'/118'/0'/0/0]
@@ -5468,9 +5497,17 @@ OPTIONS:
         --overwrite              Overwrite the key if there is already one with the same key name
 
 FLAGS:
-        --chain &lt;CHAIN_ID&gt;                 Identifier of the chain
-        --key-file &lt;KEY_FILE&gt;              Path to the key file
-        --mnemonic-file &lt;MNEMONIC_FILE&gt;    Path to file containing mnemonic to restore the key from
+        --chain &lt;CHAIN_ID&gt;
+            Identifier of the chain
+
+        --key-file &lt;KEY_FILE&gt;
+            Path to the key file
+
+        --mnemonic-file &lt;MNEMONIC_FILE&gt;
+            Path to file containing mnemonic to restore the key from
+
+        --secret-file &lt;SECRET_FILE&gt;
+            Path to file containing hex-encoded secret key to restore from
 </code></pre>
 <h4 id="add-a-private-key-to-a-chain-from-a-key-file"><a class="header" href="#add-a-private-key-to-a-chain-from-a-key-file">Add a private key to a chain from a key file</a></h4>
 <pre><code class="language-shell">forcerelay keys add --chain &lt;CHAIN_ID&gt; --key-file &lt;PRIVATE_KEY_FILE&gt;
@@ -7970,7 +8007,7 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
 <p>Note: The <code>gm.toml</code> file that we're using here looks like this:</p>
 </blockquote>
 <pre><code>[global]
-  add_to_hermes = true
+  add_to_forcerelay = true
   auto_maintain_config = true
   extra_wallets = 2
   gaiad_binary = &quot;/Users/luca/go/bin/gaiad&quot;
@@ -7980,9 +8017,9 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
   validator_mnemonic = &quot;&quot;
   wallet_mnemonic = &quot;&quot;
 
-  [global.hermes]
-    binary = &quot;$HOME/.hermes/bin/hermes&quot;
-    config = &quot;$HOME/.hermes/config.toml&quot;
+  [global.forcerelay]
+    binary = &quot;$HOME/.forcerelay/bin/hermes&quot;
+    config = &quot;$HOME/.forcerelay/config.toml&quot;
     log_level = &quot;trace&quot;
     telemetry_enabled = true
     telemetry_host = &quot;127.0.0.1&quot;
@@ -7999,13 +8036,13 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
 </code></pre>
 <ul>
 <li>Run the command <code>gm start</code></li>
-<li>Run the commands: <code>gm hermes config</code> and <code>gm hermes keys</code></li>
+<li>Run the commands: <code>{{#template ../../templates/commands/gm/forcerelay_config.md}}</code> and <code>gm hermes keys</code></li>
 </ul>
 <h3 id="test-packet-forwarding-1"><a class="header" href="#test-packet-forwarding-1">Test packet forwarding</a></h3>
 <ol>
 <li>
 <p>Create a channel between <code>ibc-0</code> and <code>ibc-1</code>, and another between <code>ibc-1</code> and <code>ibc-2</code>:</p>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/create/channel_2.md A_CHAIN_ID=ibc-0 B_CHAIN_ID=ibc-1 A_PORT_ID=transfer B_PORT_ID=transfer}}
+<pre><code class="language-shell">forcerelay create channel --a-chain ibc-0 --b-chain ibc-1 --a-port transfer --b-port transfer --new-client-connection
 </code></pre>
 <pre><code class="language-json">SUCCESS Channel {
     ordering: Unordered,
@@ -8060,7 +8097,7 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
     connection_delay: 0ns,
 }
 </code></pre>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/create/channel_2.md A_CHAIN_ID=ibc-1 B_CHAIN_ID=ibc-2 A_PORT_ID=transfer B_PORT_ID=transfer}}
+<pre><code class="language-shell">forcerelay create channel --a-chain ibc-1 --b-chain ibc-2 --a-port transfer --b-port transfer --new-client-connection
 </code></pre>
 <pre><code class="language-json">SUCCESS Channel {
     ordering: Unordered,
@@ -8118,21 +8155,21 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
 </li>
 <li>
 <p>Obtain the addresses of the wallets on each chain:</p>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/list_1.md CHAIN_ID=ibc-0}}
+<pre><code class="language-shell">forcerelay keys list --chain ibc-0
 </code></pre>
 <pre><code class="language-json">SUCCESS 
 - wallet2 (cosmos179ld56nmany7nqmsdjz684rx5t4r5gxspn6hgr)
 - wallet (cosmos1gz507egejvz3ukg3xwr3v04n3xcny7vcnkjw32)
 - wallet1 (cosmos14cgtalvczzm6xuaa086g5tx6sss6e85j55vqrd)
 </code></pre>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/list_1.md CHAIN_ID=ibc-1}}
+<pre><code class="language-shell">forcerelay keys list --chain ibc-1
 </code></pre>
 <pre><code class="language-json">SUCCESS 
 - wallet2 (cosmos1pmzq62tewxla9z7gpntcnvszyrkygnk4mesauy)
 - wallet (cosmos1jwr34yvnkqkc0ddndnh9y8t94hlhn7rapfyags)
 - wallet1 (cosmos1at4nj238c3ltlj0wymwgfjmdjctlvstwj8xl2s)
 </code></pre>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/list_1.md CHAIN_ID=ibc-2}}
+<pre><code class="language-shell">forcerelay keys list --chain ibc-2
 </code></pre>
 <pre><code class="language-json">SUCCESS 
 - wallet2 (cosmos1xpezl2vvwg9fhdmksvne6lygd7dwz4vf65v6ye)
@@ -8142,19 +8179,19 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
 </li>
 <li>
 <p>(Optional) Check the balance of the wallets before transfering tokens:</p>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-0 OPTIONS= --all}}
+<pre><code class="language-shell">forcerelay keys balance --all --chain ibc-0
 </code></pre>
 <pre><code class="language-json">SUCCESS Balances for key `wallet`:
         100000000 samoleans
         99992294 stake
 </code></pre>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-1 OPTIONS= --all}}
+<pre><code class="language-shell">forcerelay keys balance --all --chain ibc-1
 </code></pre>
 <pre><code class="language-json">SUCCESS Balances for key `wallet`:
         100000000 samoleans
         99983377 stake
 </code></pre>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-2 OPTIONS= --all}}
+<pre><code class="language-shell">forcerelay keys balance --all --chain ibc-2
 </code></pre>
 <pre><code class="language-json">SUCCESS Balances for key `wallet`:
         100000000 samoleans
@@ -8163,7 +8200,7 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
 </li>
 <li>
 <p>(Optional) Confirm the name of the channels used for the transfer:</p>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/query/channels_1.md CHAIN_ID=ibc-0 OPTIONS= --counterparty-chain ibc-1}}
+<pre><code class="language-shell">forcerelay query channels --counterparty-chain ibc-1 --chain ibc-0
 </code></pre>
 <pre><code class="language-json">SUCCESS [
     PortChannelId {
@@ -8176,7 +8213,7 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
     },
 ]
 </code></pre>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/query/channels_1.md CHAIN_ID=ibc-1 OPTIONS= --counterparty-chain ibc-2}}
+<pre><code class="language-shell">forcerelay query channels --counterparty-chain ibc-2 --chain ibc-1
 </code></pre>
 <pre><code class="language-json">SUCCESS [
     PortChannelId {
@@ -8191,13 +8228,13 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
 </code></pre>
 </li>
 <li>
-<p>In a separate terminal, start an instance of Hermes:</p>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/start_1.md}}
+<p>In a separate terminal, start an instance of forcerelay:</p>
+<pre><code class="language-shell">forcerelay start
 </code></pre>
 </li>
 <li>
 <p>Transfer token using the special receiver:</p>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/tx/ft-transfer_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 SRC_PORT_ID=transfer SRC_CHANNEL_ID=channel-0 AMOUNT=2500 OPTIONS= --denom samoleans --receiver 'cosmos1jwr34yvnkqkc0ddndnh9y8t94hlhn7rapfyags|transfer/channel-1:cosmos1nsztzzhl553avufxhqa204908l4dndafqph4tw' --timeout-seconds 120}}
+<pre><code class="language-shell">forcerelay tx ft-transfer --denom samoleans --receiver 'cosmos1jwr34yvnkqkc0ddndnh9y8t94hlhn7rapfyags|transfer/channel-1:cosmos1nsztzzhl553avufxhqa204908l4dndafqph4tw' --timeout-seconds 120 --dst-chain ibc-1 --src-chain ibc-0 --src-port transfer --src-channel channel-0 --amount 2500
 </code></pre>
 <pre><code class="language-json">SUCCESS [
     IbcEventWithHeight {
@@ -8241,19 +8278,19 @@ The <code>--upgrade-height 65</code> value is taken from the <code>height</code>
 </li>
 <li>
 <p>(Optional) Check the balances:</p>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-0 OPTIONS= --all}}
+<pre><code class="language-shell">forcerelay keys balance --all --chain ibc-0
 </code></pre>
 <pre><code class="language-json">SUCCESS Balances for key `wallet`:
         99997500 samoleans
         99985136 stake
 </code></pre>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-1 OPTIONS= --all}}
+<pre><code class="language-shell">forcerelay keys balance --all --chain ibc-1
 </code></pre>
 <pre><code class="language-json">SUCCESS Balances for key `wallet`:
         100000000 samoleans
         99972551 stake
 </code></pre>
-<pre><code class="language-shell">{{#template ../../templates/commands/hermes/keys/balance_1.md CHAIN_ID=ibc-2 OPTIONS= --all}}
+<pre><code class="language-shell">forcerelay keys balance --all --chain ibc-2
 </code></pre>
 <pre><code class="language-json">SUCCESS Balances for key `wallet`:
         2500 ibc/F47F0D7C9B4F7D971DF647A75A80CB8D905D3230262FEF2996340664D3A12D48
@@ -10758,7 +10795,7 @@ SUBCOMMANDS:
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="register-counterparty-payee"><a class="header" href="#register-counterparty-payee">Register Counterparty Payee</a></h1>
 <p>Use this command in order to specify the address which will receive the <code>recv_fee</code> from incentivised packets relayed by the specified chain on the specified channel.</p>
-<p><strong>NOTE:</strong> If the Hermes configuration parameter <code>auto_register_counterpary_payee = true</code> is set, make sure to use the <code>hermes fee register-counterparty-payee</code> command after calling <code>hermes start</code>, otherwise <code>auto_register_counterparty_payee</code> will overwrite the address registered using <code>hermes fee register-counterparty-payee</code>.</p>
+<p><strong>NOTE:</strong> If the forcerelay configuration parameter <code>auto_register_counterpary_payee = true</code> is set, make sure to use the <code>hermes fee register-counterparty-payee</code> command after calling <code>hermes start</code>, otherwise <code>auto_register_counterparty_payee</code> will overwrite the address registered using <code>hermes fee register-counterparty-payee</code>.</p>
 <pre><code class="language-shell">DESCRIPTION:
 Register a counterparty payee for a channel
 
@@ -10783,7 +10820,7 @@ FLAGS:
 </code></pre>
 <p><strong>Example</strong></p>
 <p>Register the address <code>cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw</code> for the chain <code>ibc-1</code> on channel <code>channel-0</code>:</p>
-<pre><code class="language-shell">{{#template ../../../templates/commands/hermes/fee/register-counterparty-payee_1.md CHAIN_ID=ibc-1 CHANNEL_ID=channel-0 PORT_ID=transfer COUNTERPARTY_PAYEE_ADDRESS=cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw}}
+<pre><code class="language-shell">forcerelay fee register-counterparty-payee --chain ibc-1 --channel channel-0 --port transfer --counterparty-payee cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw
 </code></pre>
 <pre><code class="language-json">SUCCESS Successfully registered counterparty payee
 </code></pre>
@@ -10807,7 +10844,7 @@ FLAGS:
 </code></pre>
 <p><strong>Example</strong></p>
 <p>Register the address <code>cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw</code> for the chain <code>ibc-1</code> on channel <code>channel-0</code>:</p>
-<pre><code class="language-shell">{{#template ../../../templates/commands/hermes/fee/register-payee_1.md CHAIN_ID=ibc-1 CHANNEL_ID=channel-0 PORT_ID=transfer PAYEE_ADDRESS=cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw}}
+<pre><code class="language-shell">forcerelay fee register-payee --chain ibc-1 --channel channel-0 --port transfer --payee cosmos10h9stc5v6ntgeygf5xf945njqq5h32r53uquvw
 </code></pre>
 <pre><code class="language-json">SUCCESS Successfully registered payee
 </code></pre>
@@ -10872,7 +10909,7 @@ FLAGS:
 </code></pre>
 <p><strong>Example</strong></p>
 <p>Send a transfer packet from the <code>transfer</code> module and <code>channel-0</code> of <code>ibc-0</code> to <code>ibc-1</code>. Each transfer is for <code>9999</code> <code>samoleans</code> (default denomination), ICS29 fees of 50 <code>samoleans</code> for <code>recv_fee</code>, 25 <code>samoleans</code> for <code>ack_fee</code>, <code>10</code> <code>samoleans</code> for <code>timeout_fee</code> and a timeout offset of <code>10</code> blocks. The transfer fee is paid by the associated account on <code>ibc-1</code>.</p>
-<pre><code class="language-shell">{{#template ../../../templates/commands/hermes/fee/transfer_1.md DST_CHAIN_ID=ibc-1 SRC_CHAIN_ID=ibc-0 SRC_PORT_ID=transfer SRC_CHANNEL_ID=channel-0 AMOUNT=9999 OPTIONS=  --receive-fee 50 --ack-fee 25 --timeout-fee 10 --timeout-height-offset 1000}}
+<pre><code class="language-shell">forcerelay fee transfer  --receive-fee 50 --ack-fee 25 --timeout-fee 10 --timeout-height-offset 1000 --dst-chain ibc-1 --src-chain ibc-0 --src-port transfer --src-channel channel-0 --amount 9999
 </code></pre>
 <pre><code class="language-json">SUCCESS [
     IbcEventWithHeight {
