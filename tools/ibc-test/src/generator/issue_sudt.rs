@@ -17,7 +17,7 @@ use crate::generator::{
 
 use super::{deploy_packet_metadata::PacketMetataAttribute, deploy_sudt::SUDTAttribute};
 
-pub fn generate_create_sudt_escrow(
+pub fn generate_issue_sudt(
     sudt_attr: &SUDTAttribute,
     packet_metadata_attr: &PacketMetataAttribute,
 ) -> (H256, usize) {

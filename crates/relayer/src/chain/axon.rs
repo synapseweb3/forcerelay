@@ -1204,12 +1204,16 @@ impl AxonChain {
             height,
         )
         .unwrap();
+        let debug_content = generate_debug_content(&block, &state_root, &block_proof, &validators);
 
         // check the validation of Axon block
         axon_tools::verify_proof(block, state_root, &mut validators, block_proof).map_err(
             |err| {
-                // let block_to_persist = serde_json::to_string_pretty(&block).unwrap();
-                // let validators_to_persist = serde_json::to_string_pretty(&validators).unwrap();
+                std::fs::write(
+                    format!("./debug/axon_block_{block_number}.log"),
+                    debug_content,
+                )
+                .unwrap();
                 let err_msg = format!("unverified axon block #{block_number}, err: {:?}", err);
                 Error::rpc_response(err_msg)
             },

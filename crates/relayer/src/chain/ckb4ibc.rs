@@ -369,13 +369,17 @@ impl Ckb4IbcChain {
                         .build();
                     let capacity: u64 = cell.output.capacity.into();
                     let client_id = hex::encode(cell.output.lock.args.into_bytes());
-                    resps.push((tx, cell_input, capacity, client_id));
+                    if let Ok(client_type) = self.config.lc_client_type(&client_id) {
+                        resps.push((tx, cell_input, capacity, client_type));
+                    } else {
+                        warn!("skip local missing client_id found on-chain: {client_id}");
+                    }
                 }
                 Ok(resps)
             });
         let mut cache = self.connection_cache.borrow_mut();
         let prefix = self.query_commitment_prefix()?;
-        for (transaction, cell_input, capacity, client_id) in self.rt.block_on(future)? {
+        for (transaction, cell_input, capacity, client_type) in self.rt.block_on(future)? {
             let tx = transaction
                 .expect("empty transaction response")
                 .transaction
@@ -387,7 +391,6 @@ impl Ckb4IbcChain {
                 }
             };
             let (connections, ibc_connection) = extract_connections_from_tx(tx, &prefix)?;
-            let client_type = self.config.lc_client_type(&client_id)?;
             cache.insert(
                 client_type,
                 (ibc_connection, cell_input, capacity, connections),

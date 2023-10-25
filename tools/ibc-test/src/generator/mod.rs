@@ -2,7 +2,7 @@ use ckb_types::{h256, H256};
 use deploy_channel::{generate_deploy_channel, ChannelAttribute};
 use deploy_connection::{generate_deploy_connection, ConnectionAttribute};
 use deploy_packet_metadata::{generate_deploy_packet_metadata, PacketMetataAttribute};
-use issue_sudt::generate_create_sudt_escrow;
+use issue_sudt::generate_issue_sudt;
 
 mod deploy_channel;
 mod deploy_connection;
@@ -26,7 +26,7 @@ fn generate() {
     let connection_attr = generate_deploy_connection(&sudt_attr);
     let channel_attr = generate_deploy_channel(&connection_attr);
     let packet_metadata_attr = generate_deploy_packet_metadata(&channel_attr);
-    let (_, _) = generate_create_sudt_escrow(&sudt_attr, &packet_metadata_attr);
+    let (_, _) = generate_issue_sudt(&sudt_attr, &packet_metadata_attr);
     generate_consts_file(
         &sudt_attr,
         &connection_attr,

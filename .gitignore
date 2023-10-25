@@ -17,6 +17,9 @@ target/
 # Ignore chain's data
 data
 
+# Ignore debug persistence file
+debug
+
 # Ignore Python artifacts
 .mypy_cache/
 __pycache__/
