@@ -1299,14 +1299,12 @@ impl AxonChain {
             .rpc_client
             .get_block_by_id(block_number.into())
             .await?
-            // XXX: proper error handling.
-            .unwrap();
+            .ok_or_else(|| Error::other_error(format!("failed to get block {block_number}")))?;
         let state_root = self
             .rpc_client
             .get_block_by_id(previous_number.into())
             .await?
-            // XXX: proper error handling.
-            .unwrap()
+            .ok_or_else(|| Error::other_error(format!("failed to get block {previous_number}")))?
             .header
             .state_root;
         let proof = loop {
