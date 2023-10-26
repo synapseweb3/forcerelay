@@ -25,7 +25,7 @@ use ckb_ics_axon::handler::{IbcChannel, IbcConnections, IbcPacket, PacketStatus}
 use ckb_ics_axon::message::Envelope;
 use ckb_ics_axon::object::Ordering;
 use ckb_ics_axon::{ChannelArgs, PacketArgs};
-use ckb_jsonrpc_types::{JsonBytes, Status, TransactionView};
+use ckb_jsonrpc_types::{Status, TransactionView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::traits::SecpCkbRawKeySigner;
 use ckb_sdk::unlock::{ScriptSigner, SecpSighashScriptSigner};
@@ -978,32 +978,32 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn query_connection_channels(
         &self,
-        _request: QueryConnectionChannelsRequest,
+        request: QueryConnectionChannelsRequest,
     ) -> Result<Vec<IdentifiedChannelEnd>, Error> {
-        self.query_channels(QueryChannelsRequest { pagination: None })
+        let connection_channels = self
+            .query_channels(QueryChannelsRequest { pagination: None })?
+            .into_iter()
+            .filter(|channel| {
+                channel
+                    .channel_end
+                    .connection_hops
+                    .contains(&request.connection_id)
+            })
+            .collect();
+        Ok(connection_channels)
     }
 
     fn query_channels(
         &self,
-        request: QueryChannelsRequest,
+        _request: QueryChannelsRequest,
     ) -> Result<Vec<IdentifiedChannelEnd>, Error> {
         let channel_code_hash = self.get_converter()?.get_channel_code_hash();
         let script = Script::new_builder()
             .code_hash(channel_code_hash)
-            .args("".pack())
             .hash_type(ScriptHashType::Type.into())
             .build();
         let search_key = get_prefix_search_key(script);
-        let (limit, index) = {
-            if let Some(pagination) = request.pagination {
-                (pagination.limit as u32, pagination.offset as u32)
-            } else {
-                (u32::MAX, 0)
-            }
-        };
-        let json_bytes = JsonBytes::from_vec(index.to_be_bytes().to_vec());
-        let cursor = Some(json_bytes);
-        let cells_rpc_result = self.rpc_client.fetch_live_cells(search_key, limit, cursor);
+        let cells_rpc_result = self.rpc_client.fetch_live_cells(search_key, u32::MAX, None);
         let txs_rpc_result = self
             .rt
             .block_on(cells_rpc_result)?
