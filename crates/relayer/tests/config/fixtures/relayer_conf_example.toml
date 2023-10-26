@@ -90,6 +90,7 @@ id = 'axon-0'
 websocket_addr = "ws://127.0.0.1:8010"
 rpc_addr = "http://127.0.0.1:8000/"
 contract_address = "0x15Ff10fCc8A1a50bFbE07847A22664801eA79E0f"
+transfer_contract_address = "0x0000000000000000000000000000000000000000"
 restore_block_count = 10000
 key_name = "relayer_axon_wallet"
 store_prefix = "forcerelay"
