@@ -504,10 +504,10 @@ pub fn generate_debug_content(
     block_proof: &AxonProof,
     validators: &Vec<ValidatorExtend>,
 ) -> String {
-    let block = serde_json::to_string_pretty(&block).unwrap();
-    let validators = serde_json::to_string_pretty(&validators).unwrap();
-    let state_root = hex::encode(&state_root);
-    let block_proof = serde_json::to_string_pretty(&block_proof).unwrap();
+    let block = serde_json::to_string_pretty(block).unwrap();
+    let validators = serde_json::to_string_pretty(validators).unwrap();
+    let state_root = hex::encode(state_root);
+    let block_proof = serde_json::to_string_pretty(block_proof).unwrap();
     let content = format!("[block]\n{block}\n[validators]\n{validators}\n[state_root]\n{state_root}\n[block_proof]\n{block_proof}");
     content
 }

@@ -264,3 +264,17 @@ pub fn extract_client_id_by_connection_id(
         .map_err(|_| Error::other_error(format!("client_id {client_id} size = 32")))?;
     Ok((client_cell_type_args, client_id))
 }
+
+#[ignore = "use to calculate the lock hash of st-cell"]
+#[test]
+fn debug_print_lock_hash() {
+    let lock_hash = Script::new_builder()
+        .code_hash(
+            h256!("0x12b7f23d284e3221fe0730ca5753c28f9302c7368d83101637684c424b242a95").pack(),
+        )
+        .hash_type(ScriptHashType::Type.into())
+        .args([0u8; 98].pack())
+        .build()
+        .calc_script_hash();
+    println!("lock_hash = {}", hex::encode(lock_hash.as_slice()));
+}
