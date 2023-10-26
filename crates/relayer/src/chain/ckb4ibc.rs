@@ -25,7 +25,7 @@ use ckb_ics_axon::handler::{IbcChannel, IbcConnections, IbcPacket, PacketStatus}
 use ckb_ics_axon::message::Envelope;
 use ckb_ics_axon::object::Ordering;
 use ckb_ics_axon::{ChannelArgs, PacketArgs};
-use ckb_jsonrpc_types::{JsonBytes, Status, TransactionView};
+use ckb_jsonrpc_types::{Status, TransactionView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::traits::SecpCkbRawKeySigner;
 use ckb_sdk::unlock::{ScriptSigner, SecpSighashScriptSigner};
@@ -369,13 +369,17 @@ impl Ckb4IbcChain {
                         .build();
                     let capacity: u64 = cell.output.capacity.into();
                     let client_id = hex::encode(cell.output.lock.args.into_bytes());
-                    resps.push((tx, cell_input, capacity, client_id));
+                    if let Ok(client_type) = self.config.lc_client_type(&client_id) {
+                        resps.push((tx, cell_input, capacity, client_type));
+                    } else {
+                        warn!("skip local missing client_id found on-chain: {client_id}");
+                    }
                 }
                 Ok(resps)
             });
         let mut cache = self.connection_cache.borrow_mut();
         let prefix = self.query_commitment_prefix()?;
-        for (transaction, cell_input, capacity, client_id) in self.rt.block_on(future)? {
+        for (transaction, cell_input, capacity, client_type) in self.rt.block_on(future)? {
             let tx = transaction
                 .expect("empty transaction response")
                 .transaction
@@ -387,7 +391,6 @@ impl Ckb4IbcChain {
                 }
             };
             let (connections, ibc_connection) = extract_connections_from_tx(tx, &prefix)?;
-            let client_type = self.config.lc_client_type(&client_id)?;
             cache.insert(
                 client_type,
                 (ibc_connection, cell_input, capacity, connections),
@@ -506,7 +509,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         ) in &config.onchain_light_clients
         {
             let client_cell = rt.block_on(rpc_client.search_cell_by_typescript(
-                &TYPE_ID_CODE_HASH.pack(),
+                &config.client_code_hash.pack(),
                 &client_cell_type_args.as_bytes().to_owned(),
             ))?;
             let Some(cell) = client_cell else {
@@ -710,6 +713,13 @@ impl ChainEndpoint for Ckb4IbcChain {
             match response {
                 Ok(height) => {
                     if let Some(event) = events.get(i).unwrap().clone() {
+                        if let IbcEvent::CreateClient(e) = &event {
+                            let client_type = e.0.client_type;
+                            info!(
+                                "the counterparty client type of Ckb4Ibc is set as {client_type}"
+                            );
+                            self.sync_counterparty_client_type(client_type);
+                        }
                         let tx_hash: [u8; 32] = tx_hashes.get(i).unwrap().clone().into();
                         let ibc_event_with_height = IbcEventWithHeight {
                             event,
@@ -968,32 +978,32 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn query_connection_channels(
         &self,
-        _request: QueryConnectionChannelsRequest,
+        request: QueryConnectionChannelsRequest,
     ) -> Result<Vec<IdentifiedChannelEnd>, Error> {
-        self.query_channels(QueryChannelsRequest { pagination: None })
+        let connection_channels = self
+            .query_channels(QueryChannelsRequest { pagination: None })?
+            .into_iter()
+            .filter(|channel| {
+                channel
+                    .channel_end
+                    .connection_hops
+                    .contains(&request.connection_id)
+            })
+            .collect();
+        Ok(connection_channels)
     }
 
     fn query_channels(
         &self,
-        request: QueryChannelsRequest,
+        _request: QueryChannelsRequest,
     ) -> Result<Vec<IdentifiedChannelEnd>, Error> {
         let channel_code_hash = self.get_converter()?.get_channel_code_hash();
         let script = Script::new_builder()
             .code_hash(channel_code_hash)
-            .args("".pack())
             .hash_type(ScriptHashType::Type.into())
             .build();
         let search_key = get_prefix_search_key(script);
-        let (limit, index) = {
-            if let Some(pagination) = request.pagination {
-                (pagination.limit as u32, pagination.offset as u32)
-            } else {
-                (u32::MAX, 0)
-            }
-        };
-        let json_bytes = JsonBytes::from_vec(index.to_be_bytes().to_vec());
-        let cursor = Some(json_bytes);
-        let cells_rpc_result = self.rpc_client.fetch_live_cells(search_key, limit, cursor);
+        let cells_rpc_result = self.rpc_client.fetch_live_cells(search_key, u32::MAX, None);
         let txs_rpc_result = self
             .rt
             .block_on(cells_rpc_result)?

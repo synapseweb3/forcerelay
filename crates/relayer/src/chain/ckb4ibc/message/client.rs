@@ -1,4 +1,8 @@
-use ckb_ics_axon::message::{Envelope, MsgType};
+use ckb_ics_axon::{
+    handler::IbcConnections,
+    message::{Envelope, MsgType},
+};
+use ckb_types::packed::BytesOpt;
 use ibc_relayer_types::{
     clients::{
         ics07_axon::client_state::AXON_CLIENT_STATE_TYPE_URL,
@@ -13,9 +17,12 @@ use ibc_relayer_types::{
     Height,
 };
 
-use super::{CkbTxInfo, MsgToTxConverter};
+use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 
-use crate::error::Error;
+use crate::{
+    chain::ckb4ibc::utils::{get_connection_lock_script, get_encoded_object},
+    error::Error,
+};
 
 pub fn convert_create_client<C: MsgToTxConverter>(
     msg: MsgCreateClient,
@@ -42,8 +49,24 @@ pub fn convert_create_client<C: MsgToTxConverter>(
             )));
         }
     };
+    // one light client only matches one unique connections cell on CKB, if not exist, create it
+    let find_unique_connections = converter.get_ibc_connections(client_id.as_str()).is_ok();
+    let unsigned_tx = if !find_unique_connections {
+        tracing::info!("connections_cell for {client_type} isn't detected on CKB, create one");
+        let empty_ibc_connections = get_encoded_object(&IbcConnections::default());
+        let connections_lock_script =
+            get_connection_lock_script(converter.get_config(), Some(client_id.to_string()))?;
+
+        let packed_tx = TxBuilder::default()
+            .output(connections_lock_script, empty_ibc_connections.data)
+            .witness(BytesOpt::default(), empty_ibc_connections.witness)
+            .build();
+        Some(packed_tx)
+    } else {
+        None
+    };
     Ok(CkbTxInfo {
-        unsigned_tx: None,
+        unsigned_tx,
         envelope: Envelope {
             msg_type: MsgType::MsgClientCreate,
             content: vec![],

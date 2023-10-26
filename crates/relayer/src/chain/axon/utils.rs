@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use axon_tools::types::{AxonBlock, Proof as AxonProof};
+use axon_tools::types::{AxonBlock, Proof as AxonProof, ValidatorExtend};
 use ckb_ics_axon::proof::{
     Log as CkbLog, ObjectProof, TransactionReceipt as CkbTransactionReceipt,
 };
@@ -496,4 +496,18 @@ pub fn ibc_event_from_ibc_handler_event(
         height,
         tx_hash,
     }))
+}
+
+pub fn generate_debug_content(
+    block: &AxonBlock,
+    state_root: &H256,
+    block_proof: &AxonProof,
+    validators: &Vec<ValidatorExtend>,
+) -> String {
+    let block = serde_json::to_string_pretty(block).unwrap();
+    let validators = serde_json::to_string_pretty(validators).unwrap();
+    let state_root = hex::encode(state_root);
+    let block_proof = serde_json::to_string_pretty(block_proof).unwrap();
+    let content = format!("[block]\n{block}\n[validators]\n{validators}\n[state_root]\n{state_root}\n[block_proof]\n{block_proof}");
+    content
 }

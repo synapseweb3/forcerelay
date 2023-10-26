@@ -25,7 +25,7 @@ concurrency:
 jobs:
   ibc-test:
     runs-on: ubuntu-20.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       SRC_DIR: ${{ github.workspace }}/ibc-test-src
       AXON_COMMIT: a088cf83d29b8658a7d2ae96a74a53bffb743f03

@@ -216,7 +216,7 @@ pub fn prepare_ckb_chain(
         "deploy_connection",
         "deploy_channel",
         "deploy_packet_metadata",
-        "create_connection_sudt",
+        "issue_sudt",
     ]
     .into_iter()
     .for_each(|tx_file| {

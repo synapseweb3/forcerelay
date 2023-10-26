@@ -353,7 +353,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 [[package]]
 name = "axon-tools"
 version = "0.1.1"
-source = "git+https://github.com/axonweb3/axon-tools.git?branch=main#ac3faddd9da7c73e41946e15a5a9b5bcd751351b"
+source = "git+https://github.com/axonweb3/axon-tools.git?rev=2e21582#2e21582da884b6399541812f3a0f57d233660cd6"
 dependencies = [
  "bit-vec",
  "blst",
@@ -362,6 +362,7 @@ dependencies = [
  "derive_more",
  "ethereum-types",
  "faster-hex 0.8.1",
+ "log",
  "rlp",
  "rlp-derive",
  "serde",
