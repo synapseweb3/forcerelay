@@ -36,4 +36,4 @@ pub mod error;
 pub mod prelude;
 
 /// The path to the default configuration file, relative to the home directory.
-pub const DEFAULT_CONFIG_PATH: &str = ".hermes/config.toml";
+pub const DEFAULT_CONFIG_PATH: &str = ".forcerelay/config.toml";

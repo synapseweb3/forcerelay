@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use crate::{chain::ChainType, config::ChainConfig};
 use errors::Error;
 
-pub const KEYSTORE_DEFAULT_FOLDER: &str = ".hermes/keys/";
+pub const KEYSTORE_DEFAULT_FOLDER: &str = ".forcerelay/keys/";
 pub const KEYSTORE_DISK_BACKEND: &str = "keyring-test";
 pub const KEYSTORE_FILE_EXTENSION: &str = "json";
 

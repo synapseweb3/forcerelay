@@ -69,7 +69,7 @@ use std::sync::RwLock;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime;
 use tokio::sync::watch::Sender as WatchSender;
-use tracing::log::{info, warn};
+use tracing::log::{error, info, warn};
 
 use self::extractor::{extract_connections_from_tx, extract_ibc_packet_from_tx};
 use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverter};
@@ -372,7 +372,7 @@ impl Ckb4IbcChain {
                     if let Ok(client_type) = self.config.lc_client_type(&client_id) {
                         resps.push((tx, cell_input, capacity, client_type));
                     } else {
-                        warn!("skip local missing client_id found on-chain: {client_id}");
+                        error!("skip local missing client_id found on-chain: {client_id}");
                     }
                 }
                 Ok(resps)
