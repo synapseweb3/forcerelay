@@ -29,8 +29,8 @@ jobs:
       - uses: actions/checkout@v3
       - name: add test key
         run: |
-          mkdir -p ~/.hermes/keys/ibc-ckb-0/keyring-test
-          cp ./tools/forcerelay-test/ckb/relayer_ckb_wallet.json ~/.hermes/keys/ibc-ckb-0/keyring-test
+          mkdir -p ~/.forcerelay/keys/ibc-ckb-0/keyring-test
+          cp ./tools/forcerelay-test/ckb/relayer_ckb_wallet.json ~/.forcerelay/keys/ibc-ckb-0/keyring-test
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable

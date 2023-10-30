@@ -67,7 +67,7 @@ $ cargo install -p ibc-relayer-cli
 $ forcerelay --version
 ```
 
-Forcerelay can be executed by specifying a configuration file in the command line, otherwise it will access the `~/.hermes/config.toml`. We provide a pre-generated [example](https://github.com/synapseweb3/forcerelay/blob/main/config.toml) configuration file written for Axon and CKB (Testnet). To run Forcerelay, only minimal modifications are needed to this configuration:
+Forcerelay can be executed by specifying a configuration file in the command line, otherwise it will access the `~/.forcerelay/config.toml`. We provide a pre-generated [example](https://github.com/synapseweb3/forcerelay/blob/main/config.toml) configuration file written for Axon and CKB (Testnet). To run Forcerelay, only minimal modifications are needed to this configuration:
 
 ```
 websocket_addr = "ws://<YOUR_AXON_URL>:<WS_PORT>"
