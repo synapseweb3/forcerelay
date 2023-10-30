@@ -1151,14 +1151,14 @@ impl ChainEndpoint for Ckb4IbcChain {
             .into_iter()
             .filter(|sequence| {
                 let seq: u16 = u64::from(*sequence) as u16;
-                if channel.order == Ordering::Ordered {
-                    if channel.sequence.next_sequence_recvs <= seq {
-                        return true;
-                    }
-                } else if channel.order == Ordering::Unordered {
-                    if !channel.sequence.received_sequences.contains(&seq) {
-                        return true;
-                    }
+                if channel.order == Ordering::Ordered && channel.sequence.next_sequence_recvs <= seq
+                {
+                    return true;
+                }
+                if channel.order == Ordering::Unordered
+                    && !channel.sequence.received_sequences.contains(&seq)
+                {
+                    return true;
                 }
                 let Ok((packet, _)) = self.fetch_packet_cell_and_extract(
                     &request.channel_id,
