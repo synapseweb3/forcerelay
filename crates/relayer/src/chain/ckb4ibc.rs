@@ -1150,8 +1150,15 @@ impl ChainEndpoint for Ckb4IbcChain {
             .packet_commitment_sequences
             .into_iter()
             .filter(|sequence| {
-                if (channel.sequence.next_sequence_recvs as u64) < (*sequence).into() {
-                    return false;
+                let seq: u16 = u64::from(*sequence) as u16;
+                if channel.order == Ordering::Ordered && channel.sequence.next_sequence_recvs <= seq
+                {
+                    return true;
+                }
+                if channel.order == Ordering::Unordered
+                    && !channel.sequence.received_sequences.contains(&seq)
+                {
+                    return true;
                 }
                 let Ok((packet, _)) = self.fetch_packet_cell_and_extract(
                     &request.channel_id,
