@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use super::contract::*;
+use super::{contract::*, IBCInfoCache};
 use crate::chain::axon::cache_ics_tx_hash_with_event;
 use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
@@ -33,6 +33,7 @@ pub struct AxonEventMonitor {
     start_block_number: u64,
     rx_cmd: channel::Receiver<MonitorCmd>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
+    ibc_cache: Arc<RwLock<IBCInfoCache>>,
 }
 
 impl AxonEventMonitor {
@@ -48,6 +49,7 @@ impl AxonEventMonitor {
         websocket_addr: WebSocketClientUrl,
         contract_address: Address,
         rt: Arc<TokioRuntime>,
+        ibc_cache: Arc<RwLock<IBCInfoCache>>,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
 
@@ -71,6 +73,7 @@ impl AxonEventMonitor {
             start_block_number,
             rx_cmd,
             event_bus,
+            ibc_cache,
         };
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
     }
@@ -231,7 +234,11 @@ impl AxonEventMonitor {
             Height::from_noncosmos_height(meta.block_number.as_u64()),
             meta.transaction_hash.into(),
         );
-        cache_ics_tx_hash_with_event(self.chain_id.clone(), event.event.clone(), event.tx_hash);
+        cache_ics_tx_hash_with_event(
+            &mut self.ibc_cache.write().unwrap(),
+            event.event.clone(),
+            event.tx_hash,
+        );
         let batch = EventBatch {
             chain_id: self.chain_id.clone(),
             tracking_id: TrackingId::Static("Axon solidity event streaming"),
