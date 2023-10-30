@@ -8,7 +8,7 @@ fn main() {
     // outputs consistent usage and help messages.
     // https://github.com/informalsystems/hermes/issues/590
     // Note: This can potentially break the normal cargo (or crates.io) workflow.
-    println!("cargo:rustc-env=CARGO_PKG_NAME=forcerelay");
+    println!("cargo:rustc-env=CARGO_PKG_NAME=hermes");
     println!("cargo:rustc-env=CARGO_PKG_VERSION={}", version());
 }
 
