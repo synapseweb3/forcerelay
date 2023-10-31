@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc, thread, time::Duration};
 
-use axon_tools::types::{AxonBlock, Proof as AxonProof, ValidatorExtend};
+use axon_tools::types::{Block as AxonBlock, Proof as AxonProof, ValidatorExtend};
 use eth2_types::Hash256;
 use k256::ecdsa::SigningKey;
 use rlp::Encodable;

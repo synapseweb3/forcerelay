@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use axon_tools::types::{AxonBlock, Proof as AxonProof, ValidatorExtend};
+use axon_tools::types::{Block as AxonBlock, Proof as AxonProof, ValidatorExtend};
 use ckb_ics_axon::proof::{
     Log as CkbLog, ObjectProof, TransactionReceipt as CkbTransactionReceipt,
 };

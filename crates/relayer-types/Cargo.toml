@@ -64,10 +64,7 @@ tree_hash_derive = { git = "https://github.com/synapseweb3/lighthouse", rev = "2
 thiserror = "1.0"
 ethereum-types = "0.14.1"
 hex = "0.4"
-axon-tools = { git = "https://github.com/axonweb3/axon-tools.git", rev = "2e21582", version = "0.1.1", features = [
-    "impl-serde",
-    "proof",
-] }
+axon-tools = { git = "https://github.com/wenyuanhust/axon.git", branch = "forcerelay0", package = "axon-tools", version = "0.1.1", features = ["impl-serde", "proof", "hex-deserialize"] }
 strum = { version = "0.24.1", features = ["derive"] }
 
 [dependencies.tendermint]
