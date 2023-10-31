@@ -79,9 +79,13 @@ jobs:
         run: yarn send
 
       - name: 2. Listen RecvPacket event on CKB
+        env:
+          SUDT_TRANSFER_PRIVATE_KEY: ${{ secrets.SUDT_TRANSFER_PRIVATE_KEY }}
         run: sudt-transfer --config $SDK_CONFIG recv
 
       - name: 3. Trigger SendPacket on CKB (sUDT)
+        env:
+          SUDT_TRANSFER_PRIVATE_KEY: ${{ secrets.SUDT_TRANSFER_PRIVATE_KEY }}
         run: sudt-transfer --config $SDK_CONFIG send --receiver $AXON_RECEIVER --amount $SUDT_AMOUNT --sudt yukun_li
 
 # TODO: need some verification steps
