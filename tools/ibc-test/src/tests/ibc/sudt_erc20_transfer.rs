@@ -446,7 +446,7 @@ fn complete_tx(
     //   * HeaderDepResolver
     //   * CellCollector
     //   * TransactionDependencyProvider
-    let mut ckb_client = CkbRpcClient::new(ckb_rpc);
+    let ckb_client = CkbRpcClient::new(ckb_rpc);
     let cell_dep_resolver = {
         let genesis_block = ckb_client.get_block_by_number(0.into())?.unwrap();
         DefaultCellDepResolver::from_genesis(&BlockView::from(genesis_block))?
@@ -516,7 +516,7 @@ pub struct FungibleTokenPacketData {
 }
 
 fn send_transaction(url: &str, tx: TransactionView) -> eyre::Result<[u8; 32]> {
-    let mut client = CkbRpcClient::new(url);
+    let client = CkbRpcClient::new(url);
     let tx_hash = client.send_transaction(
         tx.data().into(),
         Some(ckb_jsonrpc_types::OutputsValidator::Passthrough),

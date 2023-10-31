@@ -185,7 +185,7 @@ mod tests {
 
         sleep(80);
 
-        let mut indexer_rpc = IndexerRpcClient::new("http://127.0.0.1:8114");
+        let indexer_rpc = IndexerRpcClient::new("http://127.0.0.1:8114");
         let type_script = packed::Script::new_builder()
             .code_hash(TYPE_ID_CODE_HASH.0.pack())
             .hash_type(ScriptHashType::Type.into())
