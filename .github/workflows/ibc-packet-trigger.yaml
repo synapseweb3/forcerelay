@@ -4,14 +4,16 @@ on:
   workflow_dispatch:
   schedule:
     - cron:  '0 */2 * * *' # runs every 2 hour
-  pull_request:
-    paths:
-      - .github/workflows/ibc-packet-trigger.yaml
-      - Cargo.toml
-      - Cargo.lock
-      - ci/**
-      - crates/**
-      - e2e/**
+  # Add push event for debugging, TODO: remove push and pull_request event
+  push:
+  # pull_request:
+  #   paths:
+  #     - .github/workflows/ibc-packet-trigger.yaml
+  #     - Cargo.toml
+  #     - Cargo.lock
+  #     - ci/**
+  #     - crates/**
+  #     - e2e/**
 
 jobs:
   schedule-run-packet-send:
@@ -23,7 +25,6 @@ jobs:
         SUDT_AMOUNT: 1000
         SDK_WORKSPACE: ${{ github.workspace }}/forcerelay-ckb-sdk
         SDK_CONFIG: ${{ github.workspace }}/e2e/schedule/sdk.config.toml
-        SUDT_TRANSFER_PRIVATE_KEY: 63d86723e08f0f813a36ce6aa123bb2289d90680ae1e99d4de8cdb334553f24d
         # for ibc-solidity-contract
         AXON_HTTP_RPC_URL: https://rpc-alphanet-axon.ckbapp.dev
         IBC_SOLIDITY_CONTRACT_COMMIT: e0d1f4bf20c40aad721bff5838d8a3fa80c94585
@@ -43,19 +44,16 @@ jobs:
           script: return Date.now()
           result-encoding: string
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
 
-      - name: Set Node.js 16.x
-        uses: actions/setup-node@v3
+      - name: Set Node.js 18.x
+        uses: actions/setup-node@v4
         with:
-          node-version: 16.x
-
-      - name: Install yarn
-        run: npm install --global yarn
+          node-version: 18.x
 
       - name: Prepare IBC solidity contracts
         run: git clone --recursive https://github.com/synapseweb3/ibc-solidity-contract.git $CONTRACT_WORKSPACE && cd $CONTRACT_WORKSPACE && git checkout $IBC_SOLIDITY_CONTRACT_COMMIT
@@ -76,12 +74,23 @@ jobs:
       - name: Print schedule start-time
         run: echo "${{ steps.start-time.outputs.result }}"
 
+      - name: 0. Trigger SendPacket on CKB (sUDT)
+        env:
+          SUDT_TRANSFER_PRIVATE_KEY: ${{ secrets.SUDT_TRANSFER_PRIVATE_KEY }}
+        run: sudt-transfer --config $SDK_CONFIG send --receiver $AXON_RECEIVER --amount $SUDT_AMOUNT --sudt yukun_li
+        # TODO: need some verification steps
+
+      # script:   https://github.com/synapseweb3/ibc-solidity-contract/blob/e0d1f4bf20c40aad721bff5838d8a3fa80c94585/scripts/send_erc20_packet_back.js
+      # sender:   https://explorer-alphanet-axon.ckbapp.dev/address/0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+      # receiver: https://explorer-alphanet-axon.ckbapp.dev/address/0xc219351b150b900e50a7039f1e448b844110927e
       - name: 1. Trigger SendPacket event on Axon (ERC20)
         working-directory: ${{ env.CONTRACT_WORKSPACE }}
         run: yarn send
 
       - name: 2. Listen RecvPacket event on CKB
+        env:
+          SUDT_TRANSFER_PRIVATE_KEY: ${{ secrets.SUDT_TRANSFER_PRIVATE_KEY }}
         run: sudt-transfer --config $SDK_CONFIG recv
 
-      - name: 3. Trigger SendPacket on CKB (sUDT)
-        run: sudt-transfer --config $SDK_CONFIG send --receiver $AXON_RECEIVER --amount $SUDT_AMOUNT --sudt yukun_li
+
+# TODO: need some verification steps
