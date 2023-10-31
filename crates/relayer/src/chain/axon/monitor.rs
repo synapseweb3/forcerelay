@@ -34,6 +34,7 @@ pub struct AxonEventMonitor {
     rx_cmd: channel::Receiver<MonitorCmd>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
     ibc_cache: Arc<RwLock<IBCInfoCache>>,
+    reprocess_events: Vec<(OwnableIBCHandlerEvents, LogMeta)>,
 }
 
 impl AxonEventMonitor {
@@ -74,6 +75,7 @@ impl AxonEventMonitor {
             rx_cmd,
             event_bus,
             ibc_cache,
+            reprocess_events: vec![],
         };
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
     }
@@ -87,7 +89,17 @@ impl AxonEventMonitor {
     )]
     pub fn run(mut self) {
         if let Next::Continue = self.update_subscribe(false) {
-            info!("start Axon event monitor for {}", self.chain_id);
+            info!(
+                "start Axon event monitor for {}, reprocess {} events",
+                self.chain_id,
+                self.reprocess_events.len()
+            );
+            (0..self.reprocess_events.len()).for_each(|_| {
+                let (event, meta) = self.reprocess_events.remove(0);
+                self.process_event(event, meta).unwrap_or_else(|e| {
+                    error!("error while process event: {:?}", e);
+                });
+            });
             loop {
                 if let Next::Abort = self.run_loop() {
                     break;
@@ -99,7 +111,7 @@ impl AxonEventMonitor {
     }
 
     pub fn restore_event_tx_hashes(
-        &self,
+        &mut self,
         latest_block_count: u64,
     ) -> Result<Vec<IbcEventWithHeight>> {
         let contract = Arc::new(Contract::new(
@@ -113,6 +125,13 @@ impl AxonEventMonitor {
                 "latest_block_count {latest_block_count} exceeds start_block_number {}",
                 self.start_block_number
             )))?;
+        let event_filter = |event: &OwnableIBCHandlerEvents| {
+            matches!(
+                event,
+                OwnableIBCHandlerEvents::SendPacketFilter(_)
+                    | OwnableIBCHandlerEvents::WriteAcknowledgementFilter(_)
+            )
+        };
         let events = self
             .rt
             .block_on(
@@ -125,6 +144,9 @@ impl AxonEventMonitor {
             .map_err(|e| Error::others(e.to_string()))?
             .into_iter()
             .map(|(event, meta)| {
+                if event_filter(&event) {
+                    self.reprocess_events.push((event.clone(), meta.clone()));
+                }
                 IbcEventWithHeight::new_with_tx_hash(
                     event.into(),
                     Height::from_noncosmos_height(meta.block_number.as_u64()),

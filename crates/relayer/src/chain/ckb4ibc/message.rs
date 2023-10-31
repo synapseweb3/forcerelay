@@ -58,7 +58,10 @@ use ibc_relayer_types::{
     tx_msg::Msg,
 };
 
-use super::utils::{generate_connection_id, get_script_hash};
+use super::{
+    monitor::WriteAckMonitorCmd,
+    utils::{generate_connection_id, get_script_hash},
+};
 use client::{convert_create_client, convert_update_client};
 
 use channel::*;
@@ -129,9 +132,15 @@ pub trait MsgToTxConverter {
     fn get_commitment_prefix(&self) -> Vec<u8>;
 
     fn get_config(&self) -> &ChainConfig;
+
+    fn require_useless_write_ack_packet(
+        &self,
+        block_number_gap: u64,
+    ) -> Option<(IbcPacket, CellInput)>;
 }
 
 pub struct Converter<'a> {
+    pub write_ack_cmd: &'a Option<WriteAckMonitorCmd>,
     pub channel_input_data: Ref<'a, HashMap<(ChannelId, PortId), (CellInput, u64)>>,
     pub channel_cache: Ref<'a, HashMap<ChannelId, IbcChannel>>,
     #[allow(clippy::type_complexity)]
@@ -290,6 +299,20 @@ impl<'a> MsgToTxConverter for Converter<'a> {
 
     fn get_config(&self) -> &ChainConfig {
         self.config
+    }
+
+    fn require_useless_write_ack_packet(
+        &self,
+        block_number_gap: u64,
+    ) -> Option<(IbcPacket, CellInput)> {
+        if let Some(cmd) = self.write_ack_cmd.as_ref() {
+            let (tx, rx) = crossbeam_channel::bounded(1);
+            cmd.send((tx, block_number_gap))
+                .expect("send useless packet");
+            rx.recv().expect("recv useless packet")
+        } else {
+            None
+        }
     }
 }
 

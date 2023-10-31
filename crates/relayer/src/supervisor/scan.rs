@@ -126,6 +126,7 @@ impl Display for ChainsScan {
                         writeln!(f, "      + Channel: {}", chan.channel.channel_id)?;
                         writeln!(f, "        | Port: {}", chan.channel.port_id)?;
                         writeln!(f, "        | State: {}", chan.channel.channel_end.state())?;
+                        writeln!(f, "        | Order: {}", chan.channel.channel_end.ordering)?;
                         writeln!(f, "        | Counterparty: {counterparty}")?;
                     }
                 }

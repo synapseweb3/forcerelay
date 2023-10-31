@@ -50,6 +50,16 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     match old_channel_end.order {
         Ordering::Ordered => new_channel_end.sequence.next_sequence_recvs += 1,
         Ordering::Unordered => {
+            if new_channel_end
+                .sequence
+                .received_sequences
+                .contains(&packet.sequence)
+            {
+                return Err(Error::recv_packet(
+                    channel_id,
+                    format!("packet({}) has contained", packet.sequence),
+                ));
+            }
             new_channel_end
                 .sequence
                 .received_sequences
@@ -97,20 +107,35 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
     let packet_lock = get_packet_lock_script(converter, packet_args.to_args());
 
-    let packed_tx = TxBuilder::default()
+    let mut packet_tx = TxBuilder::default()
         .cell_dep(get_client_outpoint(converter, &client_id)?)
         .cell_dep(converter.get_chan_contract_outpoint().clone())
         .input(channel_input.clone())
-        // TODO: fetch useless packet cell as input to save capacity
-        // .input()
+        .witness(old_channel.witness, new_channel.witness);
+    let mut write_ack_witness = BytesOpt::default();
+
+    // fetch useless packet cell as input to save capacity
+    let useless_write_ack_packet = converter.require_useless_write_ack_packet(15); // TODO: make block number gap setup in config
+    if let Some((packet, input)) = useless_write_ack_packet {
+        tracing::info!(
+            "use useless WriteAck({}) to save CKB capacity",
+            packet.packet.sequence,
+        );
+        let write_ack_packet = get_encoded_object(&packet);
+        write_ack_witness = write_ack_packet.witness;
+        packet_tx = packet_tx
+            .cell_dep(converter.get_packet_contract_outpoint().clone())
+            .input(input.clone());
+    }
+
+    let packet_tx = packet_tx
         .output(channel_lock, new_channel.data)
         .output(packet_lock, ibc_packet.data)
-        .witness(old_channel.witness, new_channel.witness)
-        .witness(BytesOpt::default(), ibc_packet.witness)
+        .witness(write_ack_witness, ibc_packet.witness)
         .build();
 
     Ok(CkbTxInfo {
-        unsigned_tx: Some(packed_tx),
+        unsigned_tx: Some(packet_tx),
         envelope,
         input_capacity,
         event: None,

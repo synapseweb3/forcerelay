@@ -783,7 +783,7 @@ impl ChainEndpoint for AxonChain {
                         .call(),
                 )
                 .map_err(convert_err)?;
-            if found {
+            if !found {
                 sequences.push(seq);
             }
         }
@@ -887,7 +887,7 @@ impl ChainEndpoint for AxonChain {
         });
 
         let packet_filter = |packet: &contract::PacketData| {
-            if !sequences.is_empty() && sequences.contains(&Sequence::from(packet.sequence)) {
+            if !sequences.is_empty() && !sequences.contains(&Sequence::from(packet.sequence)) {
                 return false;
             }
             if packet.destination_channel != destination_channel_id.to_string() {
@@ -909,7 +909,9 @@ impl ChainEndpoint for AxonChain {
             WithBlockDataType::CreateClient => logs_iter
                 .filter_map(|(height, tx_hash, event)| {
                     if matches!(event, OwnableIBCHandlerEvents::CreateClientFilter(..)) {
-                        ibc_event_from_ibc_handler_event(height, tx_hash, event).unwrap()
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event)
+                            .ok()
+                            .unwrap_or(None)
                     } else {
                         None
                     }
@@ -918,7 +920,9 @@ impl ChainEndpoint for AxonChain {
             WithBlockDataType::UpdateClient => logs_iter
                 .filter_map(|(height, tx_hash, event)| {
                     if matches!(event, OwnableIBCHandlerEvents::UpdateClientFilter(..)) {
-                        ibc_event_from_ibc_handler_event(height, tx_hash, event).unwrap()
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event)
+                            .ok()
+                            .unwrap_or(None)
                     } else {
                         None
                     }
@@ -933,7 +937,9 @@ impl ChainEndpoint for AxonChain {
                         if !packet_filter(packet) {
                             return None;
                         }
-                        ibc_event_from_ibc_handler_event(height, tx_hash, event).unwrap()
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event)
+                            .ok()
+                            .unwrap_or(None)
                     } else {
                         None
                     }
@@ -948,7 +954,9 @@ impl ChainEndpoint for AxonChain {
                         if !packet_filter(packet) {
                             return None;
                         }
-                        ibc_event_from_ibc_handler_event(height, tx_hash, event).unwrap()
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event)
+                            .ok()
+                            .unwrap_or(None)
                     } else {
                         None
                     }
@@ -956,6 +964,7 @@ impl ChainEndpoint for AxonChain {
                 .collect(),
         };
 
+        tracing::debug!("Axon filtered {} packet events", events.len());
         Ok(events)
     }
 
@@ -1167,7 +1176,7 @@ impl AxonChain {
         crate::time!("axon_init_event_monitor");
         // let header_receiver = self.light_client.subscribe();
         let ibc_cache = self.ibc_cache.clone();
-        let (event_monitor, monitor_tx) = AxonEventMonitor::new(
+        let (mut event_monitor, monitor_tx) = AxonEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
             self.config.contract_address,
@@ -1528,6 +1537,12 @@ impl AxonChain {
         };
         let mut ibc_cache = self.ibc_cache.write().unwrap();
         cache_ics_tx_hash_with_event(&mut ibc_cache, event.clone(), tx_hash);
+        tracing::info!(
+            "{} transaciton {} committed to {}",
+            event.event_type().as_str(),
+            hex::encode(tx_hash),
+            self.id()
+        );
         Ok(IbcEventWithHeight {
             event,
             height,

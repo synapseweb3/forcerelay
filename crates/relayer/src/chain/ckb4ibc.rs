@@ -62,21 +62,21 @@ use ibc_relayer_types::proofs::Proofs;
 use ibc_relayer_types::signer::Signer;
 use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
-use itertools::Itertools;
 use rlp::Encodable;
 use semver::Version;
 use std::sync::RwLock;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime;
 use tokio::sync::watch::Sender as WatchSender;
-use tracing::log::{error, info, warn};
+use tracing::{info, warn};
 
 use self::extractor::{extract_connections_from_tx, extract_ibc_packet_from_tx};
 use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverter};
-use self::monitor::Ckb4IbcEventMonitor;
+use self::monitor::{Ckb4IbcEventMonitor, WriteAckMonitorCmd};
 use self::utils::{
-    convert_port_id_to_array, get_channel_number, get_dummy_merkle_proof, get_encoded_object,
-    get_prefix_search_key, get_search_key_with_sudt,
+    convert_port_id_to_array, fetch_transaction_by_hash, generate_ibc_packet_event,
+    get_channel_number, get_dummy_merkle_proof, get_encoded_object, get_prefix_search_key,
+    get_search_key_with_sudt,
 };
 
 use super::ckb::rpc_client::RpcClient;
@@ -116,6 +116,7 @@ pub struct Ckb4IbcChain {
     cached_network: RwLock<Option<NetworkType>>,
 
     tx_monitor_cmd: Option<TxMonitorCmd>,
+    tx_write_ack_cmd: Option<WriteAckMonitorCmd>,
 
     connection_outpoint: OutPoint,
     channel_outpoint: OutPoint,
@@ -177,6 +178,7 @@ impl Ckb4IbcChain {
             self.query_connection_and_cache()?;
         }
         Ok(Converter {
+            write_ack_cmd: &self.tx_write_ack_cmd,
             channel_input_data: self.channel_input_data.borrow(),
             channel_cache: self.channel_cache.borrow(),
             config: &self.config,
@@ -192,13 +194,14 @@ impl Ckb4IbcChain {
     }
 
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
-        let (monitor, monitor_tx) = Ckb4IbcEventMonitor::new(
+        let (monitor, monitor_tx, write_ack_tx) = Ckb4IbcEventMonitor::new(
             self.rt.clone(),
             self.rpc_client.clone(),
             self.config.clone(),
             self.counterparty_client_type.subscribe(),
         );
         std::thread::spawn(move || monitor.run());
+        self.tx_write_ack_cmd = Some(write_ack_tx);
         Ok(monitor_tx)
     }
 
@@ -207,77 +210,70 @@ impl Ckb4IbcChain {
         channel_id: &ChannelId,
         port_id: &PortId,
         sequence: Option<Sequence>,
-    ) -> Result<Vec<(IbcPacket, CellInput)>, Error> {
+    ) -> Result<Vec<(IbcPacket, CellInput, u64)>, Error> {
         let (sequence, search_all, limit) = if let Some(value) = sequence {
-            (u64::from(value) as u16, false, 1)
+            // packets with particular sequence are only 4: Send, WriteAck, Recv and AckPacket
+            (u64::from(value) as u16, false, 4)
         } else {
-            (0, true, u32::MAX)
+            (0, true, 20)
         };
+        let script_args = PacketArgs {
+            channel_id: get_channel_number(channel_id)?,
+            port_id: convert_port_id_to_array(port_id)?,
+            sequence,
+        }
+        .get_search_args(search_all);
         let script = Script::new_builder()
             .code_hash(self.get_converter()?.get_packet_code_hash())
             .hash_type(ScriptHashType::Type.into())
-            .args(
-                PacketArgs {
-                    channel_id: get_channel_number(channel_id)?,
-                    port_id: convert_port_id_to_array(port_id)?,
-                    sequence,
-                }
-                .get_search_args(search_all)
-                .pack(),
-            )
+            .args(script_args.pack())
             .build();
-        let search_key = get_prefix_search_key(script);
-        let packets = self
-            .rpc_client
-            .fetch_live_cells(search_key, limit, None)
-            .and_then(|resp| async move {
-                let mut packets = vec![];
-                for cell in resp.objects {
-                    let tx_hash = &cell.out_point.tx_hash;
-                    let tx = self
-                        .rpc_client
-                        .get_transaction(tx_hash)
-                        .await
-                        .map_err(|e| Error::query(e.to_string()))?
-                        .unwrap()
-                        .transaction
-                        .unwrap();
-                    let tx = match tx.inner {
-                        ckb_jsonrpc_types::Either::Left(tx) => tx,
-                        ckb_jsonrpc_types::Either::Right(bytes) => {
-                            serde_json::from_slice(bytes.as_bytes()).unwrap()
-                        }
-                    };
-                    let (ibc_packet, _) = extract_ibc_packet_from_tx(tx)?;
-                    let cell_input = CellInput::new_builder()
-                        .previous_output(cell.out_point.into())
-                        .build();
-                    let capacity: u64 = cell.output.capacity.into();
-                    packets.push((ibc_packet, cell_input, capacity));
-                }
-                Ok(packets)
-            });
 
-        let packets = self
-            .rt
-            .block_on(packets)?
-            .into_iter()
-            .map(|(packet, cell_input, capacity)| {
+        let search_key = get_prefix_search_key(script);
+        let mut result = vec![];
+        let mut cursor = None;
+        loop {
+            let cells = self.rt.block_on(self.rpc_client.fetch_live_cells(
+                search_key.clone(),
+                limit,
+                cursor,
+            ))?;
+            for cell in cells.objects {
+                let tx_hash = &cell.out_point.tx_hash;
+                let tx = self
+                    .rt
+                    .block_on(fetch_transaction_by_hash(self.rpc_client.as_ref(), tx_hash))?;
+                let (packet, _) = extract_ibc_packet_from_tx(tx)?;
+                let cell_input = CellInput::new_builder()
+                    .previous_output(cell.out_point.into())
+                    .build();
+
                 let channel_id: ChannelId = packet.packet.source_channel_id.parse().unwrap();
                 let port_id: PortId = packet.packet.source_port_id.parse().unwrap();
                 let sequence: Sequence = (packet.packet.sequence as u64).try_into().unwrap();
 
                 self.packet_input_data.borrow_mut().insert(
                     (channel_id.clone(), port_id.clone(), sequence),
-                    (cell_input.clone(), capacity),
+                    (cell_input.clone(), u64::from(cell.output.capacity)),
                 );
                 self.packet_cache
                     .borrow_mut()
                     .insert((channel_id, port_id, sequence), packet.clone());
-                (packet, cell_input)
-            })
-            .collect_vec();
-        Ok(packets)
+
+                result.push((packet, cell_input, u64::from(cell.block_number)));
+            }
+            if search_all {
+                if cells.last_cursor.is_empty() {
+                    break;
+                } else {
+                    cursor = Some(cells.last_cursor);
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(result)
     }
 
     fn fetch_channel_cell_and_extract(
@@ -371,8 +367,6 @@ impl Ckb4IbcChain {
                     let client_id = hex::encode(cell.output.lock.args.into_bytes());
                     if let Ok(client_type) = self.config.lc_client_type(&client_id) {
                         resps.push((tx, cell_input, capacity, client_type));
-                    } else {
-                        error!("skip local missing client_id found on-chain: {client_id}");
                     }
                 }
                 Ok(resps)
@@ -469,12 +463,19 @@ impl Ckb4IbcChain {
         channel_id: &ChannelId,
         port_id: &PortId,
         sequence: Sequence,
-    ) -> Result<(IbcPacket, CellInput), Error> {
-        let packets = self.fetch_packet_cells_and_extract(channel_id, port_id, Some(sequence))?;
-        let (ibc_packet, cell_input) = packets.into_iter().next().ok_or(Error::query(format!(
-            "packet not found on ({channel_id}/{port_id}/{sequence})"
-        )))?;
-        Ok((ibc_packet, cell_input))
+        status: PacketStatus,
+    ) -> Result<Option<(IbcPacket, CellInput)>, Error> {
+        let packets = self
+            .fetch_packet_cells_and_extract(channel_id, port_id, Some(sequence))?
+            .into_iter()
+            .filter_map(|(packet, cell_input, _)| {
+                if packet.status != status {
+                    return None;
+                }
+                Some((packet, cell_input))
+            })
+            .collect::<Vec<_>>();
+        Ok(packets.first().cloned())
     }
 }
 
@@ -555,6 +556,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             keybase,
             cached_network: RwLock::new(None),
             tx_monitor_cmd: None,
+            tx_write_ack_cmd: None,
             client_outpoints: RefCell::new(client_outpoints),
             connection_outpoint: conn_contract_cell.unwrap().out_point,
             channel_outpoint: chan_contract_cell.unwrap().out_point,
@@ -945,14 +947,14 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryClientConnectionsRequest,
     ) -> Result<Vec<ConnectionId>, Error> {
         self.query_connection_and_cache()?;
-        let client_type = self.config.lc_client_type(&request.client_id.to_string())?;
-        if let Some((_, _, _, connection)) = self.connection_cache.borrow().get(&client_type) {
-            self.sync_counterparty_client_type(client_type);
-            let connection_ids = connection.iter().map(|v| v.connection_id.clone()).collect();
-            Ok(connection_ids)
-        } else {
-            Ok(vec![])
+        if let Ok(client_type) = self.config.lc_client_type(&request.client_id.to_string()) {
+            if let Some((_, _, _, connection)) = self.connection_cache.borrow().get(&client_type) {
+                self.sync_counterparty_client_type(client_type);
+                let connection_ids = connection.iter().map(|v| v.connection_id.clone()).collect();
+                return Ok(connection_ids);
+            }
         }
+        Ok(vec![])
     }
 
     fn query_connection(
@@ -969,10 +971,12 @@ impl ChainEndpoint for Ckb4IbcChain {
                 request.connection_id.as_str().to_string(),
             ))?
             .connection_end;
-        let client_type = self
+        if let Ok(client_type) = self
             .config
-            .lc_client_type(&connection.client_id().to_string())?;
-        self.sync_counterparty_client_type(client_type);
+            .lc_client_type(&connection.client_id().to_string())
+        {
+            self.sync_counterparty_client_type(client_type);
+        }
         Ok((connection, None))
     }
 
@@ -1031,7 +1035,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 };
                 extract_channel_end_from_tx(tx)
             })
-            .map(|e| e.0)
+            .map(|(channel, _)| channel)
             .collect();
         Ok(channel_ends)
     }
@@ -1084,28 +1088,40 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryPacketCommitmentRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        let (ibc_packet, _) = self.fetch_packet_cell_and_extract(
+        let Some((packet, _)) = self.fetch_packet_cell_and_extract(
             &request.channel_id,
             &request.port_id,
             request.sequence,
-        )?;
-        if ibc_packet.status != PacketStatus::Send {
-            Ok((vec![], None))
-        } else {
-            let commitment = keccak256(&ibc_packet.rlp_bytes()).to_vec();
-            Ok((commitment, None))
-        }
+            PacketStatus::Send,
+        )?
+        else {
+            return Ok((vec![], None));
+        };
+        let commitment = keccak256(&packet.rlp_bytes()).to_vec();
+        Ok((commitment, None))
     }
 
     fn query_packet_commitments(
         &self,
         request: QueryPacketCommitmentsRequest,
     ) -> Result<(Vec<Sequence>, Height), Error> {
-        // get all packets' commitment without pagination
+        // get all packets' commitment sequence without pagination
+        let (_, channel) =
+            self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
+        let next_send_seq = channel.sequence.next_sequence_sends;
         let sequences = self
             .fetch_packet_cells_and_extract(&request.channel_id, &request.port_id, None)?
             .into_iter()
-            .map(|(v, _)| (v.packet.sequence as u64).into())
+            .filter_map(|(v, _, _)| {
+                if v.status != PacketStatus::Send {
+                    return None;
+                }
+                if v.packet.sequence < next_send_seq {
+                    Some((v.packet.sequence as u64).into())
+                } else {
+                    None
+                }
+            })
             .collect();
         Ok((sequences, Height::default()))
     }
@@ -1115,28 +1131,15 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryPacketReceiptRequest,
         _include_proof: IncludeProof,
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
-        let generate_receipt = |channel: IbcChannel| {
-            if channel.order == Ordering::Unordered {
-                Ok((vec![1u8], None))
-            } else {
-                Ok((vec![], None))
-            }
-        };
         let (_, channel) =
             self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
-        if channel.sequence.next_sequence_recvs as u64 > request.sequence.into() {
-            generate_receipt(channel)
+        let seq: u64 = request.sequence.into();
+        if channel.order == Ordering::Unordered
+            && channel.sequence.received_sequences.contains(&(seq as u16))
+        {
+            Ok((vec![1u8], None))
         } else {
-            let (ibc_packet, _) = self.fetch_packet_cell_and_extract(
-                &request.channel_id,
-                &request.port_id,
-                request.sequence,
-            )?;
-            if ibc_packet.status != PacketStatus::Recv {
-                Ok((vec![], None))
-            } else {
-                generate_receipt(channel)
-            }
+            Ok((vec![], None))
         }
     }
 
@@ -1160,16 +1163,6 @@ impl ChainEndpoint for Ckb4IbcChain {
                 {
                     return true;
                 }
-                let Ok((packet, _)) = self.fetch_packet_cell_and_extract(
-                    &request.channel_id,
-                    &request.port_id,
-                    *sequence,
-                ) else {
-                    return true;
-                };
-                if packet.status != PacketStatus::Recv {
-                    return true;
-                }
                 false
             })
             .collect();
@@ -1185,23 +1178,17 @@ impl ChainEndpoint for Ckb4IbcChain {
             &request.channel_id,
             &request.port_id,
             request.sequence,
+            PacketStatus::Send,
         );
-        if let Ok((ibc_packet, _)) = result {
-            if ibc_packet.status != PacketStatus::WriteAck || ibc_packet.status != PacketStatus::Ack
-            {
-                Ok((vec![], None))
-            } else {
-                // no matter the `data` is empty or not, we recognize the acknowledge is committed
-                // if the `WriteAck` cell exists
-                let ack_commitment = keccak256(&ibc_packet.packet.rlp_bytes()).to_vec();
-                Ok((ack_commitment, None))
-            }
+        if let Ok(Some((packet, _))) = result {
+            let ack_commitment = keccak256(&packet.packet.rlp_bytes()).to_vec();
+            Ok((ack_commitment, None))
         } else {
             // check the sequence status in channel if the packet cell under required sequence not found
             let (_, channel) =
                 self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
-            if channel.sequence.next_sequence_recvs as u64 > request.sequence.into() {
-                // since the previous `WriteAck` cells are consumed and hard to fetch from CKB, we
+            if channel.sequence.next_sequence_sends as u64 > request.sequence.into() {
+                // since the previous `SendPacket` cells are consumed and hard to fetch from CKB, we
                 // just use mock acknowledgement in return which in Hermes runtime is not sensitive
                 // with its real content but just used as Yes or No option
                 let ack_commitment = keccak256(b"unfetchable acknowledgement").to_vec();
@@ -1244,26 +1231,19 @@ impl ChainEndpoint for Ckb4IbcChain {
         &self,
         request: QueryUnreceivedAcksRequest,
     ) -> Result<Vec<Sequence>, Error> {
-        let (_, channel) =
-            self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
         let sequences = request
             .packet_ack_sequences
             .into_iter()
             .filter(|sequence| {
-                if channel.sequence.next_sequence_acks as u64 > (*sequence).into() {
-                    return false;
-                }
-                let Ok((packet, _)) = self.fetch_packet_cell_and_extract(
+                let Ok(Some(_)) = self.fetch_packet_cell_and_extract(
                     &request.channel_id,
                     &request.port_id,
                     *sequence,
+                    PacketStatus::Send,
                 ) else {
-                    return true;
+                    return false;
                 };
-                if packet.status != PacketStatus::Ack {
-                    return true;
-                }
-                false
+                true
             })
             .collect();
         Ok(sequences)
@@ -1287,10 +1267,71 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn query_packet_events(
         &self,
-        _request: QueryPacketEventDataRequest,
+        request: QueryPacketEventDataRequest,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        warn!("ckb4ibc query_packet_events() not support");
-        Ok(vec![])
+        let QueryPacketEventDataRequest {
+            event_id,
+            source_channel_id,
+            source_port_id,
+            destination_channel_id,
+            destination_port_id,
+            sequences,
+            height: _,
+        } = request;
+
+        let mut packet_events_on_source = vec![];
+        if source_port_id.to_string().len() == 64 {
+            packet_events_on_source = self
+                .fetch_packet_cells_and_extract(&source_channel_id, &source_port_id, None)?
+                .into_iter()
+                .filter_map(|(packet, _, height)| {
+                    if packet.packet.destination_channel_id == destination_channel_id.to_string() {
+                        return None;
+                    }
+                    if packet.packet.destination_port_id == destination_port_id.to_string() {
+                        return None;
+                    }
+                    if !sequences.is_empty()
+                        && !sequences.contains(&Sequence::from(packet.packet.sequence as u64))
+                    {
+                        return None;
+                    }
+                    generate_ibc_packet_event(packet, height, &event_id).ok()
+                })
+                .collect::<Vec<_>>();
+        }
+
+        let mut packet_events_on_destination = vec![];
+        if destination_port_id.to_string().len() == 64 {
+            packet_events_on_destination = self
+                .fetch_packet_cells_and_extract(
+                    &destination_channel_id,
+                    &destination_port_id,
+                    None,
+                )?
+                .into_iter()
+                .filter_map(|(packet, _, height)| {
+                    if packet.packet.source_channel_id == source_channel_id.to_string() {
+                        return None;
+                    }
+                    if packet.packet.source_port_id == source_port_id.to_string() {
+                        return None;
+                    }
+                    if !sequences.is_empty()
+                        && !sequences.contains(&Sequence::from(packet.packet.sequence as u64))
+                    {
+                        return None;
+                    }
+                    generate_ibc_packet_event(packet, height, &event_id).ok()
+                })
+                .collect::<Vec<_>>();
+        }
+
+        let mut packet_events = packet_events_on_source;
+        packet_events.append(&mut packet_events_on_destination);
+
+        tracing::debug!("Ckb4Ibc filtered {} packet events", packet_events.len());
+        Ok(packet_events)
     }
 
     fn query_host_consensus_state(
