@@ -20,7 +20,7 @@ use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonit
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use tendermint_rpc::WebSocketClientUrl;
 use tokio::runtime::Runtime as TokioRuntime;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 type Client = Provider<Ws>;
 
@@ -58,13 +58,11 @@ impl AxonEventMonitor {
             .block_on(Provider::<Ws>::connect(websocket_addr.to_string()))
             .map_err(|_| Error::client_creation_failed(chain_id.clone(), websocket_addr))?;
 
-        // FIXME: here should consider recovering from long-time-crash
         let start_block_number = rt
             .block_on(client.get_block_number())
             .map_err(|e| Error::others(e.to_string()))?
             .as_u64();
 
-        info!("listen IBC events from block {start_block_number}");
         let event_bus = EventBus::new();
         let monitor = Self {
             client: Arc::new(client),
@@ -195,6 +193,7 @@ impl AxonEventMonitor {
             self.contract_address,
             Arc::clone(&self.client),
         ));
+        info!("listen IBC events from block {}", self.start_block_number);
         let events = contract.events().from_block(self.start_block_number);
         if let Ok(mut meta_stream) = self.rt.block_on(async {
             events.stream().await.map(|stream| {
@@ -204,44 +203,26 @@ impl AxonEventMonitor {
                 meta_stream
             })
         }) {
-            debug!("setup IBC contract events streaming process");
             loop {
                 if let Next::Abort = self.update_subscribe(true) {
                     return Next::Abort;
                 }
 
-                if let Some(Ok(ret)) = self.rt.block_on(meta_stream.next()) {
-                    match ret {
+                match self.rt.block_on(meta_stream.next()) {
+                    Some(Ok(ret)) => match ret {
                         Ok((event, meta)) => {
                             self.process_event(event, meta).unwrap_or_else(|e| {
-                                error!("error while process event: {:?}", e);
+                                error!("error while process event: {e:?}");
                             });
                         }
                         Err(err) => {
-                            error!("error when monitoring axon events, reason: {:?}", err);
+                            error!("error when monitoring axon events, reason: {err:?}");
                             return Next::Continue;
-                            // TODO: reconnect
                         }
-                    }
+                    },
+                    None => warn!("Axon monitor error report: received None"),
+                    _ => {}
                 }
-
-                // Some(header) = self.header_receiver.recv() => {
-                //     if let Next::Abort = self.update_subscribe() {
-                //         return Next::Abort;
-                //     }
-                //     let height = Height::new(0u64, header.number).expect("axon header height");
-                //     let event = IbcEventWithHeight::new(
-                //         events::NewBlock::new(height).into(),
-                //         height,
-                //     );
-                //     let batch = EventBatch {
-                //         chain_id: self.chain_id.clone(),
-                //         tracking_id: TrackingId::new_uuid(),
-                //         height,
-                //         events: vec![event],
-                //     };
-                //     self.process_batch(batch);
-                // },
             }
         }
         Next::Abort
