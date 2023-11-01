@@ -783,7 +783,7 @@ impl ChainEndpoint for AxonChain {
                         .call(),
                 )
                 .map_err(convert_err)?;
-            if !found {
+            if found {
                 sequences.push(seq);
             }
         }
