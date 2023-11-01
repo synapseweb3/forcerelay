@@ -137,6 +137,7 @@ impl Ckb4IbcEventMonitor {
                         .remove(&block_number)
                         .unwrap();
                     resposne.send(Some((packet, input))).unwrap();
+                    return Ok(());
                 }
             }
             resposne.send(None).unwrap();
