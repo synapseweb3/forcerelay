@@ -8,6 +8,7 @@ on:
 jobs:
   schedule-run-packet-send:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
         # for forcerelay-ckb-sdk
         FORCERELAY_CKB_SDK_COMMIT: f02969f920fa48234959fd25c771992a85619eb6

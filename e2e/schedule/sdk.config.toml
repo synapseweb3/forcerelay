@@ -1,5 +1,5 @@
 channel_contract_type_id_args = "0x4d63d2d59c9f8e2b117cde09bb3d705b82e0e21216a3cc54967e715bf19a25b8"
-packet_contract_type_id_args = "0x7a06b2df4bc422cfe4702d96dca655397b4b818f04a5ef1426a6591997540fdf"
+packet_contract_type_id_args = "0x7e2f534bf12a8f596411ca8c02f698b8cdc3581e851325b4fbb7580b1f20e289"
 channel_id = 0
 confirmations = 3
 
