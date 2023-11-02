@@ -1,4 +1,3 @@
-pub mod axon;
 pub mod eth;
 pub mod tendermint;
 

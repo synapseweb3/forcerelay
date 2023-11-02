@@ -235,6 +235,8 @@ impl FullNode {
             contract_address,
             transfer_contract_address,
             restore_block_count,
+            emitter_ckb_url: Url::from_str("http://127.0.0.1").unwrap(),
+            emitter_scan_start_block_number: 0, // means close cell_emitter
             ckb_light_client_contract_address,
             image_cell_contract_address,
         };

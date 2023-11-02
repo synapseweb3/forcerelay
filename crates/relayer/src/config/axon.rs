@@ -19,6 +19,9 @@ pub struct AxonChainConfig {
     pub ckb_light_client_contract_address: H160,
     pub image_cell_contract_address: H160,
 
+    pub emitter_ckb_url: Url,
+    pub emitter_scan_start_block_number: u64,
+
     #[serde(default)]
     pub packet_filter: PacketFilter,
 }

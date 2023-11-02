@@ -826,8 +826,12 @@ impl From<contract::OwnableIBCHandlerEvents> for IbcEvent {
             OwnershipTransferredFilter(_) => {
                 IbcEvent::ChainError("unsupported event: OwnershipTransferredFilter".to_owned())
             }
-            RegisterCellEmitterFilterFilter(_) => todo!(),
-            RemoveCellEmitterFilterFilter(_) => todo!(),
+            RegisterCellEmitterFilterFilter(_) => IbcEvent::ChainError(
+                "unsupported event: RegisterCellEmitterFilterFilter".to_owned(),
+            ),
+            RemoveCellEmitterFilterFilter(_) => {
+                IbcEvent::ChainError("unsupported event: RemoveCellEmitterFilterFilter".to_owned())
+            }
         };
         event
     }

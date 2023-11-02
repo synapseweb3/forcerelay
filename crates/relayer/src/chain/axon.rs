@@ -27,7 +27,6 @@ use crate::{
     event::{monitor::TxMonitorCmd, IbcEventWithHeight},
     ibc_contract::OwnableIBCHandlerEvents,
     keyring::{KeyRing, Secp256k1KeyPair},
-    light_client::{axon::LightClient as AxonLightClient, LightClient},
     misbehaviour::MisbehaviourEvidence,
 };
 use eth_light_client_in_ckb_prover::Receipts;
@@ -82,7 +81,7 @@ use ibc_relayer_types::{
 };
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 
-use self::{contract::OwnableIBCHandler, monitor::AxonEventMonitor};
+use self::{contract::OwnableIBCHandler, emitter::CellProcessManager, monitor::AxonEventMonitor};
 
 type ContractProvider = SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>;
 type IBCContract = OwnableIBCHandler<ContractProvider>;
@@ -112,6 +111,7 @@ use super::{
 use tokio::runtime::Runtime as TokioRuntime;
 
 pub mod contract;
+mod emitter;
 mod monitor;
 mod msg;
 mod rpc;
@@ -150,10 +150,9 @@ pub struct IBCInfoCache {
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
     config: AxonChainConfig,
-    light_client: AxonLightClient,
     tx_monitor_cmd: Option<TxMonitorCmd>,
     rpc_client: rpc::AxonRpcClient,
-    client: Provider<Ws>,
+    client: Arc<Provider<Ws>>,
     keybase: KeyRing<Secp256k1KeyPair>,
     chain_id: u64,
     ibc_cache: Arc<RwLock<IBCInfoCache>>,
@@ -168,7 +167,10 @@ impl AxonChain {
 
     fn contract_provider(&self) -> Result<Arc<ContractProvider>, Error> {
         let wallet = self.get_wallet(&self.config.key_name)?;
-        Ok(Arc::new(SignerMiddleware::new(self.client.clone(), wallet)))
+        Ok(Arc::new(SignerMiddleware::new(
+            self.client.as_ref().clone(),
+            wallet,
+        )))
     }
 
     fn contract(&self) -> Result<IBCContract, Error> {
@@ -208,30 +210,20 @@ impl ChainEndpoint for AxonChain {
 
         let url = config.websocket_addr.clone();
         let rpc_client = rpc::AxonRpcClient::new(&config.rpc_addr);
-        let client = rt
-            .block_on(Provider::<Ws>::connect(url.to_string()))
-            .map_err(|_| Error::web_socket(url.into()))?;
+        let client = Arc::new(
+            rt.block_on(Provider::<Ws>::connect(url.to_string()))
+                .map_err(|_| Error::web_socket(url.into()))?,
+        );
         let chain_id = rt
             .block_on(client.get_chainid())
             .map_err(|e| Error::other_error(e.to_string()))?
             .as_u64();
-        let light_client = AxonLightClient::from_config(&config, rt.clone())?;
         let ibc_cache = Arc::new(RwLock::new(IBCInfoCache::default()));
-
-        // TODO: since Ckb endpoint uses Axon metadata cell as its light client, Axon
-        //       endpoint has no need to monitor the update of its metadata
-        //
-        // let metadata = rt.block_on(rpc_client.get_current_metadata())?;
-        // let epoch_len = metadata.version.end - metadata.version.start + 1;
-        // light_client.bootstrap(client.clone(), rpc_client.clone(), epoch_len)?;
-
-        // FIXME remove the light client or fully implement it
 
         Ok(Self {
             rt,
             config,
             keybase,
-            light_client,
             tx_monitor_cmd: None,
             chain_id,
             rpc_client,
@@ -329,22 +321,20 @@ impl ChainEndpoint for AxonChain {
     // TODO the light client is unimplemented
     fn verify_header(
         &mut self,
-        trusted: Height,
-        target: Height,
-        client_state: &AnyClientState,
+        _trusted: Height,
+        _target: Height,
+        _client_state: &AnyClientState,
     ) -> Result<Self::LightBlock, Error> {
-        self.light_client
-            .verify(trusted, target, client_state)
-            .map(|v| v.target)
+        Ok(AxonLightBlock {})
     }
 
     // TODO the light client is unimplemented
     fn check_misbehaviour(
         &mut self,
-        update: &UpdateClient,
-        client_state: &AnyClientState,
+        _update: &UpdateClient,
+        _client_state: &AnyClientState,
     ) -> Result<Option<MisbehaviourEvidence>, Error> {
-        self.light_client.check_misbehaviour(update, client_state)
+        Ok(None)
     }
 
     fn query_balance(&self, key_name: Option<&str>, denom: Option<&str>) -> Result<Balance, Error> {
@@ -1195,8 +1185,15 @@ fn extract_path_and_base_from_full_denom(parts: Vec<&str>) -> (String, String) {
 impl AxonChain {
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
         crate::time!("axon_init_event_monitor");
-        // let header_receiver = self.light_client.subscribe();
+
         let ibc_cache = self.ibc_cache.clone();
+        let cell_process_manager = CellProcessManager::new(
+            self.rt.clone(),
+            &self.config.emitter_ckb_url.to_string(),
+            self.client.clone(),
+            self.config.emitter_scan_start_block_number,
+        );
+
         let (mut event_monitor, monitor_tx) = AxonEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
@@ -1204,6 +1201,7 @@ impl AxonChain {
             // header_receiver,
             self.rt.clone(),
             ibc_cache.clone(),
+            cell_process_manager,
         )
         .map_err(Error::event_monitor)?;
 
@@ -1215,6 +1213,11 @@ impl AxonChain {
             .map_err(Error::event_monitor)?
             .into_iter()
             .for_each(|v| cache_ics_tx_hash_with_event(&mut ibc_cache, v.event, v.tx_hash));
+
+        // resotore cell_emitter filters
+        event_monitor
+            .restore_cell_emitter_filters()
+            .map_err(Error::event_monitor)?;
 
         thread::spawn(move || event_monitor.run());
         Ok(monitor_tx)

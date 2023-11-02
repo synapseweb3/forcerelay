@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use super::emitter::CellProcessManager;
 use super::{contract::*, IBCInfoCache};
 use crate::chain::axon::cache_ics_tx_hash_with_event;
 use crate::event::bus::EventBus;
@@ -35,6 +36,7 @@ pub struct AxonEventMonitor {
     event_bus: EventBus<Arc<Result<EventBatch>>>,
     ibc_cache: Arc<RwLock<IBCInfoCache>>,
     reprocess_events: Vec<(OwnableIBCHandlerEvents, LogMeta)>,
+    cell_process_manager: CellProcessManager,
 }
 
 impl AxonEventMonitor {
@@ -51,6 +53,7 @@ impl AxonEventMonitor {
         contract_address: Address,
         rt: Arc<TokioRuntime>,
         ibc_cache: Arc<RwLock<IBCInfoCache>>,
+        cell_process_manager: CellProcessManager,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
 
@@ -74,6 +77,7 @@ impl AxonEventMonitor {
             event_bus,
             ibc_cache,
             reprocess_events: vec![],
+            cell_process_manager,
         };
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
     }
@@ -112,10 +116,7 @@ impl AxonEventMonitor {
         &mut self,
         latest_block_count: u64,
     ) -> Result<Vec<IbcEventWithHeight>> {
-        let contract = Arc::new(Contract::new(
-            self.contract_address,
-            Arc::clone(&self.client),
-        ));
+        let contract = Contract::new(self.contract_address, Arc::clone(&self.client));
         let restore_block_number = self
             .start_block_number
             .checked_sub(latest_block_count)
@@ -160,6 +161,24 @@ impl AxonEventMonitor {
         Ok(events)
     }
 
+    pub fn restore_cell_emitter_filters(&mut self) -> Result<()> {
+        let contract = Contract::new(self.contract_address, Arc::clone(&self.client));
+        // FIXME: consider what if the format of filter stored on-chain is invalid
+        let filters = self
+            .rt
+            .block_on(contract.get_cell_emitter_filters().call())
+            .map_err(|e| Error::others(e.to_string()))?
+            .into_iter()
+            .map(|filter| self.cell_process_manager.spawn_cell_processor(&filter))
+            .collect::<Result<Vec<_>>>()?;
+        info!(
+            "resotred {} filters on contract {}",
+            filters.len(),
+            self.contract_address
+        );
+        Ok(())
+    }
+
     fn update_subscribe(&mut self, use_try: bool) -> Next {
         let cmd = if use_try {
             match self.rx_cmd.try_recv() {
@@ -189,10 +208,7 @@ impl AxonEventMonitor {
     fn run_loop(&mut self) -> Next {
         const TIMEOUT_MILLIS: u64 = 300;
 
-        let contract = Arc::new(Contract::new(
-            self.contract_address,
-            Arc::clone(&self.client),
-        ));
+        let contract = Contract::new(self.contract_address, Arc::clone(&self.client));
         info!("listen IBC events from block {}", self.start_block_number);
         let events = contract.events().from_block(self.start_block_number);
         if let Ok(mut meta_stream) = self.rt.block_on(async {
@@ -231,7 +247,12 @@ impl AxonEventMonitor {
     fn process_event(&mut self, event: ContractEvents, meta: LogMeta) -> Result<()> {
         println!("\n{}\n[event] = {:?}", self.chain_id, event);
         println!("[event_meta] = {:?}\n", meta);
+
         self.start_block_number = meta.block_number.as_u64();
+        if self.process_cell_emitter_event(&event)? {
+            return Ok(());
+        }
+
         let event = IbcEventWithHeight::new_with_tx_hash(
             event.into(),
             Height::from_noncosmos_height(meta.block_number.as_u64()),
@@ -254,5 +275,23 @@ impl AxonEventMonitor {
 
     fn process_batch(&mut self, batch: EventBatch) {
         self.event_bus.broadcast(Arc::new(Ok(batch)));
+    }
+
+    fn process_cell_emitter_event(&mut self, event: &ContractEvents) -> Result<bool> {
+        match event {
+            ContractEvents::RegisterCellEmitterFilterFilter(RegisterCellEmitterFilterFilter {
+                filter,
+            }) => {
+                self.cell_process_manager.spawn_cell_processor(filter)?;
+                Ok(true)
+            }
+            ContractEvents::RemoveCellEmitterFilterFilter(RemoveCellEmitterFilterFilter {
+                filter,
+            }) => {
+                self.cell_process_manager.remove_cell_processor(filter)?;
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
     }
 }

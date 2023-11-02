@@ -401,7 +401,15 @@ impl Ckb4IbcEventMonitor {
         let useless_packets = &mut self.useless_write_ack_packets;
         let events = ibc_packets
             .into_iter()
-            .filter(|(((packet, _), tx), _)| {
+            .filter(|(((packet, _), tx), (block_number, cell_input))| {
+                // if a block contains more than one WriteAck cells, useless_packets won't save all of them,
+                // but every packet cells will be scanned repeatedly, after the previous WriteAck cell is consumed,
+                // the other WriteAck cells which share the save block_number will be stored then
+                if packet.status == PacketStatus::WriteAck
+                    && !useless_packets.contains_key(block_number)
+                {
+                    useless_packets.insert(*block_number, (packet.clone(), cell_input.clone()));
+                }
                 if packet.status == PacketStatus::Ack
                     || packet.status == PacketStatus::Recv
                     || self.cache_set.read().unwrap().has(tx)

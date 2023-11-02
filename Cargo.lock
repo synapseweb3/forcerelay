@@ -2173,6 +2173,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "emitter-core"
+version = "0.1.0"
+source = "git+https://github.com/axonweb3/emitter?rev=315e7e8#315e7e845684888baa64f045118ad6910c41eeca"
+dependencies = [
+ "async-trait",
+ "ckb-jsonrpc-types",
+ "ckb-types",
+ "jsonrpc-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "ena"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3680,6 +3695,7 @@ dependencies = [
  "ed25519",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
+ "emitter-core",
  "env_logger 0.10.0",
  "eth_light_client_in_ckb-prover",
  "eth_light_client_in_ckb-verification",
