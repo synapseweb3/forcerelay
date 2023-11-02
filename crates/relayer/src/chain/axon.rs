@@ -989,7 +989,7 @@ impl ChainEndpoint for AxonChain {
         let block = self
             .rt
             .block_on(fut)?
-            .ok_or_else(|| Error::invalid_height_no_source())?;
+            .ok_or_else(Error::invalid_height_no_source)?;
         let root = CommitmentRoot::from_bytes(block.header.state_root.as_bytes());
         let timestamp = Timestamp::from_nanoseconds(block.header.timestamp * SEC_TO_NANO)
             .map_err(Error::other)?;
