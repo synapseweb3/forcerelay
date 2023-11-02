@@ -1,10 +1,16 @@
 use std::str::FromStr;
 
+use crate::chain::axon::utils::convert_err;
+use crate::chain::ckb::prelude::CkbReader;
+use crate::chain::SEC_TO_NANO;
 use crate::config::ckb4ibc::ChainConfig;
 use crate::error::Error;
+use crate::event::IbcEventWithHeight;
 use ckb_ics_axon::consts::{CHANNEL_ID_PREFIX, CONNECTION_ID_PREFIX};
+use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
+use ckb_jsonrpc_types::TransactionView;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
@@ -16,8 +22,13 @@ use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::{h256, H256};
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics04_channel::channel::ChannelEnd;
+use ibc_relayer_types::core::ics04_channel::events::{SendPacket, WriteAcknowledgement};
+use ibc_relayer_types::core::ics04_channel::packet::{Packet, Sequence};
+use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ConnectionId, PortId};
+use ibc_relayer_types::events::WithBlockDataType;
 use ibc_relayer_types::proofs::{ConsensusProof, Proofs};
+use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
 use tiny_keccak::{Hasher, Keccak};
 
@@ -265,16 +276,86 @@ pub fn extract_client_id_by_connection_id(
     Ok((client_cell_type_args, client_id))
 }
 
-#[ignore = "use to calculate the lock hash of st-cell"]
-#[test]
-fn debug_print_lock_hash() {
-    let lock_hash = Script::new_builder()
-        .code_hash(
-            h256!("0x12b7f23d284e3221fe0730ca5753c28f9302c7368d83101637684c424b242a95").pack(),
-        )
-        .hash_type(ScriptHashType::Type.into())
-        .args([0u8; 98].pack())
-        .build()
-        .calc_script_hash();
-    println!("lock_hash = {}", hex::encode(lock_hash.as_slice()));
+pub fn generate_ibc_packet_event(
+    packet: IbcPacket,
+    height: u64,
+    event_id: &WithBlockDataType,
+) -> Result<IbcEventWithHeight, Error> {
+    let to_ibc_packet = |v: IbcPacket| -> Result<Packet, Error> {
+        let packet = Packet {
+            sequence: Sequence::from(v.packet.sequence as u64),
+            source_channel: ChannelId::from_str(&v.packet.source_channel_id)
+                .map_err(convert_err)?,
+            source_port: PortId::from_str(&v.packet.source_port_id).map_err(convert_err)?,
+            destination_channel: ChannelId::from_str(&v.packet.destination_channel_id)
+                .map_err(convert_err)?,
+            destination_port: PortId::from_str(&v.packet.source_port_id).map_err(convert_err)?,
+            data: v.packet.data,
+            timeout_height: if v.packet.timeout_height == 0 {
+                TimeoutHeight::Never
+            } else {
+                TimeoutHeight::At(Height::from_noncosmos_height(v.packet.timeout_height))
+            },
+            timeout_timestamp: Timestamp::from_nanoseconds(
+                v.packet.timeout_timestamp * SEC_TO_NANO,
+            )
+            .map_err(convert_err)?,
+        };
+        Ok(packet)
+    };
+
+    let tx_hash = packet.tx_hash.unwrap_or_default().to_fixed_bytes();
+    let event = match event_id {
+        WithBlockDataType::SendPacket => SendPacket {
+            packet: to_ibc_packet(packet)?,
+        }
+        .into(),
+        WithBlockDataType::WriteAck => WriteAcknowledgement {
+            ack: packet.ack.clone().unwrap_or_default(),
+            packet: to_ibc_packet(packet)?,
+        }
+        .into(),
+        _ => {
+            return Err(Error::other_error(
+                "unexpected event_id in generation of packet event".to_owned(),
+            ));
+        }
+    };
+
+    Ok(IbcEventWithHeight {
+        event,
+        tx_hash,
+        height: Height::from_noncosmos_height(height),
+    })
+}
+
+pub async fn fetch_transaction_by_hash(
+    rpc_client: &impl CkbReader,
+    tx_hash: &H256,
+) -> Result<TransactionView, Error> {
+    let tx = rpc_client
+        .get_transaction(tx_hash)
+        .await
+        .map_err(|e| Error::query(e.to_string()))?
+        .unwrap()
+        .transaction
+        .unwrap();
+    let tx = match tx.inner {
+        ckb_jsonrpc_types::Either::Left(tx) => tx,
+        ckb_jsonrpc_types::Either::Right(bytes) => {
+            serde_json::from_slice(bytes.as_bytes()).unwrap()
+        }
+    };
+    Ok(tx)
+}
+
+pub async fn tip_block_number(rpc_client: &impl CkbReader) -> Result<u64, Error> {
+    let tip_block_number: u64 = rpc_client
+        .get_tip_header()
+        .await
+        .map_err(|err| Error::other_error(err.to_string()))?
+        .inner
+        .number
+        .into();
+    Ok(tip_block_number)
 }

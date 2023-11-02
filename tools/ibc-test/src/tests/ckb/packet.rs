@@ -1,3 +1,5 @@
+use ckb_sdk::unlock::SecpSighashScriptSigner;
+use forcerelay_ckb_sdk::config::Config as SdkConfig;
 use ibc_test_framework::prelude::*;
 use log::info;
 use tokio::runtime::Runtime;
@@ -10,6 +12,92 @@ pub struct CKB4IbcPacketTest;
 impl CKB4IbcPacketTest {
     pub fn new() -> Self {
         Self
+    }
+}
+
+impl CKB4IbcPacketTest {
+    #[allow(clippy::too_many_arguments)]
+    fn run_instance(
+        &self,
+        rt: &Runtime,
+        chain_a_config: &SdkConfig,
+        chain_a_url: &str,
+        chain_a_signer: &SecpSighashScriptSigner,
+        chain_b_config: &SdkConfig,
+        chain_b_url: &str,
+        chain_b_signer: &SecpSighashScriptSigner,
+    ) -> Result<(), Error> {
+        // 2. trigger SendPacket event on ChainA
+        info!("send send_packet transaction to chain_a");
+        let relayer_on_a = chain_a_config.user_lock_script().calc_script_hash();
+        let message = ICS20Transfer {
+            denom: "AT".to_owned(),
+            amount: 1000,
+            sender: relayer_on_a.raw_data().to_vec(),
+            receiver: relayer_on_a.raw_data().to_vec(),
+        };
+        let send_packet_tx = generate_send_packet_transaction(
+            rt,
+            chain_a_config,
+            chain_a_url,
+            chain_a_signer,
+            &message,
+        )?;
+        let hash = send_transaction(chain_a_url, send_packet_tx)?;
+        info!(
+            "🍻 successfully sent send_packet transaction to chain_a, hash = {}",
+            hex::encode(hash)
+        );
+
+        // 3. listen RecvPacket event on ChainB
+        info!("wait recv_packet being found on chain_b");
+        let recv_packet = listen_and_wait_packet_cell(rt, chain_b_url, chain_b_config, |packet| {
+            packet.is_recv_packet()
+        })?;
+        let payload: ICS20Transfer =
+            serde_json::from_slice(&recv_packet.packet.packet.data).expect("ics20 message");
+        let relayer_on_b = chain_b_config.user_lock_script().calc_script_hash();
+        assert!(payload == message && payload.receiver == relayer_on_b.raw_data().to_vec());
+        info!("🍻 successfully find recv_packet cell on chain_b: {payload}");
+
+        // 4. trigger WriteAck event on ChainB
+        info!("send write_ack transaction to chain_b");
+        let write_ack_tx = generate_write_ack_transaction(
+            rt,
+            chain_b_config,
+            chain_b_url,
+            chain_b_signer,
+            recv_packet,
+        )?;
+        let hash = send_transaction(chain_b_url, write_ack_tx)?;
+        info!(
+            "🍻 successfully sent write_ack transaction to chain_b, hash = {}",
+            hex::encode(hash)
+        );
+
+        // 5. listen AckPacket event on ChainA
+        info!("wait ack_packet being found on chain_a");
+        let ack_packet = listen_and_wait_packet_cell(rt, chain_a_url, chain_a_config, |packet| {
+            packet.is_ack_packet()
+        })?;
+        info!("🍻 successfully find ack_packet cell on chain_a");
+
+        // 6. comsune AckPacket cell on ChainA
+        info!("send ack_packet consume transaction to chain_a");
+        let consume_ack_packet_tx = generate_consume_ack_packet_transaction(
+            rt,
+            chain_a_config,
+            chain_a_url,
+            chain_a_signer,
+            ack_packet,
+        )?;
+        let hash = send_transaction(chain_a_url, consume_ack_packet_tx)?;
+        info!(
+            "🍻 successfully consumed ack_packet on chain_a, hash = {}",
+            hex::encode(hash)
+        );
+
+        Ok(())
     }
 }
 
@@ -52,77 +140,31 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
             wallet_balance(&rt, &chain_b_url, &chain_b_config.user_lock_script())?
         );
 
-        // 2. trigger SendPacket event on ChainA
-        info!("send send_packet transaction to chain_a");
-        let relayer_on_a = chain_a_config.user_lock_script().calc_script_hash();
-        let message = ICS20Transfer {
-            denom: "AT".to_owned(),
-            amount: 1000,
-            sender: relayer_on_a.raw_data().to_vec(),
-            receiver: relayer_on_a.raw_data().to_vec(),
-        };
-        let send_packet_tx = generate_send_packet_transaction(
+        // run for first time
+        println!("\n================ FIRST time run packet communication ===================\n");
+        self.run_instance(
             &rt,
             &chain_a_config,
             &chain_a_url,
             &chain_a_signer,
-            &message,
-        )?;
-        let hash = send_transaction(&chain_a_url, send_packet_tx)?;
-        info!(
-            "🍻 successfully sent send_packet transaction to chain_a, hash = {}",
-            hex::encode(hash)
-        );
-
-        // 3. listen RecvPacket event on ChainB
-        info!("wait recv_packet being found on chain_b");
-        let recv_packet =
-            listen_and_wait_packet_cell(&rt, &chain_b_url, &chain_b_config, |packet| {
-                packet.is_recv_packet()
-            })?;
-        let payload: ICS20Transfer =
-            serde_json::from_slice(&recv_packet.packet.packet.data).expect("ics20 message");
-        let relayer_on_b = chain_b_config.user_lock_script().calc_script_hash();
-        assert!(payload == message && payload.receiver == relayer_on_b.raw_data().to_vec());
-        info!("🍻 successfully find recv_packet cell on chain_b: {payload}");
-
-        // 4. trigger WriteAck event on ChainB
-        info!("send write_ack transaction to chain_b");
-        let write_ack_tx = generate_write_ack_transaction(
-            &rt,
             &chain_b_config,
             &chain_b_url,
             &chain_b_signer,
-            recv_packet,
         )?;
-        let hash = send_transaction(&chain_b_url, write_ack_tx)?;
-        info!(
-            "🍻 successfully sent write_ack transaction to chain_b, hash = {}",
-            hex::encode(hash)
-        );
 
-        // 5. listen AckPacket event on ChainA
-        info!("wait ack_packet being found on chain_a");
-        let ack_packet =
-            listen_and_wait_packet_cell(&rt, &chain_a_url, &chain_a_config, |packet| {
-                packet.is_ack_packet()
-            })?;
-        info!("🍻 successfully find ack_packet cell on chain_a");
-
-        // 6. comsune AckPacket cell on ChainA
-        info!("send ack_packet consume transaction to chain_a");
-        let consume_ack_packet_tx = generate_consume_ack_packet_transaction(
-            &rt,
-            &chain_a_config,
-            &chain_a_url,
-            &chain_a_signer,
-            ack_packet,
-        )?;
-        let hash = send_transaction(&chain_a_url, consume_ack_packet_tx)?;
-        info!(
-            "🍻 successfully consumed ack_packet on chain_a, hash = {}",
-            hex::encode(hash)
-        );
+        // FIXME: this part would block forever with no idea
+        //
+        // run for second time to test using useless WriteAck packet
+        // println!("\n================ SECOND time run packet communication ===================\n");
+        // self.run_instance(
+        //     &rt,
+        //     &chain_a_config,
+        //     &chain_a_url,
+        //     &chain_a_signer,
+        //     &chain_b_config,
+        //     &chain_b_url,
+        //     &chain_b_signer,
+        // )?;
 
         Ok(())
     }

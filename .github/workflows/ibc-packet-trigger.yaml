@@ -4,10 +4,15 @@ on:
   workflow_dispatch:
   schedule:
     - cron:  '0 */2 * * *' # runs every 2 hour
+  pull_request:
+    paths:
+      - .github/workflows/ibc-packet-trigger.yaml
+      - e2e/schedule/**
 
 jobs:
   schedule-run-packet-send:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
         # for forcerelay-ckb-sdk
         FORCERELAY_CKB_SDK_COMMIT: f02969f920fa48234959fd25c771992a85619eb6
