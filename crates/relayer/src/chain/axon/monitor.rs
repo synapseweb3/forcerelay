@@ -1,5 +1,5 @@
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::emitter::CellProcessManager;
 use super::{contract::*, IBCInfoCache};
@@ -24,6 +24,8 @@ use tokio::runtime::Runtime as TokioRuntime;
 use tracing::{debug, error, info, instrument, warn};
 
 type Client = Provider<Ws>;
+const TIMEOUT_MILLIS: u64 = 300;
+const REFREASH_TIMEOUT_SECS: u64 = 3600;
 
 // #[derive(Clone, Debug)]
 pub struct AxonEventMonitor {
@@ -206,42 +208,56 @@ impl AxonEventMonitor {
     }
 
     fn run_loop(&mut self) -> Next {
-        const TIMEOUT_MILLIS: u64 = 300;
-
         let contract = Contract::new(self.contract_address, Arc::clone(&self.client));
         info!("listen IBC events from block {}", self.start_block_number);
         let events = contract.events().from_block(self.start_block_number);
-        if let Ok(mut meta_stream) = self.rt.block_on(async {
+        let stream_listen = self.rt.block_on(async {
             events.stream().await.map(|stream| {
                 let meta_stream = stream.with_meta().timeout_repeating(tokio::time::interval(
                     Duration::from_millis(TIMEOUT_MILLIS),
                 ));
                 meta_stream
             })
-        }) {
-            loop {
-                if let Next::Abort = self.update_subscribe(true) {
-                    return Next::Abort;
-                }
+        });
+        match stream_listen {
+            Ok(mut meta_stream) => {
+                let mut refresh_timepoint = Instant::now();
+                loop {
+                    if let Next::Abort = self.update_subscribe(true) {
+                        return Next::Abort;
+                    }
 
-                match self.rt.block_on(meta_stream.next()) {
-                    Some(Ok(ret)) => match ret {
-                        Ok((event, meta)) => {
-                            self.process_event(event, meta).unwrap_or_else(|e| {
-                                error!("error while process event: {e:?}");
-                            });
-                        }
-                        Err(err) => {
-                            error!("error when monitoring axon events, reason: {err:?}");
-                            return Next::Continue;
-                        }
-                    },
-                    None => warn!("Axon monitor error report: received None"),
-                    _ => {}
+                    // it's one hour that no events coming in, we consider to re-register events listener
+                    if Instant::now()
+                        > refresh_timepoint + Duration::from_secs(REFREASH_TIMEOUT_SECS)
+                    {
+                        info!("{REFREASH_TIMEOUT_SECS}s running out with no Solidity events coming in, restart monitor");
+                        return Next::Continue;
+                    }
+
+                    match self.rt.block_on(meta_stream.next()) {
+                        Some(Ok(ret)) => match ret {
+                            Ok((event, meta)) => {
+                                self.process_event(event, meta).unwrap_or_else(|e| {
+                                    error!("error while process event: {e:?}");
+                                });
+                                refresh_timepoint = Instant::now();
+                            }
+                            Err(err) => {
+                                error!("error when monitoring axon events, reason: {err:?}");
+                                return Next::Continue;
+                            }
+                        },
+                        None => warn!("Axon monitor error report: received None"),
+                        _ => {}
+                    }
                 }
             }
+            Err(e) => {
+                error!("failed to listen events: {e}");
+                Next::Continue
+            }
         }
-        Next::Abort
     }
 
     fn process_event(&mut self, event: ContractEvents, meta: LogMeta) -> Result<()> {

@@ -33,7 +33,6 @@ use ibc_relayer_types::{
     },
     core::{
         ics02_client::client_type::ClientType,
-        ics03_connection::connection::IdentifiedConnectionEnd,
         ics04_channel::{
             msgs::{
                 acknowledgement::{MsgAcknowledgement, TYPE_URL as ACK_PACKET_TYPE_URL},
@@ -51,7 +50,6 @@ use ibc_relayer_types::{
             },
             packet::Sequence,
         },
-        ics23_commitment::commitment::CommitmentPrefix,
         ics24_host::identifier::{ChannelId, ConnectionId, PortId},
     },
     events::IbcEvent,
@@ -61,6 +59,7 @@ use ibc_relayer_types::{
 use super::{
     monitor::WriteAckMonitorCmd,
     utils::{generate_connection_id, get_script_hash},
+    Ckb4IbcChain, ConnectionCache, PacketInputData,
 };
 use client::{convert_create_client, convert_update_client};
 
@@ -93,7 +92,11 @@ pub trait MsgToTxConverter {
 
     fn get_ibc_connections_input(&self, client_id: &str) -> Result<(&CellInput, u64), Error>;
 
-    fn get_ibc_channel(&self, id: &ChannelId) -> Result<&IbcChannel, Error>;
+    fn get_ibc_channel(
+        &self,
+        channel_id: &ChannelId,
+        port: Option<&PortId>,
+    ) -> Result<&IbcChannel, Error>;
 
     fn get_ibc_channel_input(
         &self,
@@ -143,20 +146,11 @@ pub struct Converter<'a> {
     pub write_ack_cmd: &'a Option<WriteAckMonitorCmd>,
     pub channel_input_data: Ref<'a, HashMap<(ChannelId, PortId), (CellInput, u64)>>,
     pub channel_cache: Ref<'a, HashMap<ChannelId, IbcChannel>>,
-    #[allow(clippy::type_complexity)]
-    pub connection_cache: Ref<
-        'a,
-        HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>,
-    >,
-    #[allow(clippy::type_complexity)]
-    pub packet_input_data: Ref<'a, HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>>,
+    pub connection_cache: Ref<'a, ConnectionCache>,
+    pub packet_input_data: Ref<'a, PacketInputData>,
     pub packet_cache: Ref<'a, HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
-    pub config: &'a ChainConfig,
     pub client_outpoints: Ref<'a, HashMap<ClientType, OutPoint>>,
-    pub chan_contract_outpoint: &'a OutPoint,
-    pub packet_contract_outpoint: &'a OutPoint,
-    pub conn_contract_outpoint: &'a OutPoint,
-    pub commitment_prefix: CommitmentPrefix,
+    pub ckb_instance: &'a Ckb4IbcChain,
 }
 
 impl<'a> MsgToTxConverter for Converter<'a> {
@@ -165,7 +159,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     }
 
     fn get_ibc_connections(&self, client_id: &str) -> Result<&IbcConnections, Error> {
-        let client_type = self.config.lc_client_type(client_id)?;
+        let client_type = self.get_config().lc_client_type(client_id)?;
         if let Some((connection, _, _, _)) = self.connection_cache.get(&client_type) {
             Ok(connection)
         } else {
@@ -208,7 +202,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     }
 
     fn get_ibc_connections_input(&self, client_id: &str) -> Result<(&CellInput, u64), Error> {
-        let client_type = self.config.lc_client_type(client_id)?;
+        let client_type = self.get_config().lc_client_type(client_id)?;
         if let Some((_, cell_input, capacity, _)) = self.connection_cache.get(&client_type) {
             Ok((cell_input, *capacity))
         } else {
@@ -218,10 +212,22 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         }
     }
 
-    fn get_ibc_channel(&self, channel_id: &ChannelId) -> Result<&IbcChannel, Error> {
-        self.channel_cache
-            .get(channel_id)
-            .ok_or(Error::query(format!("no channel_id {channel_id}")))
+    fn get_ibc_channel(
+        &self,
+        channel_id: &ChannelId,
+        port_id: Option<&PortId>,
+    ) -> Result<&IbcChannel, Error> {
+        if let Some(channel) = self.channel_cache.get(channel_id) {
+            Ok(channel)
+        } else if let Some(port_id) = port_id {
+            self.ckb_instance
+                .fetch_channel_cell_and_extract(channel_id, port_id, true)?;
+            self.channel_cache
+                .get(channel_id)
+                .ok_or(Error::query(format!("no channel_id {channel_id}")))
+        } else {
+            Err(Error::query(format!("no channel_id {channel_id}")))
+        }
     }
 
     fn get_ibc_channel_input(
@@ -229,41 +235,50 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         channel_id: &ChannelId,
         port_id: &PortId,
     ) -> Result<(&CellInput, u64), Error> {
-        self.channel_input_data
+        if let Some((input, capacity)) = self
+            .channel_input_data
             .get(&(channel_id.clone(), port_id.clone()))
-            .map(|(input, capacity)| (input, *capacity))
-            .ok_or(Error::query(format!("no channel({channel_id}/{port_id})")))
+        {
+            Ok((input, *capacity))
+        } else {
+            self.ckb_instance
+                .fetch_channel_cell_and_extract(channel_id, port_id, true)?;
+            self.channel_input_data
+                .get(&(channel_id.clone(), port_id.clone()))
+                .map(|(input, capacity)| (input, *capacity))
+                .ok_or(Error::query(format!("no channel({channel_id}/{port_id})")))
+        }
     }
 
     fn get_client_outpoint(&self, client_id: &str) -> Option<&OutPoint> {
-        let Some(client_type) = self.config.lc_client_type(client_id).ok() else {
+        let Some(client_type) = self.get_config().lc_client_type(client_id).ok() else {
             return None;
         };
         self.client_outpoints.get(&client_type)
     }
 
     fn get_conn_contract_outpoint(&self) -> &OutPoint {
-        self.conn_contract_outpoint
+        &self.ckb_instance.connection_outpoint
     }
 
     fn get_chan_contract_outpoint(&self) -> &OutPoint {
-        self.chan_contract_outpoint
+        &self.ckb_instance.channel_outpoint
     }
 
     fn get_packet_contract_outpoint(&self) -> &OutPoint {
-        self.packet_contract_outpoint
+        &self.ckb_instance.packet_outpoint
     }
 
     fn get_channel_code_hash(&self) -> Byte32 {
-        get_script_hash(&self.config.channel_type_args)
+        get_script_hash(&self.get_config().channel_type_args)
     }
 
     fn get_packet_code_hash(&self) -> Byte32 {
-        get_script_hash(&self.config.packet_type_args)
+        get_script_hash(&self.get_config().packet_type_args)
     }
 
     fn get_connection_code_hash(&self) -> Byte32 {
-        get_script_hash(&self.config.connection_type_args)
+        get_script_hash(&self.get_config().connection_type_args)
     }
 
     fn get_ibc_packet_input(
@@ -294,11 +309,11 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     }
 
     fn get_commitment_prefix(&self) -> Vec<u8> {
-        self.commitment_prefix.as_bytes().to_vec()
+        self.get_config().store_prefix.clone().into_bytes()
     }
 
     fn get_config(&self) -> &ChainConfig {
-        self.config
+        &self.ckb_instance.config
     }
 
     fn require_useless_write_ack_packet(

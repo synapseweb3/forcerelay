@@ -217,7 +217,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_idx = get_channel_number(&msg.channel_id)?;
-    let old_channel = converter.get_ibc_channel(&msg.channel_id)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, None)?;
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id).unwrap();
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
@@ -276,7 +276,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelOpenConfirm,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_channel = converter.get_ibc_channel(&msg.channel_id)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, None)?;
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
 

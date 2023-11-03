@@ -43,7 +43,8 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_id = msg.packet.destination_channel.clone();
-    let old_channel_end = converter.get_ibc_channel(&channel_id)?;
+    let old_channel_end =
+        converter.get_ibc_channel(&channel_id, Some(&msg.packet.destination_port))?;
     let mut new_channel_end = old_channel_end.clone();
 
     let packet = convert_ibc_packet(&msg.packet);
@@ -148,7 +149,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_id = msg.packet.source_channel.clone();
-    let old_channel_end = converter.get_ibc_channel(&channel_id)?;
+    let old_channel_end = converter.get_ibc_channel(&channel_id, Some(&msg.packet.source_port))?;
     let mut new_channel_end = old_channel_end.clone();
 
     match old_channel_end.order {

@@ -108,6 +108,10 @@ pub mod utils;
 
 pub use utils::keccak256;
 
+type ConnectionCache =
+    HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>;
+type PacketInputData = HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>;
+
 pub struct Ckb4IbcChain {
     rt: Arc<TokioRuntime>,
     rpc_client: Arc<RpcClient>,
@@ -127,12 +131,8 @@ pub struct Ckb4IbcChain {
     client_outpoints: RefCell<HashMap<ClientType, OutPoint>>,
     channel_input_data: RefCell<HashMap<(ChannelId, PortId), (CellInput, u64)>>,
     channel_cache: RefCell<HashMap<ChannelId, IbcChannel>>,
-    #[allow(clippy::type_complexity)]
-    connection_cache: RefCell<
-        HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>,
-    >,
-    #[allow(clippy::type_complexity)]
-    packet_input_data: RefCell<HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>>,
+    connection_cache: RefCell<ConnectionCache>,
+    packet_input_data: RefCell<PacketInputData>,
     packet_cache: RefCell<HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
 }
 
@@ -181,15 +181,11 @@ impl Ckb4IbcChain {
             write_ack_cmd: &self.tx_write_ack_cmd,
             channel_input_data: self.channel_input_data.borrow(),
             channel_cache: self.channel_cache.borrow(),
-            config: &self.config,
             connection_cache: self.connection_cache.borrow(),
             client_outpoints: self.client_outpoints.borrow(),
             packet_input_data: self.packet_input_data.borrow(),
             packet_cache: self.packet_cache.borrow(),
-            chan_contract_outpoint: &self.channel_outpoint,
-            packet_contract_outpoint: &self.packet_outpoint,
-            conn_contract_outpoint: &self.connection_outpoint,
-            commitment_prefix: self.query_commitment_prefix()?,
+            ckb_instance: self,
         })
     }
 
