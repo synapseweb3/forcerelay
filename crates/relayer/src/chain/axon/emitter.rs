@@ -1,19 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use ckb_jsonrpc_types::HeaderView;
+use ckb_jsonrpc_types::{HeaderView, JsonBytes, Script, ScriptHashType};
 use ckb_types::H256;
 use emitter_core::{
     cell_process::CellProcess,
     rpc_client::RpcClient,
-    types::{IndexerTip, RpcSearchKey},
+    types::{IndexerScriptSearchMode, IndexerTip, RpcSearchKey, RpcSearchKeyFilter, ScriptType},
     Submit, SubmitProcess, TipState,
 };
 use ethers::providers::{Provider, Ws};
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
-use crate::event::monitor::Error;
+use crate::{event::monitor::Error, ibc_contract};
 
 struct CkbTipState(IndexerTip);
 
@@ -85,13 +85,11 @@ impl CellProcessManager {
         }
     }
 
-    pub fn spawn_cell_processor(&mut self, search_key: &str) -> Result<bool, Error> {
+    pub fn spawn_cell_processor(&mut self, search_key: RpcSearchKey) -> Result<bool, Error> {
         // feature closed
         if self.start_tip_number == 0 {
             return Ok(true);
         }
-        let search_key = serde_json::from_str(search_key)
-            .map_err(|e| Error::others(format!("failed to parse search_key from JSON: {e}")))?;
         if self.cell_processors.contains_key(&search_key) {
             return Ok(false);
         }
@@ -118,14 +116,61 @@ impl CellProcessManager {
         Ok(true)
     }
 
-    pub fn remove_cell_processor(&mut self, search_key: &str) -> Result<bool, Error> {
-        let search_key = serde_json::from_str(search_key)
-            .map_err(|e| Error::others(format!("failed to parse search_key from JSON: {e}")))?;
+    pub fn remove_cell_processor(&mut self, search_key: RpcSearchKey) -> bool {
         if let Some(handle) = self.cell_processors.remove(&search_key) {
             handle.abort();
-            Ok(true)
+            true
         } else {
-            Ok(false)
+            false
+        }
+    }
+}
+
+impl From<ibc_contract::Script> for Script {
+    fn from(value: ibc_contract::Script) -> Self {
+        let hash_type = if value.hash_type == 0 {
+            ScriptHashType::Data
+        } else if value.hash_type == 1 {
+            ScriptHashType::Type
+        } else {
+            ScriptHashType::Data1
+        };
+        Self {
+            code_hash: value.code_hash.into(),
+            hash_type,
+            args: JsonBytes::from_vec(value.args.to_vec()),
+        }
+    }
+}
+
+impl From<&ibc_contract::SearchKey> for RpcSearchKey {
+    fn from(value: &ibc_contract::SearchKey) -> Self {
+        let script_type = if value.script_type == 0 {
+            ScriptType::Lock
+        } else {
+            ScriptType::Type
+        };
+        let search_mode = if value.script_search_mode == 0 {
+            IndexerScriptSearchMode::Prefix
+        } else {
+            IndexerScriptSearchMode::Exact
+        };
+        let filter = if let Some(filter) = value.filter.first() {
+            let json_uint_array = |v: [u64; 2]| [v[0].into(), v[1].into()];
+            Some(RpcSearchKeyFilter {
+                script: Some(filter.script.clone().into()),
+                script_len_range: Some(json_uint_array(filter.script_len_range)),
+                output_data_len_range: Some(json_uint_array(filter.output_data_len_range)),
+                output_capacity_range: Some(json_uint_array(filter.output_data_capacity_range)),
+            })
+        } else {
+            None
+        };
+        Self {
+            script: value.script.clone().into(),
+            script_type,
+            script_search_mode: Some(search_mode),
+            filter,
         }
     }
 }
