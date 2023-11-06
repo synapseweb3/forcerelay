@@ -233,7 +233,8 @@ impl FullNode {
             transfer_contract_address,
             restore_block_count,
             emitter_ckb_url: Url::from_str("http://127.0.0.1").unwrap(),
-            emitter_scan_start_block_number: 0, // means close cell_emitter
+            emitter_cell_start_block_number: 0, // 0 means to close cell sync feature
+            emitter_header_start_block_number: 0, // 0 means to close header sync feature
         };
         Ok(config::ChainConfig::Axon(axon_config))
     }

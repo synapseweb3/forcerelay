@@ -5,6 +5,7 @@ use ckb_jsonrpc_types::{CellInfo, HeaderView, OutPoint};
 use ckb_types::H256;
 use emitter_core::{
     cell_process::CellProcess,
+    header_sync::HeaderSyncProcess,
     rpc_client::RpcClient,
     types::{IndexerTip, RpcSearchKey},
     Submit, SubmitProcess, TipState,
@@ -173,9 +174,6 @@ impl SubmitProcess for CkbSubmitProcess {
         true
     }
 
-    // TODO: it's a normal use to upload headers via cell-emitter, but due to the
-    //       feature that Axon won't check header's continuity, we can upload the header
-    //       just before relaying IBC messages, if so, this method would be abandoned
     async fn submit_headers(&mut self, headers: Vec<HeaderView>) -> bool {
         if let Err(err) = self.upload_headers(headers).await {
             tracing::error!("failed to sync CKB headers: {err}");
@@ -184,16 +182,17 @@ impl SubmitProcess for CkbSubmitProcess {
     }
 }
 
-pub struct CellProcessManager {
+pub struct CkbSyncManager {
     rt: Arc<Runtime>,
     rpc: RpcClient,
     chain_id: u64,
     contract: Arc<ContractProvider>,
     start_tip_number: u64,
     cell_processors: HashMap<RpcSearchKey, JoinHandle<()>>,
+    header_processor: Option<JoinHandle<()>>,
 }
 
-impl CellProcessManager {
+impl CkbSyncManager {
     pub fn new(
         rt: Arc<Runtime>,
         ckb_uri: &str,
@@ -208,7 +207,19 @@ impl CellProcessManager {
             contract,
             start_tip_number,
             cell_processors: HashMap::new(),
+            header_processor: None,
         }
+    }
+
+    fn tip_state(&self, block_number: u64) -> Result<CkbTipState, Error> {
+        let old_tip_header = self
+            .rt
+            .block_on(self.rpc.get_header_by_number(block_number.into()))
+            .map_err(|e| {
+                Error::others(format!("failed to fetch CKB header {}: {e}", block_number))
+            })?;
+        let tip_state = CkbTipState::new(old_tip_header.hash, block_number);
+        Ok(tip_state)
     }
 
     pub fn spawn_cell_processor(&mut self, search_key: RpcSearchKey) -> Result<bool, Error> {
@@ -219,19 +230,9 @@ impl CellProcessManager {
         if self.cell_processors.contains_key(&search_key) {
             return Ok(false);
         }
-        let old_tip_header = self
-            .rt
-            .block_on(self.rpc.get_header_by_number(self.start_tip_number.into()))
-            .map_err(|e| {
-                Error::others(format!(
-                    "failed to fetch CKB header {}: {e}",
-                    self.start_tip_number
-                ))
-            })?;
-        let tip_state = CkbTipState::new(old_tip_header.hash, self.start_tip_number);
         let mut cell_processor = CellProcess::new(
             search_key.clone(),
-            tip_state,
+            self.tip_state(self.start_tip_number)?,
             self.rpc.clone(),
             CkbSubmitProcess::new(self.chain_id, self.contract.clone()),
         );
@@ -249,5 +250,34 @@ impl CellProcessManager {
         } else {
             false
         }
+    }
+
+    pub fn spawn_header_processor(&mut self, start_block_number: u64) -> Result<bool, Error> {
+        // feature closed
+        if start_block_number == 0 {
+            return Ok(true);
+        }
+        if self.header_processor.is_some() {
+            return Ok(false);
+        }
+        let mut header_processor = HeaderSyncProcess::new(
+            self.tip_state(start_block_number)?,
+            self.rpc.clone(),
+            CkbSubmitProcess::new(self.chain_id, self.contract.clone()),
+        );
+        let handle = self.rt.spawn(async move {
+            header_processor.run().await;
+        });
+        self.header_processor = Some(handle);
+        Ok(true)
+    }
+
+    // TODO: use this method before each submit of IBC messages
+    pub fn _sync_header(&self, headers: Vec<HeaderView>) -> Result<(), Error> {
+        self.rt
+            .block_on(
+                CkbSubmitProcess::new(self.chain_id, self.contract.clone()).upload_headers(headers),
+            )
+            .map_err(|err| Error::others(err.to_string()))
     }
 }

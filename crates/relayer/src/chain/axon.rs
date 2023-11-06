@@ -79,7 +79,7 @@ use ibc_relayer_types::{
 };
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 
-use self::{contract::OwnableIBCHandler, emitter::CellProcessManager, monitor::AxonEventMonitor};
+use self::{contract::OwnableIBCHandler, emitter::CkbSyncManager, monitor::AxonEventMonitor};
 
 type ContractProvider = SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>;
 type IBCContract = OwnableIBCHandler<ContractProvider>;
@@ -1185,13 +1185,18 @@ impl AxonChain {
         crate::time!("axon_init_event_monitor");
 
         let ibc_cache = self.ibc_cache.clone();
-        let cell_process_manager = CellProcessManager::new(
+        let mut cell_process_manager = CkbSyncManager::new(
             self.rt.clone(),
             &self.config.emitter_ckb_url.to_string(),
             self.chain_id,
             self.contract_provider()?,
-            self.config.emitter_scan_start_block_number,
+            self.config.emitter_cell_start_block_number,
         );
+
+        // start sync ckb header
+        cell_process_manager
+            .spawn_header_processor(self.config.emitter_header_start_block_number)
+            .map_err(Error::event_monitor)?;
 
         let (mut event_monitor, monitor_tx) = AxonEventMonitor::new(
             self.config.id.clone(),
@@ -1211,11 +1216,6 @@ impl AxonChain {
             .map_err(Error::event_monitor)?
             .into_iter()
             .for_each(|v| cache_ics_tx_hash_with_event(&mut ibc_cache, v.event, v.tx_hash));
-
-        // resotore cell_emitter filters
-        event_monitor
-            .restore_cell_emitter_filters()
-            .map_err(Error::event_monitor)?;
 
         thread::spawn(move || event_monitor.run());
         Ok(monitor_tx)

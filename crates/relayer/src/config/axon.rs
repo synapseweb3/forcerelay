@@ -16,7 +16,8 @@ pub struct AxonChainConfig {
     pub key_name: String,
     pub store_prefix: String,
     pub emitter_ckb_url: Url,
-    pub emitter_scan_start_block_number: u64,
+    pub emitter_cell_start_block_number: u64,
+    pub emitter_header_start_block_number: u64,
 
     #[serde(default)]
     pub packet_filter: PacketFilter,

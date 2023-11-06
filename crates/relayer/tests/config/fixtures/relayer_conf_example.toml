@@ -95,7 +95,8 @@ restore_block_count = 10000
 key_name = "relayer_axon_wallet"
 store_prefix = "forcerelay"
 emitter_ckb_url = "https://testnet.ckbapp.dev"
-emitter_scan_start_block_number = 1000000
+emitter_cell_start_block_number = 1000000
+emitter_header_start_block_number = 1000000
 
 [[chains]]
 id = "ckb4ibc-0"

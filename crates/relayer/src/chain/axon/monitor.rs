@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
-use super::emitter::CellProcessManager;
+use super::emitter::CkbSyncManager;
 use super::{contract::*, IBCInfoCache};
 use crate::chain::axon::cache_ics_tx_hash_with_event;
 use crate::event::bus::EventBus;
@@ -38,7 +38,7 @@ pub struct AxonEventMonitor {
     event_bus: EventBus<Arc<Result<EventBatch>>>,
     ibc_cache: Arc<RwLock<IBCInfoCache>>,
     reprocess_events: Vec<(OwnableIBCHandlerEvents, LogMeta)>,
-    cell_process_manager: CellProcessManager,
+    ckb_sync_manager: CkbSyncManager,
 }
 
 impl AxonEventMonitor {
@@ -55,7 +55,7 @@ impl AxonEventMonitor {
         contract_address: Address,
         rt: Arc<TokioRuntime>,
         ibc_cache: Arc<RwLock<IBCInfoCache>>,
-        cell_process_manager: CellProcessManager,
+        ckb_sync_manager: CkbSyncManager,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
 
@@ -79,7 +79,7 @@ impl AxonEventMonitor {
             event_bus,
             ibc_cache,
             reprocess_events: vec![],
-            cell_process_manager,
+            ckb_sync_manager,
         };
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
     }
@@ -163,26 +163,6 @@ impl AxonEventMonitor {
             self.contract_address
         );
         Ok(events)
-    }
-
-    // TODO: monitor can recover Axon events from at least 25000 blocks, it's enough to restore emitter filters,
-    //       and in case of unrecoverable, since filter isn't the sensitive data, users can register filter again
-    pub fn restore_cell_emitter_filters(&mut self) -> Result<()> {
-        // let contract = Contract::new(self.contract_address, Arc::clone(&self.client));
-        // // FIXME: consider what if the format of filter stored on-chain is invalid
-        // let filters = self
-        //     .rt
-        //     .block_on(contract.get_cell_emitter_filters().call())
-        //     .map_err(|e| Error::others(e.to_string()))?
-        //     .into_iter()
-        //     .map(|filter| self.cell_process_manager.spawn_cell_processor(&filter))
-        //     .collect::<Result<Vec<_>>>()?;
-        // info!(
-        //     "resotred {} filters on contract {}",
-        //     filters.len(),
-        //     self.contract_address
-        // );
-        Ok(())
     }
 
     fn update_subscribe(&mut self, use_try: bool) -> Next {
@@ -302,15 +282,13 @@ impl AxonEventMonitor {
             ContractEvents::RegisterCellEmitterFilterFilter(RegisterCellEmitterFilterFilter {
                 filter,
             }) => {
-                self.cell_process_manager
-                    .spawn_cell_processor(filter.into())?;
+                self.ckb_sync_manager.spawn_cell_processor(filter.into())?;
                 Ok(true)
             }
             ContractEvents::RemoveCellEmitterFilterFilter(RemoveCellEmitterFilterFilter {
                 filter,
             }) => {
-                self.cell_process_manager
-                    .remove_cell_processor(filter.into());
+                self.ckb_sync_manager.remove_cell_processor(filter.into());
                 Ok(true)
             }
             _ => Ok(false),
