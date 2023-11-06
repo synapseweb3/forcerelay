@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 30
     env:
         # for forcerelay-ckb-sdk
-        FORCERELAY_CKB_SDK_COMMIT: f02969f920fa48234959fd25c771992a85619eb6
+        FORCERELAY_CKB_SDK_COMMIT: 1a1c5c1debc6d7e10f3093479f87727abf35e01b
         AXON_RECEIVER: "f39fd6e51aad88f6f4ce6ab8827279cfffb92266"
         SUDT_AMOUNT: 1000
         SDK_WORKSPACE: ${{ github.workspace }}/forcerelay-ckb-sdk
