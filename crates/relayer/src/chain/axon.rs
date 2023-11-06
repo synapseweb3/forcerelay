@@ -43,9 +43,7 @@ use ibc_proto::{
 use ibc_relayer_types::{
     applications::ics31_icq::response::CrossChainQueryResponse,
     clients::ics07_axon::{
-        client_state::AxonClientState,
-        consensus_state::AxonConsensusState,
-        header::{AxonHeader, AXON_HEADER_TYPE_URL},
+        client_state::AxonClientState, consensus_state::AxonConsensusState, header::AxonHeader,
         light_block::AxonLightBlock,
     },
     core::{
@@ -1190,7 +1188,8 @@ impl AxonChain {
         let cell_process_manager = CellProcessManager::new(
             self.rt.clone(),
             &self.config.emitter_ckb_url.to_string(),
-            self.client.clone(),
+            self.chain_id,
+            self.contract_provider()?,
             self.config.emitter_scan_start_block_number,
         );
 
@@ -1198,7 +1197,6 @@ impl AxonChain {
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
             self.config.contract_address,
-            // header_receiver,
             self.rt.clone(),
             ibc_cache.clone(),
             cell_process_manager,
@@ -1387,24 +1385,6 @@ impl AxonChain {
             // client
             create_client::TYPE_URL => {
                 convert!(self, msg, MsgCreateClient, create_client)
-            }
-            // TODO: this update_client uses Hermes internal message to handle the Axon-specific function,
-            // so maybe there is possibility to create a new one to do so
-            update_client::TYPE_URL => {
-                let msg = update_client::MsgUpdateClient::from_any(msg)
-                    .map_err(|e| Error::protobuf_decode(update_client::TYPE_URL.to_string(), e))?;
-                let bytes = msg.header.value.as_slice();
-                let type_url = msg.header.type_url;
-                let to = match type_url.as_str() {
-                    AXON_HEADER_TYPE_URL => self.config.ckb_light_client_contract_address,
-                    "CELL_TYPE_URL" => self.config.image_cell_contract_address,
-                    type_url => {
-                        return Err(Error::other_error(format!("unknown type_url {type_url}")))
-                    }
-                };
-                let tx = TransactionRequest::new().to(to).data(bytes.to_vec());
-                self.rt
-                    .block_on(async { Ok(self.client.send_transaction(tx, None).await?.await?) })
             }
             // connection
             conn_open_init::TYPE_URL => {

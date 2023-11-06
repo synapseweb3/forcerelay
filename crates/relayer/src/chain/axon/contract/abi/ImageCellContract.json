@@ -1,0 +1,189 @@
+{
+  "contractName": "image_cell_contract",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "components": [
+                {
+                  "internalType": "bytes32",
+                  "name": "txHash",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "uint32",
+                  "name": "index",
+                  "type": "uint32"
+                }
+              ],
+              "internalType": "struct CkbType.OutPoint[]",
+              "name": "txInputs",
+              "type": "tuple[]"
+            },
+            {
+              "components": [
+                {
+                  "internalType": "bytes32",
+                  "name": "txHash",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "uint32",
+                  "name": "index",
+                  "type": "uint32"
+                }
+              ],
+              "internalType": "struct CkbType.OutPoint[]",
+              "name": "txOutputs",
+              "type": "tuple[]"
+            }
+          ],
+          "internalType": "struct ImageCell.BlockRollBlack[]",
+          "name": "blocks",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "rollback",
+      "outputs": [],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bool",
+          "name": "allowRead",
+          "type": "bool"
+        }
+      ],
+      "name": "setState",
+      "outputs": [],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint64",
+              "name": "blockNumber",
+              "type": "uint64"
+            },
+            {
+              "components": [
+                {
+                  "internalType": "bytes32",
+                  "name": "txHash",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "uint32",
+                  "name": "index",
+                  "type": "uint32"
+                }
+              ],
+              "internalType": "struct CkbType.OutPoint[]",
+              "name": "txInputs",
+              "type": "tuple[]"
+            },
+            {
+              "components": [
+                {
+                  "components": [
+                    {
+                      "internalType": "bytes32",
+                      "name": "txHash",
+                      "type": "bytes32"
+                    },
+                    {
+                      "internalType": "uint32",
+                      "name": "index",
+                      "type": "uint32"
+                    }
+                  ],
+                  "internalType": "struct CkbType.OutPoint",
+                  "name": "outPoint",
+                  "type": "tuple"
+                },
+                {
+                  "components": [
+                    {
+                      "internalType": "uint64",
+                      "name": "capacity",
+                      "type": "uint64"
+                    },
+                    {
+                      "components": [
+                        {
+                          "internalType": "bytes32",
+                          "name": "codeHash",
+                          "type": "bytes32"
+                        },
+                        {
+                          "internalType": "enum CkbType.ScriptHashType",
+                          "name": "hashType",
+                          "type": "uint8"
+                        },
+                        {
+                          "internalType": "bytes",
+                          "name": "args",
+                          "type": "bytes"
+                        }
+                      ],
+                      "internalType": "struct CkbType.Script",
+                      "name": "lock",
+                      "type": "tuple"
+                    },
+                    {
+                      "components": [
+                        {
+                          "internalType": "bytes32",
+                          "name": "codeHash",
+                          "type": "bytes32"
+                        },
+                        {
+                          "internalType": "enum CkbType.ScriptHashType",
+                          "name": "hashType",
+                          "type": "uint8"
+                        },
+                        {
+                          "internalType": "bytes",
+                          "name": "args",
+                          "type": "bytes"
+                        }
+                      ],
+                      "internalType": "struct CkbType.Script[]",
+                      "name": "type_",
+                      "type": "tuple[]"
+                    }
+                  ],
+                  "internalType": "struct CkbType.CellOutput",
+                  "name": "output",
+                  "type": "tuple"
+                },
+                {
+                  "internalType": "bytes",
+                  "name": "data",
+                  "type": "bytes"
+                }
+              ],
+              "internalType": "struct CkbType.CellInfo[]",
+              "name": "txOutputs",
+              "type": "tuple[]"
+            }
+          ],
+          "internalType": "struct ImageCell.BlockUpdate[]",
+          "name": "blocks",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "update",
+      "outputs": [],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ]
+}

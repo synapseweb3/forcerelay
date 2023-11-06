@@ -1,19 +1,35 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use ckb_jsonrpc_types::{HeaderView, JsonBytes, Script, ScriptHashType};
+use ckb_jsonrpc_types::{CellInfo, HeaderView, OutPoint};
 use ckb_types::H256;
 use emitter_core::{
     cell_process::CellProcess,
     rpc_client::RpcClient,
-    types::{IndexerScriptSearchMode, IndexerTip, RpcSearchKey, RpcSearchKeyFilter, ScriptType},
+    types::{IndexerTip, RpcSearchKey},
     Submit, SubmitProcess, TipState,
 };
-use ethers::providers::{Provider, Ws};
+use ethers::prelude::{Address, H160};
+use ethers::providers::Middleware;
+use ethers::types::transaction::eip2718::TypedTransaction::Legacy;
+use ethers::{abi::AbiEncode, types::TransactionRequest};
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
-use crate::{event::monitor::Error, ibc_contract};
+use crate::event::monitor::Error;
+use crate::ibc_contract::{ckb_light_client, image_cell};
+
+use super::ContractProvider;
+
+const fn system_contract_address(addr: u8) -> Address {
+    H160([
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, addr,
+    ])
+}
+
+const IMAGE_CELL_ADDRESS: Address = system_contract_address(0x3);
+const CKB_LIGHT_CLIENT_ADDRESS: Address = system_contract_address(0x4);
 
 struct CkbTipState(IndexerTip);
 
@@ -38,11 +54,109 @@ impl TipState for CkbTipState {
 }
 
 #[derive(Clone)]
-struct CkbSubmitProcess(Arc<Provider<Ws>>);
+struct CkbSubmitProcess {
+    chain_id: u64,
+    contract: Arc<ContractProvider>,
+}
 
 impl CkbSubmitProcess {
-    pub fn new(client: Arc<Provider<Ws>>) -> Self {
-        Self(client)
+    fn new(chain_id: u64, contract: Arc<ContractProvider>) -> Self {
+        Self { chain_id, contract }
+    }
+
+    fn generate_data(&self, data: Vec<Submit>) -> Vec<u8> {
+        let blocks = data
+            .into_iter()
+            .map(|block| image_cell::BlockUpdate {
+                block_number: block.header.inner.number.into(),
+                tx_inputs: block.inputs.into_iter().map(Into::into).collect(),
+                tx_outputs: self.convert_outputs(block.outputs),
+            })
+            .collect();
+        image_cell::UpdateCall { blocks }.encode()
+    }
+
+    fn convert_outputs(&self, outputs: Vec<(OutPoint, CellInfo)>) -> Vec<image_cell::CellInfo> {
+        outputs
+            .into_iter()
+            .map(|(outpoint, cell)| {
+                let type_ = if let Some(type_) = cell.output.type_ {
+                    vec![type_.into()]
+                } else {
+                    vec![]
+                };
+                let data = if let Some(data) = cell.data {
+                    data.content.into_bytes().into()
+                } else {
+                    Default::default()
+                };
+                image_cell::CellInfo {
+                    out_point: outpoint.into(),
+                    output: image_cell::CellOutput {
+                        capacity: cell.output.capacity.into(),
+                        lock: cell.output.lock.into(),
+                        type_,
+                    },
+                    data,
+                }
+            })
+            .collect()
+    }
+
+    async fn upload_cells(&self, cells: Vec<Submit>) -> eyre::Result<()> {
+        let from = self.contract.address();
+        let nonce = self.contract.get_transaction_count(from, None).await?;
+        let data = self.generate_data(cells);
+
+        let transaction_request = TransactionRequest::new()
+            .chain_id(self.chain_id)
+            .to(IMAGE_CELL_ADDRESS)
+            .data(data)
+            .from(from)
+            .gas_price(1)
+            .gas(21000)
+            .nonce(nonce);
+
+        let tx = Legacy(transaction_request);
+        let signature = self.contract.sign_transaction(&tx, from).await?;
+
+        self.contract
+            .send_raw_transaction(tx.rlp_signed(&signature))
+            .await?
+            .await?
+            .expect("failed to send to image_cell_contract");
+
+        Ok(())
+    }
+
+    async fn upload_headers(&self, headers: Vec<HeaderView>) -> eyre::Result<()> {
+        let data = ckb_light_client::UpdateCall {
+            headers: headers.into_iter().map(Into::into).collect(),
+        }
+        .encode();
+
+        let from = self.contract.address();
+        let nonce = self.contract.get_transaction_count(from, None).await?;
+
+        let transaction_request = TransactionRequest::new()
+            .chain_id(self.chain_id)
+            .to(CKB_LIGHT_CLIENT_ADDRESS)
+            .data(data)
+            .from(from)
+            .gas_price(1)
+            .gas(21000)
+            .nonce(nonce);
+
+        let tx = Legacy(transaction_request);
+        let signature = self.contract.sign_transaction(&tx, from).await?;
+
+        self.contract
+            .send_raw_transaction(tx.rlp_signed(&signature))
+            .await?
+            .await?
+            .expect("failed to send to light_client_contract");
+
+        Ok(())
     }
 }
 
@@ -52,11 +166,20 @@ impl SubmitProcess for CkbSubmitProcess {
         false
     }
 
-    async fn submit_cells(&mut self, _cells: Vec<Submit>) -> bool {
+    async fn submit_cells(&mut self, cells: Vec<Submit>) -> bool {
+        if let Err(err) = self.upload_cells(cells).await {
+            tracing::error!("failed to sync CKB cells: {err}");
+        }
         true
     }
 
-    async fn submit_headers(&mut self, _headers: Vec<HeaderView>) -> bool {
+    // TODO: it's a normal use to upload headers via cell-emitter, but due to the
+    //       feature that Axon won't check header's continuity, we can upload the header
+    //       just before relaying IBC messages, if so, this method would be abandoned
+    async fn submit_headers(&mut self, headers: Vec<HeaderView>) -> bool {
+        if let Err(err) = self.upload_headers(headers).await {
+            tracing::error!("failed to sync CKB headers: {err}");
+        }
         true
     }
 }
@@ -64,7 +187,8 @@ impl SubmitProcess for CkbSubmitProcess {
 pub struct CellProcessManager {
     rt: Arc<Runtime>,
     rpc: RpcClient,
-    contract: Arc<Provider<Ws>>,
+    chain_id: u64,
+    contract: Arc<ContractProvider>,
     start_tip_number: u64,
     cell_processors: HashMap<RpcSearchKey, JoinHandle<()>>,
 }
@@ -73,12 +197,14 @@ impl CellProcessManager {
     pub fn new(
         rt: Arc<Runtime>,
         ckb_uri: &str,
-        contract: Arc<Provider<Ws>>,
+        chain_id: u64,
+        contract: Arc<ContractProvider>,
         start_tip_number: u64,
     ) -> Self {
         Self {
             rt,
             rpc: RpcClient::new(ckb_uri),
+            chain_id,
             contract,
             start_tip_number,
             cell_processors: HashMap::new(),
@@ -107,7 +233,7 @@ impl CellProcessManager {
             search_key.clone(),
             tip_state,
             self.rpc.clone(),
-            CkbSubmitProcess::new(self.contract.clone()),
+            CkbSubmitProcess::new(self.chain_id, self.contract.clone()),
         );
         let handle = self.rt.spawn(async move {
             cell_processor.run().await;
@@ -122,55 +248,6 @@ impl CellProcessManager {
             true
         } else {
             false
-        }
-    }
-}
-
-impl From<ibc_contract::Script> for Script {
-    fn from(value: ibc_contract::Script) -> Self {
-        let hash_type = if value.hash_type == 0 {
-            ScriptHashType::Data
-        } else if value.hash_type == 1 {
-            ScriptHashType::Type
-        } else {
-            ScriptHashType::Data1
-        };
-        Self {
-            code_hash: value.code_hash.into(),
-            hash_type,
-            args: JsonBytes::from_vec(value.args.to_vec()),
-        }
-    }
-}
-
-impl From<&ibc_contract::SearchKey> for RpcSearchKey {
-    fn from(value: &ibc_contract::SearchKey) -> Self {
-        let script_type = if value.script_type == 0 {
-            ScriptType::Lock
-        } else {
-            ScriptType::Type
-        };
-        let search_mode = if value.script_search_mode == 0 {
-            IndexerScriptSearchMode::Prefix
-        } else {
-            IndexerScriptSearchMode::Exact
-        };
-        let filter = if let Some(filter) = value.filter.first() {
-            let json_uint_array = |v: [u64; 2]| [v[0].into(), v[1].into()];
-            Some(RpcSearchKeyFilter {
-                script: Some(filter.script.clone().into()),
-                script_len_range: Some(json_uint_array(filter.script_len_range)),
-                output_data_len_range: Some(json_uint_array(filter.output_data_len_range)),
-                output_capacity_range: Some(json_uint_array(filter.output_data_capacity_range)),
-            })
-        } else {
-            None
-        };
-        Self {
-            script: value.script.clone().into(),
-            script_type,
-            script_search_mode: Some(search_mode),
-            filter,
         }
     }
 }

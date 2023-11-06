@@ -11,7 +11,7 @@ pub use ownable_ibc_handler::*;
 )]
 pub mod ownable_ibc_handler {
     const _: () = {
-        ::core::include_bytes!("OwnableIBCHandler.json",);
+        ::core::include_bytes!("abi/OwnableIBCHandler.json",);
     };
     #[allow(deprecated)]
     fn __abi() -> ::ethers::core::abi::Abi {

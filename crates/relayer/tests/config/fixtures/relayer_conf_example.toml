@@ -91,13 +91,11 @@ websocket_addr = "ws://127.0.0.1:8010"
 rpc_addr = "http://127.0.0.1:8000/"
 contract_address = "0x15Ff10fCc8A1a50bFbE07847A22664801eA79E0f"
 transfer_contract_address = "0x0000000000000000000000000000000000000000"
-emitter_ckb_url = "https://testnet.ckbapp.dev"
-emitter_scan_start_block_number = 1000000
 restore_block_count = 10000
 key_name = "relayer_axon_wallet"
 store_prefix = "forcerelay"
-ckb_light_client_contract_address = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"
-image_cell_contract_address = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"
+emitter_ckb_url = "https://testnet.ckbapp.dev"
+emitter_scan_start_block_number = 1000000
 
 [[chains]]
 id = "ckb4ibc-0"
