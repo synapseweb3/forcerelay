@@ -55,7 +55,8 @@ pub enum IbcProtocolType {
     Packet,
 }
 
-pub type WriteAckMonitorSender = (Sender<Option<(IbcPacket, CellInput)>>, u64);
+pub type UselessWriteAckCell = (IbcPacket, CellInput, u64);
+pub type WriteAckMonitorSender = (Sender<Option<UselessWriteAckCell>>, u64);
 pub type WriteAckMonitorCmd = Sender<WriteAckMonitorSender>;
 
 // TODO: add cell emitter here
@@ -70,7 +71,7 @@ pub struct Ckb4IbcEventMonitor {
     counterparty_client_type_rx: WatchReceiver<Option<ClientType>>,
     counterparty_client_type: ClientType,
     fetch_cursors: HashMap<IbcProtocolType, JsonBytes>,
-    useless_write_ack_packets: BTreeMap<u64, (IbcPacket, CellInput)>,
+    useless_write_ack_packets: BTreeMap<u64, UselessWriteAckCell>,
 }
 
 impl Ckb4IbcEventMonitor {
@@ -132,11 +133,11 @@ impl Ckb4IbcEventMonitor {
                     .await
                     .map_err(|err| Error::others(err.detail().to_string()))?;
                 if block_number + block_number_gap < tip_block_number {
-                    let (packet, input) = self
+                    let useless_packet = self
                         .useless_write_ack_packets
                         .remove(&block_number)
                         .unwrap();
-                    resposne.send(Some((packet, input))).unwrap();
+                    resposne.send(Some(useless_packet)).unwrap();
                     return Ok(());
                 }
             }
@@ -203,7 +204,7 @@ impl Ckb4IbcEventMonitor {
                 events: vec![],
             });
         }
-        let ((ibc_connection_cell, tx_hash), (block_number, _)) =
+        let ((ibc_connection_cell, tx_hash), (block_number, _, _)) =
             connections.into_iter().next().unwrap();
         if self.cache_set.read().unwrap().has(&tx_hash) {
             return Ok(EventBatch {
@@ -319,7 +320,7 @@ impl Ckb4IbcEventMonitor {
                 self.cache_set.write().unwrap().insert(tx.clone());
                 true
             })
-            .map(|((channel, tx), (block_number, _))| match channel.channel_end.state {
+            .map(|((channel, tx), (block_number, _, _))| match channel.channel_end.state {
                 State::Init => {
                     let connection_id = channel.channel_end.connection_hops[0].clone();
                     info!(
@@ -411,7 +412,7 @@ impl Ckb4IbcEventMonitor {
                 true
             })
             .map(
-                |(((packet, _content), tx), (block_number, cell_input))| match packet.status {
+                |(((packet, _), tx), (block_number, cell_input, capacity))| match packet.status {
                     PacketStatus::Send => {
                         info!(
                             "🫡  {} received SendPacket({}) event, from {}/{} to {}/{}",
@@ -440,7 +441,8 @@ impl Ckb4IbcEventMonitor {
                             packet.packet.destination_channel_id,
                             packet.packet.destination_port_id,
                         );
-                        useless_packets.insert(block_number, (packet.clone(), cell_input));
+                        useless_packets
+                            .insert(block_number, (packet.clone(), cell_input, capacity));
                         IbcEventWithHeight {
                             event: IbcEvent::WriteAcknowledgement(WriteAcknowledgement {
                                 ack: packet
@@ -472,7 +474,7 @@ impl Ckb4IbcEventMonitor {
         extractor: &F,
         limit: u32,
         ibc_protocol: IbcProtocolType,
-    ) -> Result<Vec<((T, H256), (u64, CellInput))>>
+    ) -> Result<Vec<((T, H256), (u64, CellInput, u64))>>
     where
         F: Fn(TransactionView) -> Result<(T, H256)>,
     {
@@ -490,9 +492,13 @@ impl Ckb4IbcEventMonitor {
                 let cell_input = CellInput::new_builder()
                     .previous_output(cell.out_point.clone().into())
                     .build();
-                (cell.block_number.into(), cell_input)
+                (
+                    cell.block_number.into(),
+                    cell_input,
+                    cell.output.capacity.into(),
+                )
             })
-            .collect::<Vec<(u64, CellInput)>>();
+            .collect::<Vec<(u64, CellInput, u64)>>();
         let ibc_response = cells
             .objects
             .iter()
