@@ -1,4 +1,7 @@
-use serde::ser::{Serialize, Serializer};
+use serde::{
+    ser::{Serialize, Serializer},
+    Deserialize, Deserializer,
+};
 use subtle_encoding::{Encoding, Hex};
 
 pub fn ser_hex_upper<S, T>(data: T, serializer: S) -> Result<S::Ok, S::Error>
@@ -8,6 +11,15 @@ where
 {
     let hex = Hex::upper_case().encode_to_string(data).unwrap();
     hex.serialize(serializer)
+}
+
+pub fn deser_hex_upper<'de, D>(deserializer: D) -> Result<alloc::vec::Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let data = alloc::string::String::deserialize(deserializer)?;
+    let decoded = Hex::upper_case().decode_from_str(data).unwrap();
+    Ok(decoded)
 }
 
 pub mod serde_string {
