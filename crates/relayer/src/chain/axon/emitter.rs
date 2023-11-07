@@ -22,6 +22,7 @@ use crate::ibc_contract::{ckb_light_client, image_cell};
 
 use super::ContractProvider;
 
+/// see https://docs.axonweb3.io/contract/system_contacts
 const fn system_contract_address(addr: u8) -> Address {
     H160([
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
