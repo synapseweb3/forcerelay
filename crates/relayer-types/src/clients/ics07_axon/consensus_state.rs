@@ -11,19 +11,22 @@ use crate::core::ics02_client::error::Error as Ics02Error;
 pub const AXON_CONSENSUS_STATE_TYPE_URL: &str = "/ibc.lightclients.axon.v1.ConsensusState";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AxonConsensusState {}
+pub struct AxonConsensusState {
+    pub root: CommitmentRoot,
+    pub timestamp: Timestamp,
+}
 
 impl crate::core::ics02_client::consensus_state::ConsensusState for AxonConsensusState {
     fn client_type(&self) -> ClientType {
-        todo!()
+        ClientType::Axon
     }
 
     fn root(&self) -> &CommitmentRoot {
-        todo!()
+        &self.root
     }
 
     fn timestamp(&self) -> Timestamp {
-        todo!()
+        self.timestamp
     }
 }
 

@@ -67,7 +67,10 @@ use ibc_relayer_types::{
             },
             packet::{PacketMsgType, Sequence},
         },
-        ics23_commitment::{commitment::CommitmentPrefix, merkle::MerkleProof},
+        ics23_commitment::{
+            commitment::{CommitmentPrefix, CommitmentRoot},
+            merkle::MerkleProof,
+        },
         ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId},
     },
     events::{IbcEvent, WithBlockDataType},
@@ -104,6 +107,7 @@ use super::{
         QueryUpgradedConsensusStateRequest,
     },
     tracking::TrackedMsgs,
+    SEC_TO_NANO,
 };
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -968,14 +972,28 @@ impl ChainEndpoint for AxonChain {
         Ok(events)
     }
 
-    // TODO do we need to implement this?
     fn query_host_consensus_state(
         &self,
-        _request: QueryHostConsensusStateRequest,
+        request: QueryHostConsensusStateRequest,
     ) -> Result<Self::ConsensusState, Error> {
-        // TODO
-        warn!("axon query_host_consensus_state() not support");
-        Ok(AxonConsensusState {})
+        let fut = match request.height {
+            QueryHeight::Latest => self
+                .rpc_client
+                .get_block_by_id(BlockId::Number(BlockNumber::Latest)),
+            QueryHeight::Specific(ibc_height) => {
+                let number = ibc_height.revision_height();
+                self.rpc_client
+                    .get_block_by_id(BlockId::Number(BlockNumber::Number(number.into())))
+            }
+        };
+        let block = self
+            .rt
+            .block_on(fut)?
+            .ok_or_else(Error::invalid_height_no_source)?;
+        let root = CommitmentRoot::from_bytes(block.header.state_root.as_bytes());
+        let timestamp = Timestamp::from_nanoseconds(block.header.timestamp * SEC_TO_NANO)
+            .map_err(Error::other)?;
+        Ok(AxonConsensusState { root, timestamp })
     }
 
     // TODO do we need to implement this?
@@ -1009,7 +1027,10 @@ impl ChainEndpoint for AxonChain {
         &self,
         _light_block: Self::LightBlock,
     ) -> Result<Self::ConsensusState, Error> {
-        Ok(AxonConsensusState {})
+        Ok(AxonConsensusState {
+            root: CommitmentRoot::from_bytes(&[]),
+            timestamp: Timestamp::default(),
+        })
     }
 
     // TODO do we need to implement this?
