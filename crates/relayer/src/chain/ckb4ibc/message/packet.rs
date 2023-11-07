@@ -102,7 +102,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         ack: None,
     });
 
-    let (channel_input, input_capacity) =
+    let (channel_input, mut input_capacity) =
         converter.get_ibc_channel_input(&channel_id, &msg.packet.destination_port)?;
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
     let packet_lock = get_packet_lock_script(converter, packet_args.to_args());
@@ -116,7 +116,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
 
     // fetch useless packet cell as input to save capacity
     let useless_write_ack_packet = converter.require_useless_write_ack_packet(15); // TODO: make block number gap setup in config
-    if let Some((packet, input)) = useless_write_ack_packet {
+    if let Some((packet, input, capacity)) = useless_write_ack_packet {
         tracing::info!(
             "use useless WriteAck({}) to save CKB capacity",
             packet.packet.sequence,
@@ -125,7 +125,8 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         write_ack_witness = write_ack_packet.witness;
         packet_tx = packet_tx
             .cell_dep(converter.get_packet_contract_outpoint().clone())
-            .input(input.clone());
+            .input(input);
+        input_capacity += capacity;
     }
 
     let packet_tx = packet_tx

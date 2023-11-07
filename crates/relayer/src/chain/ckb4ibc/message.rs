@@ -136,7 +136,7 @@ pub trait MsgToTxConverter {
     fn require_useless_write_ack_packet(
         &self,
         block_number_gap: u64,
-    ) -> Option<(IbcPacket, CellInput)>;
+    ) -> Option<(IbcPacket, CellInput, u64)>;
 }
 
 pub struct Converter<'a> {
@@ -304,7 +304,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     fn require_useless_write_ack_packet(
         &self,
         block_number_gap: u64,
-    ) -> Option<(IbcPacket, CellInput)> {
+    ) -> Option<(IbcPacket, CellInput, u64)> {
         if let Some(cmd) = self.write_ack_cmd.as_ref() {
             let (tx, rx) = crossbeam_channel::bounded(1);
             cmd.send((tx, block_number_gap))
