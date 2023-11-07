@@ -1542,7 +1542,7 @@ impl AxonChain {
         let mut ibc_cache = self.ibc_cache.write().unwrap();
         cache_ics_tx_hash_with_event(&mut ibc_cache, event.clone(), tx_hash);
         tracing::info!(
-            "{} transaciton {} committed to {}",
+            "🎉 {} transaciton {} committed to {}",
             event.event_type().as_str(),
             hex::encode(tx_hash),
             self.id()

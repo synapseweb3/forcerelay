@@ -121,16 +121,31 @@ impl CkbSubmitProcess {
         let tx = Legacy(transaction_request);
         let signature = self.contract.sign_transaction(&tx, from).await?;
 
-        self.contract
+        let result = self
+            .contract
             .send_raw_transaction(tx.rlp_signed(&signature))
             .await?
-            .await?
-            .expect("failed to send to image_cell_contract");
+            .await?;
+
+        if let Some(receipt) = result {
+            let tx_hash = hex::encode(receipt.transaction_hash);
+            tracing::info!(
+                "📖 cells upload transaction {tx_hash} has sent to Axon({})",
+                self.chain_id
+            );
+        }
 
         Ok(())
     }
 
     async fn upload_headers(&self, headers: Vec<HeaderView>) -> eyre::Result<()> {
+        if headers.is_empty() {
+            return Ok(());
+        }
+        let (from_number, to_number) = (
+            headers.first().unwrap().inner.number,
+            headers.last().unwrap().inner.number,
+        );
         let data = ckb_light_client::UpdateCall {
             headers: headers.into_iter().map(Into::into).collect(),
         }
@@ -151,11 +166,21 @@ impl CkbSubmitProcess {
         let tx = Legacy(transaction_request);
         let signature = self.contract.sign_transaction(&tx, from).await?;
 
-        self.contract
+        let result = self
+            .contract
             .send_raw_transaction(tx.rlp_signed(&signature))
             .await?
-            .await?
-            .expect("failed to send to light_client_contract");
+            .await?;
+
+        if let Some(receipt) = result {
+            let tx_hash = hex::encode(receipt.transaction_hash);
+            tracing::info!(
+                "📖 headers({} - {}) upload transaction {tx_hash} has sent to Axon({})",
+                u64::from(from_number),
+                u64::from(to_number),
+                self.chain_id
+            );
+        }
 
         Ok(())
     }
@@ -240,6 +265,10 @@ impl CkbSyncManager {
             cell_processor.run().await;
         });
         self.cell_processors.insert(search_key, handle);
+        tracing::info!(
+            "new cell filter registered to sync from block {}",
+            self.start_tip_number
+        );
         Ok(true)
     }
 
@@ -269,6 +298,7 @@ impl CkbSyncManager {
             header_processor.run().await;
         });
         self.header_processor = Some(handle);
+        tracing::info!("start to sync CKB headers from block {start_block_number}");
         Ok(true)
     }
 

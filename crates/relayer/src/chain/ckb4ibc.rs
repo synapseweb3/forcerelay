@@ -692,7 +692,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 .and_then(|tx_hash| {
                     let confirms = 3;
                     info!(
-                        "{:?} transaction {} committed to {}, wait {confirms} blocks confirmation",
+                        "🎉 {:?} transaction {} committed to {}, wait {confirms} blocks confirmation",
                         *msg_type,
                         hex::encode(&tx_hash),
                         self.id()
