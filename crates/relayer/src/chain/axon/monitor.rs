@@ -224,6 +224,7 @@ impl AxonEventMonitor {
             .into_iter()
             .for_each(|(event, meta)| self.process_event(event, meta));
 
+        self.start_block_number = tip_block_number + 1;
         Next::Continue
     }
 
