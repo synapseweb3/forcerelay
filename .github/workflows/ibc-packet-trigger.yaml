@@ -24,7 +24,6 @@ jobs:
         AXON_HTTP_RPC_URL: https://rpc-alphanet-axon.ckbapp.dev
         IBC_SOLIDITY_CONTRACT_COMMIT: e0d1f4bf20c40aad721bff5838d8a3fa80c94585
         CONTRACT_WORKSPACE: ${{ github.workspace }}/ibc-solidity-contract
-        RECEIVER: "0xc219351b150b900e50a7039f1e448b844110927e"
         TRANSFER_CONTRACT_ADDRESS: "0x9E545E3C0baAB3E08CdfD552C960A1050f373042"
         CHANNEL: channel-8
         DENOM: f2a14f50a56b9aab8e960cb1b2c7f1152d7523e6cacb45b1ab2a94acb83e0233
@@ -77,9 +76,12 @@ jobs:
 
       # script:   https://github.com/synapseweb3/ibc-solidity-contract/blob/e0d1f4bf20c40aad721bff5838d8a3fa80c94585/scripts/send_erc20_packet_back.js
       # sender:   https://explorer-alphanet-axon.ckbapp.dev/address/0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-      # receiver: https://explorer-alphanet-axon.ckbapp.dev/address/0xc219351b150b900e50a7039f1e448b844110927e
+      # receiver: https://explorer-alphanet-axon.ckbapp.dev/address/0xbb559cdd754bed4637293c65bf5fdd1e43c8241e
+      # Note: The address of the receiver on CKB chain is `ckb_blake2b(packed CKB lock script)[..20]`.
       - name: 1. Trigger SendPacket event on Axon (ERC20)
         working-directory: ${{ env.CONTRACT_WORKSPACE }}
+        env:
+          RECEIVER: ${{ vars.SUDT_RECEIVER }}
         run: yarn send
 
       - name: 2. Listen RecvPacket event on CKB
