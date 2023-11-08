@@ -7,9 +7,12 @@ use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::object::{Ordering, Packet as CkbPacket};
 use ckb_ics_axon::{ChannelArgs, PacketArgs};
 use ckb_types::packed::BytesOpt;
+use ibc_relayer_types::core::ics04_channel::events::AcknowledgePacket;
+use ibc_relayer_types::core::ics04_channel::events::ReceivePacket;
 use ibc_relayer_types::core::ics04_channel::msgs::acknowledgement::MsgAcknowledgement;
 use ibc_relayer_types::core::ics04_channel::msgs::recv_packet::MsgRecvPacket;
 use ibc_relayer_types::core::ics04_channel::packet::Packet;
+use ibc_relayer_types::events::IbcEvent;
 
 use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 use crate::chain::ckb4ibc::utils::{
@@ -135,11 +138,13 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         .witness(write_ack_witness, ibc_packet.witness)
         .build();
 
+    let event = IbcEvent::ReceivePacket(ReceivePacket { packet: msg.packet });
+
     Ok(CkbTxInfo {
         unsigned_tx: Some(packet_tx),
         envelope,
         input_capacity,
-        event: None,
+        event: Some(event),
     })
 }
 
@@ -218,10 +223,12 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         .witness(old_packet.witness, new_packet.witness)
         .build();
 
+    let event = IbcEvent::AcknowledgePacket(AcknowledgePacket { packet: msg.packet });
+
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
         input_capacity: channel_capacity + packet_capacity,
-        event: None,
+        event: Some(event),
     })
 }

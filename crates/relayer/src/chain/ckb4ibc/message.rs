@@ -325,7 +325,7 @@ pub struct CkbTxInfo {
 
 // Return a transaction which needs to be added relayer's input in it and to be signed.
 pub fn convert_msg_to_ckb_tx<C: MsgToTxConverter>(
-    msg: Any,
+    msg: &Any,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     match msg.type_url.as_str() {

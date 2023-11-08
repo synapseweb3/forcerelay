@@ -22,7 +22,7 @@ use crate::keyring::{KeyRing, Secp256k1KeyPair};
 use crate::misbehaviour::MisbehaviourEvidence;
 
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections, IbcPacket, PacketStatus};
-use ckb_ics_axon::message::Envelope;
+use ckb_ics_axon::message::{Envelope, MsgType};
 use ckb_ics_axon::object::Ordering;
 use ckb_ics_axon::{ChannelArgs, PacketArgs};
 use ckb_jsonrpc_types::{Status, TransactionView};
@@ -36,6 +36,7 @@ use ckb_types::molecule::prelude::Entity;
 use ckb_types::packed::{CellInput, OutPoint, Script, WitnessArgs};
 use ckb_types::prelude::{Builder, Pack, Unpack};
 use futures::TryFutureExt;
+use ibc_proto::google::protobuf::Any;
 use ibc_proto::ibc::apps::fee::v1::{
     QueryIncentivizedPacketRequest, QueryIncentivizedPacketResponse,
 };
@@ -477,6 +478,61 @@ impl Ckb4IbcChain {
             .collect::<Vec<_>>();
         Ok(packets.first().cloned())
     }
+
+    #[allow(clippy::type_complexity)]
+    fn assemble_transaction_from_msg(
+        &self,
+        msg: &Any,
+    ) -> Result<(Option<IbcEvent>, Option<(TransactionView, MsgType)>), Error> {
+        let converter = self.get_converter()?;
+        let CkbTxInfo {
+            unsigned_tx,
+            envelope,
+            input_capacity,
+            event,
+        } = convert_msg_to_ckb_tx(msg, &converter)?;
+        if unsigned_tx.is_none() {
+            return Ok((event, None));
+        }
+        let unsigned_tx = unsigned_tx.unwrap();
+        let msg_type = envelope.msg_type;
+        match self.complete_tx_with_secp256k1_change_and_envelope(
+            unsigned_tx,
+            input_capacity,
+            envelope,
+        ) {
+            Ok(tx) => {
+                let last_input_idx = tx.inputs().len() - 1;
+                let secret_key = self
+                    .keybase
+                    .get_key(&self.config.key_name)
+                    .map_err(Error::key_base)?
+                    .into_ckb_keypair(self.network()?)
+                    .private_key;
+                let signer = SecpSighashScriptSigner::new(Box::new(
+                    SecpCkbRawKeySigner::new_with_secret_keys(vec![secret_key]),
+                ));
+                let tx = signer
+                    .sign_tx(
+                        &tx,
+                        &ScriptGroup {
+                            script: Script::from(&self.tx_assembler_address()?),
+                            group_type: ScriptGroupType::Lock,
+                            // TODO: here should be more indices in case of more than one Secp256k1 cells
+                            //       have been filled in the transaction
+                            input_indices: vec![last_input_idx],
+                            output_indices: vec![],
+                        },
+                    )
+                    .map_err(|err| Error::other_error(err.to_string()))?;
+                Ok((event, Some((tx.into(), msg_type))))
+            }
+            Err(err) => {
+                // return signing error such as no enough ckb
+                Err(err)
+            }
+        }
+    }
 }
 
 impl ChainEndpoint for Ckb4IbcChain {
@@ -624,119 +680,79 @@ impl ChainEndpoint for Ckb4IbcChain {
         &mut self,
         tracked_msgs: TrackedMsgs,
     ) -> Result<Vec<IbcEventWithHeight>, Error> {
-        let mut txs = Vec::new();
-        let mut tx_hashes = Vec::new();
-        let mut events = Vec::new();
         let mut result_events = Vec::new();
-        for msg in tracked_msgs.msgs {
-            let converter = self.get_converter()?;
-            let CkbTxInfo {
-                unsigned_tx,
-                envelope,
-                input_capacity,
-                event,
-            } = convert_msg_to_ckb_tx(msg, &converter)?;
-            if unsigned_tx.is_none() {
-                if let Some(e) = event {
-                    if let IbcEvent::CreateClient(e) = &e {
-                        let client_type = e.0.client_type;
-                        info!("the counterparty client type of Ckb4Ibc is set as {client_type}");
-                        self.sync_counterparty_client_type(client_type);
+        let mut msgs = tracked_msgs.msgs;
+        let mut retry_times = 0;
+        let sync_if_create_client = |event: &IbcEvent| {
+            if let IbcEvent::CreateClient(e) = event {
+                let client_type = e.0.client_type;
+                info!("counterparty client type of Ckb4Ibc is set to {client_type}");
+                self.sync_counterparty_client_type(client_type);
+                return true;
+            }
+            false
+        };
+        while !msgs.is_empty() {
+            let msg = msgs.remove(0);
+            match self.assemble_transaction_from_msg(&msg)? {
+                (Some(event), None) => {
+                    if sync_if_create_client(&event) {
+                        let ibc_event = IbcEventWithHeight::new(event, Height::default());
+                        return Ok(vec![ibc_event]);
+                    } else {
+                        return Ok(vec![]);
                     }
-                    let ibc_event = IbcEventWithHeight::new(e, Height::default());
-                    result_events.push(ibc_event);
                 }
-                continue;
-            }
-            let unsigned_tx = unsigned_tx.unwrap();
-            let msg_type = envelope.msg_type;
-            match self.complete_tx_with_secp256k1_change_and_envelope(
-                unsigned_tx,
-                input_capacity,
-                envelope,
-            ) {
-                Ok(tx) => {
-                    let last_input_idx = tx.inputs().len() - 1;
-                    let secret_key = self
-                        .keybase
-                        .get_key(&self.config.key_name)
-                        .map_err(Error::key_base)?
-                        .into_ckb_keypair(self.network()?)
-                        .private_key;
-                    let signer = SecpSighashScriptSigner::new(Box::new(
-                        SecpCkbRawKeySigner::new_with_secret_keys(vec![secret_key]),
-                    ));
-                    let tx = signer
-                        .sign_tx(
-                            &tx,
-                            &ScriptGroup {
-                                script: Script::from(&self.tx_assembler_address()?),
-                                group_type: ScriptGroupType::Lock,
-                                // TODO: here should be more indices in case of more than one Secp256k1 cells
-                                //       have been filled in the transaction
-                                input_indices: vec![last_input_idx],
-                                output_indices: vec![],
-                            },
-                        )
-                        .unwrap();
-                    tx_hashes.push(tx.hash().unpack());
-                    txs.push((tx, msg_type));
-                    events.push(event);
-                }
-                Err(err) => {
-                    // return signing error such as no enough ckb
-                    return Err(err);
-                }
-            }
-        }
-        let responses = txs.iter().map(|(tx, msg_type)| {
-            let tx: TransactionView = tx.clone().into();
-            self.rpc_client
-                .send_transaction(&tx.inner, None)
-                .and_then(|tx_hash| {
-                    let confirms = 3;
-                    info!(
-                        "{:?} transaction {} committed to {}, wait {confirms} blocks confirmation",
-                        *msg_type,
-                        hex::encode(&tx_hash),
-                        self.id()
-                    );
-                    wait_ckb_transaction_committed(
-                        &self.rpc_client,
-                        tx_hash,
-                        Duration::from_secs(10),
-                        confirms,
-                        Duration::from_secs(600),
-                    )
-                })
-        });
-        let responses = self.rt.block_on(futures::future::join_all(responses));
-        for (i, response) in responses.iter().enumerate() {
-            match response {
-                Ok(height) => {
-                    if let Some(event) = events.get(i).unwrap().clone() {
-                        if let IbcEvent::CreateClient(e) = &event {
-                            let client_type = e.0.client_type;
-                            info!(
-                                "the counterparty client type of Ckb4Ibc is set as {client_type}"
-                            );
-                            self.sync_counterparty_client_type(client_type);
+                (Some(event), Some((tx, msg_type))) => match self
+                    .rt
+                    .block_on(self.rpc_client.send_transaction(&tx.inner, None))
+                {
+                    Ok(tx_hash) => {
+                        let confirms = 3;
+                        info!(
+                            "{msg_type:?} transaction {} committed to {}, wait {confirms} blocks confirmation",
+                            hex::encode(&tx_hash),
+                            self.id()
+                        );
+                        retry_times = 0;
+                        match self.rt.block_on(wait_ckb_transaction_committed(
+                            &self.rpc_client,
+                            tx_hash.clone(),
+                            Duration::from_secs(10),
+                            confirms,
+                            Duration::from_secs(600),
+                        )) {
+                            Ok(height) => {
+                                sync_if_create_client(&event);
+                                let ibc_event_with_height = IbcEventWithHeight {
+                                    event,
+                                    height: Height::from_noncosmos_height(height),
+                                    tx_hash: tx_hash.0,
+                                };
+                                result_events.push(ibc_event_with_height);
+                            }
+                            Err(err) => {
+                                warn!("wait transaction failed: {err}");
+                                continue;
+                            }
                         }
-                        let tx_hash: [u8; 32] = tx_hashes.get(i).unwrap().clone().into();
-                        let ibc_event_with_height = IbcEventWithHeight {
-                            event,
-                            height: Height::from_noncosmos_height(*height),
-                            tx_hash,
-                        };
-                        result_events.push(ibc_event_with_height);
                     }
-                }
-                Err(e) => {
-                    let tx: TransactionView = txs[i].0.clone().into();
-                    let json_tx = serde_json::to_string_pretty(&tx).unwrap();
-                    let error = format!("{e}\n\n======== transaction info ========\n\n{json_tx}\n");
-                    return Err(Error::send_tx(error));
-                }
+                    Err(e) => {
+                        let json_tx = serde_json::to_string_pretty(&tx).unwrap();
+                        let error =
+                            format!("{e}\n\n======== transaction info ========\n\n{json_tx}\n");
+                        if error.contains("UnknowOutpoint") || error.contains("PoolRejectedRBF") {
+                            if retry_times < 3 {
+                                msgs.insert(0, msg);
+                            }
+                            retry_times += 1;
+                            warn!("error occurred, try again: {e}");
+                            continue;
+                        }
+                        return Err(Error::other_error(error));
+                    }
+                },
+                _ => unreachable!(),
             }
         }
         self.clear_cache();
