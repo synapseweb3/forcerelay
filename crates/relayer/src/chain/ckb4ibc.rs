@@ -109,6 +109,10 @@ pub mod utils;
 
 pub use utils::keccak256;
 
+type ConnectionCache =
+    HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>;
+type PacketInputData = HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>;
+
 pub struct Ckb4IbcChain {
     rt: Arc<TokioRuntime>,
     rpc_client: Arc<RpcClient>,
@@ -128,12 +132,8 @@ pub struct Ckb4IbcChain {
     client_outpoints: RefCell<HashMap<ClientType, OutPoint>>,
     channel_input_data: RefCell<HashMap<(ChannelId, PortId), (CellInput, u64)>>,
     channel_cache: RefCell<HashMap<ChannelId, IbcChannel>>,
-    #[allow(clippy::type_complexity)]
-    connection_cache: RefCell<
-        HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>,
-    >,
-    #[allow(clippy::type_complexity)]
-    packet_input_data: RefCell<HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>>,
+    connection_cache: RefCell<ConnectionCache>,
+    packet_input_data: RefCell<PacketInputData>,
     packet_cache: RefCell<HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
 }
 
@@ -180,17 +180,7 @@ impl Ckb4IbcChain {
         }
         Ok(Converter {
             write_ack_cmd: &self.tx_write_ack_cmd,
-            channel_input_data: self.channel_input_data.borrow(),
-            channel_cache: self.channel_cache.borrow(),
-            config: &self.config,
-            connection_cache: self.connection_cache.borrow(),
-            client_outpoints: self.client_outpoints.borrow(),
-            packet_input_data: self.packet_input_data.borrow(),
-            packet_cache: self.packet_cache.borrow(),
-            chan_contract_outpoint: &self.channel_outpoint,
-            packet_contract_outpoint: &self.packet_outpoint,
-            conn_contract_outpoint: &self.connection_outpoint,
-            commitment_prefix: self.query_commitment_prefix()?,
+            ckb_instance: self,
         })
     }
 
@@ -683,20 +673,20 @@ impl ChainEndpoint for Ckb4IbcChain {
         let mut result_events = Vec::new();
         let mut msgs = tracked_msgs.msgs;
         let mut retry_times = 0;
-        let sync_if_create_client = |event: &IbcEvent| {
+        let sync_if_create_client = |event: &IbcEvent| -> Option<ClientType> {
             if let IbcEvent::CreateClient(e) = event {
                 let client_type = e.0.client_type;
                 info!("counterparty client type of Ckb4Ibc is set to {client_type}");
-                self.sync_counterparty_client_type(client_type);
-                return true;
+                return Some(client_type);
             }
-            false
+            None
         };
         while !msgs.is_empty() {
             let msg = msgs.remove(0);
             match self.assemble_transaction_from_msg(&msg)? {
                 (Some(event), None) => {
-                    if sync_if_create_client(&event) {
+                    if let Some(client_type) = sync_if_create_client(&event) {
+                        self.sync_counterparty_client_type(client_type);
                         let ibc_event = IbcEventWithHeight::new(event, Height::default());
                         return Ok(vec![ibc_event]);
                     } else {
@@ -723,11 +713,13 @@ impl ChainEndpoint for Ckb4IbcChain {
                             Duration::from_secs(600),
                         )) {
                             Ok(height) => {
-                                sync_if_create_client(&event);
+                                if let Some(client_type) = sync_if_create_client(&event) {
+                                    self.sync_counterparty_client_type(client_type);
+                                }
                                 let ibc_event_with_height = IbcEventWithHeight {
                                     event,
                                     height: Height::from_noncosmos_height(height),
-                                    tx_hash: tx_hash.0,
+                                    tx_hash: tx_hash.into(),
                                 };
                                 result_events.push(ibc_event_with_height);
                             }
@@ -746,7 +738,8 @@ impl ChainEndpoint for Ckb4IbcChain {
                                 msgs.insert(0, msg);
                             }
                             retry_times += 1;
-                            warn!("error occurred, try again: {e}");
+                            warn!("error occurred, clear cache and try again: {e}");
+                            self.clear_cache();
                             continue;
                         }
                         return Err(Error::other_error(error));

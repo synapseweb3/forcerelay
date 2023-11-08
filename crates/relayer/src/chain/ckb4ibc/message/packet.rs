@@ -46,7 +46,8 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_id = msg.packet.destination_channel.clone();
-    let old_channel_end = converter.get_ibc_channel(&channel_id)?;
+    let old_channel_end =
+        converter.get_ibc_channel(&channel_id, Some(&msg.packet.destination_port))?;
     let mut new_channel_end = old_channel_end.clone();
 
     let packet = convert_ibc_packet(&msg.packet);
@@ -96,7 +97,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         port_id,
     };
 
-    let old_channel = get_encoded_object(old_channel_end);
+    let old_channel = get_encoded_object(&old_channel_end);
     let new_channel = get_encoded_object(&new_channel_end);
     let ibc_packet = get_encoded_object(&IbcPacket {
         packet,
@@ -153,7 +154,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_id = msg.packet.source_channel.clone();
-    let old_channel_end = converter.get_ibc_channel(&channel_id)?;
+    let old_channel_end = converter.get_ibc_channel(&channel_id, Some(&msg.packet.source_port))?;
     let mut new_channel_end = old_channel_end.clone();
 
     match old_channel_end.order {
@@ -162,7 +163,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         Ordering::Unknown => return Err(Error::other("channel ordering must be Order or Unorder")),
     }
 
-    let old_channel = get_encoded_object(old_channel_end);
+    let old_channel = get_encoded_object(&old_channel_end);
     let new_channel = get_encoded_object(&new_channel_end);
 
     let ack_packet = CkbMsgAckPacket {
@@ -193,11 +194,11 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     let (old_packet_input, packet_capacity) = converter.get_ibc_packet_input(
         &channel_id,
         &msg.packet.source_port,
-        &msg.packet.sequence,
+        msg.packet.sequence,
     )?;
     let old_ibc_packet =
-        converter.get_ibc_packet(&channel_id, &msg.packet.source_port, &msg.packet.sequence)?;
-    let old_packet = get_encoded_object(old_ibc_packet);
+        converter.get_ibc_packet(&channel_id, &msg.packet.source_port, msg.packet.sequence)?;
+    let old_packet = get_encoded_object(&old_ibc_packet);
 
     let (client_cell_type_args, client_id) =
         extract_client_id_by_connection_id(&new_channel_end.connection_hops[0], converter)?;

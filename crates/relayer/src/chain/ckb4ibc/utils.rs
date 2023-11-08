@@ -242,7 +242,6 @@ pub fn get_client_outpoint(
 ) -> Result<OutPoint, Error> {
     converter
         .get_client_outpoint(client_id)
-        .cloned()
         .ok_or(Error::other_error(format!("not found {client_id}")))
 }
 

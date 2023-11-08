@@ -58,7 +58,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         content: rlp::encode(&CkbMsgConnectionOpenInit {}).to_vec(),
     };
 
-    let old_connection = get_encoded_object(old_ibc_connection_cell);
+    let old_connection = get_encoded_object(&old_ibc_connection_cell);
     let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
@@ -123,7 +123,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
         .to_vec(),
     };
 
-    let old_connection = get_encoded_object(old_ibc_connection_cell);
+    let old_connection = get_encoded_object(&old_ibc_connection_cell);
     let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
@@ -177,7 +177,7 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
     let counterparty_client_id = connection_end.counterparty.client_id.clone();
     let client_id = connection_end.client_id.clone();
 
-    let old_connection = get_encoded_object(old_ibc_connection_cell);
+    let old_connection = get_encoded_object(&old_ibc_connection_cell);
     let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
@@ -235,7 +235,7 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
         .map(|v| v.parse().unwrap());
     let client_id = connection_end.client_id.clone();
 
-    let old_connection = get_encoded_object(old_ibc_connection_cell);
+    let old_connection = get_encoded_object(&old_ibc_connection_cell);
     let new_connection = get_encoded_object(&new_ibc_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;

@@ -115,7 +115,7 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
         port_id: convert_port_id_to_array(&msg.port_id)?,
     };
 
-    let old_connection = get_encoded_object(old_connection_cell);
+    let old_connection = get_encoded_object(&old_connection_cell);
     let new_connection = get_encoded_object(&new_connection_cell);
     let connection_lock =
         get_connection_lock_script(converter.get_config(), Some(client_id.clone()))?;
@@ -164,7 +164,7 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
     let ibc_channel = get_encoded_object(&ibc_channel_end);
 
     let (client_cell_type_args, client_id) = get_client_id_from_channel(&msg.channel, converter)?;
-    let old_connection = get_encoded_object(old_connection_cell);
+    let old_connection = get_encoded_object(&old_connection_cell);
     let new_connection = get_encoded_object(&new_connection_cell);
 
     let envelope = Envelope {
@@ -217,7 +217,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_idx = get_channel_number(&msg.channel_id)?;
-    let old_channel = converter.get_ibc_channel(&msg.channel_id)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, None)?;
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id).unwrap();
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
@@ -242,7 +242,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     };
 
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
-    let old_channel = get_encoded_object(old_channel);
+    let old_channel = get_encoded_object(&old_channel);
     let new_channel = get_encoded_object(&new_channel);
     let (channel_input, input_capacity) =
         converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id)?;
@@ -276,7 +276,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelOpenConfirm,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_channel = converter.get_ibc_channel(&msg.channel_id)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, None)?;
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
 
@@ -304,7 +304,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     };
 
     let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
-    let old_channel = get_encoded_object(old_channel);
+    let old_channel = get_encoded_object(&old_channel);
     let new_channel = get_encoded_object(&new_channel);
     let (channel_input, input_capacity) =
         converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id)?;
