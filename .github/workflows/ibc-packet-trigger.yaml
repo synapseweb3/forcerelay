@@ -15,16 +15,16 @@ jobs:
     timeout-minutes: 30
     env:
         # for forcerelay-ckb-sdk
-        FORCERELAY_CKB_SDK_COMMIT: ${{ vars.FORCERELAY_CKB_SDK_COMMIT || "main" }}
-        AXON_RECEIVER: ${{ vars.AXON_RECEIVER || "f39fd6e51aad88f6f4ce6ab8827279cfffb92266" }}
+        FORCERELAY_CKB_SDK_COMMIT: ${{ vars.FORCERELAY_CKB_SDK_COMMIT || 'main' }}
+        AXON_RECEIVER: ${{ vars.AXON_RECEIVER || 'f39fd6e51aad88f6f4ce6ab8827279cfffb92266' }}
         SUDT_AMOUNT: 1000
         SDK_WORKSPACE: ${{ github.workspace }}/forcerelay-ckb-sdk
         SDK_CONFIG: ${{ github.workspace }}/e2e/schedule/sdk.config.toml
         # for ibc-solidity-contract
         AXON_HTTP_RPC_URL: https://rpc-alphanet-axon.ckbapp.dev
-        IBC_SOLIDITY_CONTRACT_COMMIT: ${{ vars.IBC_SOLIDITY_CONTRACT_COMMIT || "e0d1f4bf20c40aad721bff5838d8a3fa80c94585" }} 
+        IBC_SOLIDITY_CONTRACT_COMMIT: ${{ vars.IBC_SOLIDITY_CONTRACT_COMMIT || 'e0d1f4bf20c40aad721bff5838d8a3fa80c94585' }} 
         CONTRACT_WORKSPACE: ${{ github.workspace }}/ibc-solidity-contract
-        TRANSFER_CONTRACT_ADDRESS: ${{ vars.TRANSFER_CONTRACT_ADDRESS || "0x9E545E3C0baAB3E08CdfD552C960A1050f373042" }}
+        TRANSFER_CONTRACT_ADDRESS: ${{ vars.TRANSFER_CONTRACT_ADDRESS || '0x9E545E3C0baAB3E08CdfD552C960A1050f373042' }}
         CHANNEL: channel-8
         DENOM: f2a14f50a56b9aab8e960cb1b2c7f1152d7523e6cacb45b1ab2a94acb83e0233
         AMOUNT: 990
