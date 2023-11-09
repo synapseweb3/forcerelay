@@ -96,15 +96,15 @@ use super::{
     handle::{CacheTxHashStatus, Subscription},
     requests::{
         CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest, QueryChannelRequest,
-        QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientStateRequest,
-        QueryClientStatesRequest, QueryConnectionChannelsRequest, QueryConnectionRequest,
-        QueryConnectionsRequest, QueryConsensusStateHeightsRequest, QueryConsensusStateRequest,
-        QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
-        QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
-        QueryPacketCommitmentRequest, QueryPacketCommitmentsRequest, QueryPacketEventDataRequest,
-        QueryPacketReceiptRequest, QueryTxRequest, QueryUnreceivedAcksRequest,
-        QueryUnreceivedPacketsRequest, QueryUpgradedClientStateRequest,
-        QueryUpgradedConsensusStateRequest,
+        QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientEventRequest,
+        QueryClientStateRequest, QueryClientStatesRequest, QueryConnectionChannelsRequest,
+        QueryConnectionRequest, QueryConnectionsRequest, QueryConsensusStateHeightsRequest,
+        QueryConsensusStateRequest, QueryHostConsensusStateRequest,
+        QueryNextSequenceReceiveRequest, QueryPacketAcknowledgementRequest,
+        QueryPacketAcknowledgementsRequest, QueryPacketCommitmentRequest,
+        QueryPacketCommitmentsRequest, QueryPacketEventDataRequest, QueryPacketReceiptRequest,
+        QueryTxHash, QueryTxRequest, QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest,
+        QueryUpgradedClientStateRequest, QueryUpgradedConsensusStateRequest,
     },
     tracking::TrackedMsgs,
     SEC_TO_NANO,
@@ -838,10 +838,80 @@ impl ChainEndpoint for AxonChain {
         Ok((sequence.into(), None))
     }
 
-    // TODO do we need to implement this?
-    fn query_txs(&self, _request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
-        warn!("axon query_txs() not support");
-        Ok(vec![])
+    fn query_txs(&self, request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
+        let events = match request {
+            QueryTxRequest::Client(QueryClientEventRequest {
+                query_height: _,
+                event_id: _,
+                client_id,
+                consensus_height,
+            }) => {
+                // return at most one update client event
+                let block = self
+                    .rt
+                    .block_on(self.client.get_block(consensus_height.revision_height()))
+                    .map_err(|e| Error::other_error(e.to_string()))?;
+                let Some(block) = block else {
+                    return Ok(Vec::new());
+                };
+                let filter = Filter::new()
+                    .address(self.config.contract_address)
+                    .at_block_hash(block.hash.unwrap());
+                let logs = self
+                    .rt
+                    .block_on(self.client.get_logs(&filter))
+                    .map_err(|e| Error::other_error(e.to_string()))?;
+
+                logs.into_iter()
+                    .filter_map(|log| {
+                        let height = {
+                            let number = log.block_number.expect("no block number").as_u64();
+                            Height::from_noncosmos_height(number)
+                        };
+                        let tx_hash: [u8; 32] = log.transaction_hash.expect("no tx hash").into();
+                        let event =
+                            OwnableIBCHandlerEvents::decode_log(&log.into()).expect("parse log");
+                        match &event {
+                            OwnableIBCHandlerEvents::UpdateClientFilter(filter)
+                                if filter.client_id == client_id.to_string() =>
+                            {
+                                // continue
+                            }
+                            _ => return None,
+                        }
+                        ibc_event_from_ibc_handler_event(height, tx_hash, event).transpose()
+                    })
+                    .take(1)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(Error::other)?
+            }
+            QueryTxRequest::Transaction(QueryTxHash(tx_hash)) => {
+                // return transaction events
+                let tx_hash = TxHash::from_slice(tx_hash.as_ref());
+                let logs = self
+                    .rt
+                    .block_on(self.client.get_transaction_receipt(tx_hash))
+                    .map_err(|e| Error::other_error(e.to_string()))?
+                    .map(|receipt| receipt.logs)
+                    .unwrap_or_default();
+                logs.into_iter()
+                    .filter_map(|log| {
+                        if log.address != self.config.contract_address {
+                            return None;
+                        }
+                        let height = {
+                            let number = log.block_number.expect("no block number").as_u64();
+                            Height::from_noncosmos_height(number)
+                        };
+                        let event =
+                            OwnableIBCHandlerEvents::decode_log(&log.into()).expect("parse log");
+                        ibc_event_from_ibc_handler_event(height, tx_hash.into(), event).transpose()
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(Error::other)?
+            }
+        };
+        Ok(events)
     }
 
     fn query_packet_events(
