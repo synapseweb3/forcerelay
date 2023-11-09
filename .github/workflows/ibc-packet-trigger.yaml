@@ -15,16 +15,16 @@ jobs:
     timeout-minutes: 30
     env:
         # for forcerelay-ckb-sdk
-        FORCERELAY_CKB_SDK_COMMIT: 1a1c5c1debc6d7e10f3093479f87727abf35e01b
-        AXON_RECEIVER: "f39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        FORCERELAY_CKB_SDK_COMMIT: ${{ vars.FORCERELAY_CKB_SDK_COMMIT || "main" }}
+        AXON_RECEIVER: ${{ vars.AXON_RECEIVER || "f39fd6e51aad88f6f4ce6ab8827279cfffb92266" }}
         SUDT_AMOUNT: 1000
         SDK_WORKSPACE: ${{ github.workspace }}/forcerelay-ckb-sdk
         SDK_CONFIG: ${{ github.workspace }}/e2e/schedule/sdk.config.toml
         # for ibc-solidity-contract
         AXON_HTTP_RPC_URL: https://rpc-alphanet-axon.ckbapp.dev
-        IBC_SOLIDITY_CONTRACT_COMMIT: e0d1f4bf20c40aad721bff5838d8a3fa80c94585
+        IBC_SOLIDITY_CONTRACT_COMMIT: ${{ vars.IBC_SOLIDITY_CONTRACT_COMMIT || "e0d1f4bf20c40aad721bff5838d8a3fa80c94585" }} 
         CONTRACT_WORKSPACE: ${{ github.workspace }}/ibc-solidity-contract
-        TRANSFER_CONTRACT_ADDRESS: "0x9E545E3C0baAB3E08CdfD552C960A1050f373042"
+        TRANSFER_CONTRACT_ADDRESS: ${{ vars.TRANSFER_CONTRACT_ADDRESS || "0x9E545E3C0baAB3E08CdfD552C960A1050f373042" }}
         CHANNEL: channel-8
         DENOM: f2a14f50a56b9aab8e960cb1b2c7f1152d7523e6cacb45b1ab2a94acb83e0233
         AMOUNT: 990
@@ -38,7 +38,9 @@ jobs:
           script: return Date.now()
           result-encoding: string
 
-      - uses: actions/checkout@v4
+      - name: Checkout Forcerelay
+        uses: actions/checkout@v4
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -49,14 +51,14 @@ jobs:
         with:
           node-version: 18.x
 
-      - name: Prepare IBC solidity contracts
+      - name: Git checkout IBC solidity contracts synapseweb3/ibc-solidity-contract@${{ env.IBC_SOLIDITY_CONTRACT_COMMIT }}
         run: git clone --recursive https://github.com/synapseweb3/ibc-solidity-contract.git $CONTRACT_WORKSPACE && cd $CONTRACT_WORKSPACE && git checkout $IBC_SOLIDITY_CONTRACT_COMMIT
 
       - name: Build and compile IBC solidity contracts
         working-directory: ${{ env.CONTRACT_WORKSPACE }}
         run: yarn install && yarn compile
 
-      - name: Download forcerelay-ckb-sdk
+      - name: Git checkout forcerelay-ckb-sdk@${{ env.FORCERELAY_CKB_SDK_COMMIT }}
         run: git clone --recursive https://github.com/synapseweb3/forcerelay-ckb-sdk.git $SDK_WORKSPACE && cd $SDK_WORKSPACE && git checkout $FORCERELAY_CKB_SDK_COMMIT
 
       - name: Install forcerelay-ckb-sdk example (sudt-transfer)
