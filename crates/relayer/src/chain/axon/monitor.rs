@@ -95,15 +95,24 @@ impl AxonEventMonitor {
                 let (event, meta) = self.reprocess_events.remove(0);
                 self.process_event(event, meta);
             });
-            let contract = Contract::new(self.contract_address, Arc::clone(&self.client));
+            let mut contract = Contract::new(self.contract_address, Arc::clone(&self.client));
             info!(
                 "start to fetch IBC events from block {}",
                 self.start_block_number
             );
             loop {
                 std::thread::sleep(Duration::from_secs(1));
-                if let Next::Abort = self.run_once(&contract) {
-                    break;
+                match self.run_once(&contract) {
+                    (Next::Abort, _) => break,
+                    (Next::Continue, false) => {
+                        // recreate contract when WS connection meets error
+                        contract = Contract::new(self.contract_address, Arc::clone(&self.client));
+                        info!(
+                            "re-start to fetch IBC events from block {}",
+                            self.start_block_number
+                        );
+                    }
+                    (Next::Continue, true) => {}
                 }
             }
             debug!("event monitor is shutting down");
@@ -188,21 +197,21 @@ impl AxonEventMonitor {
         Next::Continue
     }
 
-    fn run_once(&mut self, contract: &OwnableIBCHandler<Client>) -> Next {
+    fn run_once(&mut self, contract: &OwnableIBCHandler<Client>) -> (Next, bool) {
         if let Next::Abort = self.update_subscribe(true) {
-            return Next::Abort;
+            return (Next::Abort, true);
         }
 
         let tip_block_number = match self.rt.block_on(contract.client().get_block_number()) {
             Ok(tip) => tip.as_u64(),
             Err(err) => {
                 error!("failed to fetch Axon latest block number: {err}");
-                return Next::Continue;
+                return (Next::Continue, false);
             }
         };
 
         if self.start_block_number >= tip_block_number {
-            return Next::Continue;
+            return (Next::Continue, true);
         }
 
         let query = contract
@@ -216,7 +225,7 @@ impl AxonEventMonitor {
                     "failed to fetch events from block {} to block {tip_block_number}: {err}",
                     self.start_block_number
                 );
-                return Next::Continue;
+                return (Next::Continue, false);
             }
         };
 
@@ -225,7 +234,7 @@ impl AxonEventMonitor {
             .for_each(|(event, meta)| self.process_event(event, meta));
 
         self.start_block_number = tip_block_number + 1;
-        Next::Continue
+        (Next::Continue, true)
     }
 
     fn process_event(&mut self, event: ContractEvents, meta: LogMeta) {
