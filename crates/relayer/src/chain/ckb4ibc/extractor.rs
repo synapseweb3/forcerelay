@@ -29,9 +29,9 @@ use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, Conne
 use super::utils::{generate_channel_id, generate_connection_id};
 
 pub fn extract_channel_end_from_tx(
-    tx: TransactionView,
+    tx: &TransactionView,
 ) -> Result<(IdentifiedChannelEnd, CkbIbcChannel), Error> {
-    let idx = get_object_index(&tx, ObjectType::ChannelEnd)?;
+    let idx = get_object_index(tx, ObjectType::ChannelEnd)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
         .map_err(|_| Error::ckb_decode_witness_args())?;
@@ -43,8 +43,8 @@ pub fn extract_channel_end_from_tx(
     Ok((channel_end, ckb_channel_end))
 }
 
-pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnections, Error> {
-    let idx = get_object_index(&tx, ObjectType::IbcConnections)?;
+pub fn extract_ibc_connections_from_tx(tx: &TransactionView) -> Result<IbcConnections, Error> {
+    let idx = get_object_index(tx, ObjectType::IbcConnections)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes()).unwrap();
     let ibc_connection_cells =
@@ -55,7 +55,7 @@ pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnect
 }
 
 pub fn extract_connections_from_tx(
-    tx: TransactionView,
+    tx: &TransactionView,
     prefix: &CommitmentPrefix,
 ) -> Result<(Vec<IdentifiedConnectionEnd>, IbcConnections), Error> {
     let ibc_connection_cell = extract_ibc_connections_from_tx(tx)?;
@@ -68,8 +68,8 @@ pub fn extract_connections_from_tx(
     Ok((result, ibc_connection_cell))
 }
 
-pub fn extract_ibc_packet_from_tx(tx: TransactionView) -> Result<(IbcPacket, Vec<u8>), Error> {
-    let envelope = get_envelope(&tx)?;
+pub fn extract_ibc_packet_from_tx(tx: &TransactionView) -> Result<(IbcPacket, Vec<u8>), Error> {
+    let envelope = get_envelope(tx)?;
     let idx = navigate(&envelope.msg_type, &ObjectType::IbcPacket);
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
@@ -216,7 +216,7 @@ fn get_object_index(tx: &TransactionView, object_type: ObjectType) -> Result<usi
     Ok(navigate(&envelope.msg_type, &object_type))
 }
 
-fn get_envelope(tx: &TransactionView) -> Result<Envelope, Error> {
+pub fn get_envelope(tx: &TransactionView) -> Result<Envelope, Error> {
     let msg = tx.inner.witnesses.last().ok_or(Error::ckb_none_witness())?;
 
     let bytes = msg.as_bytes();

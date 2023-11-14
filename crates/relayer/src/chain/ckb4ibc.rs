@@ -234,7 +234,7 @@ impl Ckb4IbcChain {
                 let tx = self
                     .rt
                     .block_on(fetch_transaction_by_hash(self.rpc_client.as_ref(), tx_hash))?;
-                let (packet, _) = extract_ibc_packet_from_tx(tx)?;
+                let (packet, _) = extract_ibc_packet_from_tx(&tx)?;
                 let cell_input = CellInput::new_builder()
                     .previous_output(cell.out_point.into())
                     .build();
@@ -312,7 +312,7 @@ impl Ckb4IbcChain {
                         serde_json::from_slice(json_bytes.as_bytes()).unwrap()
                     }
                 };
-                let channel_end = extract_channel_end_from_tx(tx)?;
+                let channel_end = extract_channel_end_from_tx(&tx)?;
                 let input = CellInput::new_builder()
                     .previous_output(cell.out_point.clone().into())
                     .build();
@@ -375,7 +375,7 @@ impl Ckb4IbcChain {
                     serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
                 }
             };
-            let (connections, ibc_connection) = extract_connections_from_tx(tx, &prefix)?;
+            let (connections, ibc_connection) = extract_connections_from_tx(&tx, &prefix)?;
             cache.insert(
                 client_type,
                 (ibc_connection, cell_input, capacity, connections),
@@ -1046,7 +1046,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                         serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
                     }
                 };
-                extract_channel_end_from_tx(tx)
+                extract_channel_end_from_tx(&tx)
             })
             .map(|(channel, _)| channel)
             .collect();

@@ -310,7 +310,7 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
                 }
             };
             let prefix = "forcerelay".as_bytes().to_vec().try_into().unwrap();
-            let (_, ibc_connection) = extract_connections_from_tx(tx, &prefix).unwrap();
+            let (_, ibc_connection) = extract_connections_from_tx(&tx, &prefix).unwrap();
             return ibc_connection;
         } else {
             if loop_count > 30 {
@@ -369,7 +369,7 @@ pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &Channel
                     serde_json::from_slice(json_bytes.as_bytes()).unwrap()
                 }
             };
-            let (_, channel_end) = extract_channel_end_from_tx(tx).unwrap();
+            let (_, channel_end) = extract_channel_end_from_tx(&tx).unwrap();
             return channel_end;
         } else {
             if loop_count > 30 {

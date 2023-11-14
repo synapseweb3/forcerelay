@@ -84,6 +84,10 @@ impl BinaryChannelTest for ChannelTest {
                 warn!("Skip IBC channel check for chain-B({:?})", chain);
             }
         }
+
+        println!("\n================ Close Channel ===================\n");
+        channel.channel.build_chan_close_init_and_send()?;
+
         Ok(())
     }
 }

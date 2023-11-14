@@ -166,6 +166,9 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         //     &chain_b_signer,
         // )?;
 
+        println!("\n================ Close Channel ===================\n");
+        channels.channel.build_chan_close_init_and_send()?;
+
         Ok(())
     }
 }
