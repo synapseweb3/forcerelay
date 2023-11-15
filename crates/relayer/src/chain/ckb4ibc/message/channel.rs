@@ -221,7 +221,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_idx = get_channel_number(&msg.channel_id)?;
-    let old_channel = converter.get_ibc_channel(&msg.channel_id, None)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, Some(&msg.port_id))?;
     if old_channel.state == CkbState::Open {
         return Err(Error::other_error(format!(
             "channel {} has already opened",
@@ -286,7 +286,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelOpenConfirm,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_channel = converter.get_ibc_channel(&msg.channel_id, None)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, Some(&msg.port_id))?;
     if old_channel.state == CkbState::Open {
         return Err(Error::other_error(format!(
             "channel {} has already opened",
@@ -353,7 +353,7 @@ pub fn convert_chan_close_init_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelCloseInit,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_channel = converter.get_ibc_channel(&msg.channel_id)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, Some(&msg.port_id))?;
     if old_channel.state == CkbState::Closed {
         return Err(Error::other_error(format!(
             "channel {} has already closed",
@@ -387,7 +387,7 @@ pub fn convert_chan_close_init_to_tx<C: MsgToTxConverter>(
     let (channel_input, input_capacity) =
         converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id)?;
 
-    let old_channel = get_encoded_object(old_channel);
+    let old_channel = get_encoded_object(&old_channel);
     let new_channel = get_encoded_object(&new_channel);
 
     let packed_tx = TxBuilder::default()
@@ -418,7 +418,7 @@ pub fn convert_chan_close_confirm_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelCloseConfirm,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_channel = converter.get_ibc_channel(&msg.channel_id)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, Some(&msg.port_id))?;
     if old_channel.state == CkbState::Closed {
         return Err(Error::other_error(format!(
             "channel {} has already closed",
@@ -455,7 +455,7 @@ pub fn convert_chan_close_confirm_to_tx<C: MsgToTxConverter>(
     let (channel_input, input_capacity) =
         converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id)?;
 
-    let old_channel = get_encoded_object(old_channel);
+    let old_channel = get_encoded_object(&old_channel);
     let new_channel = get_encoded_object(&new_channel);
 
     let packed_tx = TxBuilder::default()
