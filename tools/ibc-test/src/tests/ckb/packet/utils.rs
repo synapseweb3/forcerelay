@@ -144,7 +144,7 @@ fn complete_partial_transaction(
         .sign_tx(
             &unsigned_tx,
             &ScriptGroup {
-                script: sdk_config.user_lock_script(),
+                script: sdk_config.module_lock_script(),
                 group_type: ScriptGroupType::Lock,
                 input_indices: (signature_start..signature_end).collect(),
                 output_indices: vec![],
@@ -260,7 +260,7 @@ pub fn prepare_artificials(
             .expect("channel id"),
     )?;
     let sdk_config = SdkConfig {
-        user_lock_script: AddressOrScript::Script(relayer_script.into()),
+        module_lock_script: AddressOrScript::Script(relayer_script.into()),
         axon_metadata_type_script: AddressOrScript::Script(metadata_script.into()),
         channel_contract_type_id_args: ckb4ibc_config.channel_type_args.clone(),
         packet_contract_type_id_args: ckb4ibc_config.packet_type_args.clone(),

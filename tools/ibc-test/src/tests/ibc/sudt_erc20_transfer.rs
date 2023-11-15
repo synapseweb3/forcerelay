@@ -149,7 +149,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             .args(CLIENT_TYPE_ARGS.as_bytes().pack())
             .build();
         let sdk_config = forcerelay_ckb_sdk::config::Config {
-            user_lock_script: AddressOrScript::Script(ibc_sudt_transfer_lock.clone().into()),
+            module_lock_script: AddressOrScript::Script(ibc_sudt_transfer_lock.clone().into()),
             axon_metadata_type_script: AddressOrScript::Script(metadata_script.clone().into()),
             channel_contract_type_id_args: ckb_config.channel_type_args.clone(),
             packet_contract_type_id_args: ckb_config.packet_type_args.clone(),
