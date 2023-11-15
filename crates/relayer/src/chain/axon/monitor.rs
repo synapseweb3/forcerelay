@@ -25,6 +25,7 @@ type Client = Provider<Ws>;
 
 // #[derive(Clone, Debug)]
 pub struct AxonEventMonitor {
+    websocket_addr: WebSocketClientUrl,
     client: Arc<Client>,
     rt: Arc<TokioRuntime>,
     chain_id: ChainId,
@@ -55,7 +56,7 @@ impl AxonEventMonitor {
 
         let client = rt
             .block_on(Provider::<Ws>::connect(websocket_addr.to_string()))
-            .map_err(|_| Error::client_creation_failed(chain_id.clone(), websocket_addr))?;
+            .map_err(|_| Error::client_creation_failed(chain_id.clone(), websocket_addr.clone()))?;
 
         let start_block_number = rt
             .block_on(client.get_block_number())
@@ -64,6 +65,7 @@ impl AxonEventMonitor {
 
         let event_bus = EventBus::new();
         let monitor = Self {
+            websocket_addr,
             client: Arc::new(client),
             rt,
             chain_id,
@@ -75,6 +77,20 @@ impl AxonEventMonitor {
             reprocess_events: vec![],
         };
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
+    }
+
+    // XXX: we met a connection error that ethers-rs doesn't reconnection if it meets error,
+    //      we just choose to recreate provider mannully to solve connection problem
+    //
+    //      see: https://github.com/gakonst/ethers-rs/issues/2323
+    fn new_ws_provider(&mut self) -> Result<Client> {
+        let client = self
+            .rt
+            .block_on(Provider::<Ws>::connect(self.websocket_addr.to_string()))
+            .map_err(|_| {
+                Error::client_creation_failed(self.chain_id.clone(), self.websocket_addr.clone())
+            })?;
+        Ok(client)
     }
 
     #[allow(clippy::while_let_loop)]
@@ -104,14 +120,21 @@ impl AxonEventMonitor {
                 std::thread::sleep(Duration::from_secs(1));
                 match self.run_once(&contract) {
                     (Next::Abort, _) => break,
-                    (Next::Continue, false) => {
-                        // recreate contract when WS connection meets error
-                        contract = Contract::new(self.contract_address, Arc::clone(&self.client));
-                        info!(
-                            "re-start to fetch IBC events from block {}",
-                            self.start_block_number
-                        );
-                    }
+                    (Next::Continue, false) => match self.new_ws_provider() {
+                        Ok(client) => {
+                            // recreate contract when WS connection meets error
+                            self.client = Arc::new(client);
+                            contract =
+                                Contract::new(self.contract_address, Arc::clone(&self.client));
+                            info!(
+                                "restart to fetch IBC events from block {}",
+                                self.start_block_number
+                            );
+                        }
+                        Err(err) => {
+                            error!("restart provider failed: {err}");
+                        }
+                    },
                     (Next::Continue, true) => {}
                 }
             }
