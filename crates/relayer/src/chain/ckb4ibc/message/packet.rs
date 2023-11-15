@@ -7,9 +7,12 @@ use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::object::{Ordering, Packet as CkbPacket};
 use ckb_ics_axon::{ChannelArgs, PacketArgs};
 use ckb_types::packed::BytesOpt;
+use ibc_relayer_types::core::ics04_channel::events::AcknowledgePacket;
+use ibc_relayer_types::core::ics04_channel::events::ReceivePacket;
 use ibc_relayer_types::core::ics04_channel::msgs::acknowledgement::MsgAcknowledgement;
 use ibc_relayer_types::core::ics04_channel::msgs::recv_packet::MsgRecvPacket;
 use ibc_relayer_types::core::ics04_channel::packet::Packet;
+use ibc_relayer_types::events::IbcEvent;
 
 use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 use crate::chain::ckb4ibc::utils::{
@@ -43,7 +46,8 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_id = msg.packet.destination_channel.clone();
-    let old_channel_end = converter.get_ibc_channel(&channel_id)?;
+    let old_channel_end =
+        converter.get_ibc_channel(&channel_id, Some(&msg.packet.destination_port))?;
     let mut new_channel_end = old_channel_end.clone();
 
     let packet = convert_ibc_packet(&msg.packet);
@@ -93,7 +97,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         port_id,
     };
 
-    let old_channel = get_encoded_object(old_channel_end);
+    let old_channel = get_encoded_object(&old_channel_end);
     let new_channel = get_encoded_object(&new_channel_end);
     let ibc_packet = get_encoded_object(&IbcPacket {
         packet,
@@ -135,11 +139,13 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         .witness(write_ack_witness, ibc_packet.witness)
         .build();
 
+    let event = IbcEvent::ReceivePacket(ReceivePacket { packet: msg.packet });
+
     Ok(CkbTxInfo {
         unsigned_tx: Some(packet_tx),
         envelope,
         input_capacity,
-        event: None,
+        event: Some(event),
     })
 }
 
@@ -148,7 +154,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_id = msg.packet.source_channel.clone();
-    let old_channel_end = converter.get_ibc_channel(&channel_id)?;
+    let old_channel_end = converter.get_ibc_channel(&channel_id, Some(&msg.packet.source_port))?;
     let mut new_channel_end = old_channel_end.clone();
 
     match old_channel_end.order {
@@ -157,7 +163,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         Ordering::Unknown => return Err(Error::other("channel ordering must be Order or Unorder")),
     }
 
-    let old_channel = get_encoded_object(old_channel_end);
+    let old_channel = get_encoded_object(&old_channel_end);
     let new_channel = get_encoded_object(&new_channel_end);
 
     let ack_packet = CkbMsgAckPacket {
@@ -188,11 +194,11 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     let (old_packet_input, packet_capacity) = converter.get_ibc_packet_input(
         &channel_id,
         &msg.packet.source_port,
-        &msg.packet.sequence,
+        msg.packet.sequence,
     )?;
     let old_ibc_packet =
-        converter.get_ibc_packet(&channel_id, &msg.packet.source_port, &msg.packet.sequence)?;
-    let old_packet = get_encoded_object(old_ibc_packet);
+        converter.get_ibc_packet(&channel_id, &msg.packet.source_port, msg.packet.sequence)?;
+    let old_packet = get_encoded_object(&old_ibc_packet);
 
     let (client_cell_type_args, client_id) =
         extract_client_id_by_connection_id(&new_channel_end.connection_hops[0], converter)?;
@@ -218,10 +224,12 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         .witness(old_packet.witness, new_packet.witness)
         .build();
 
+    let event = IbcEvent::AcknowledgePacket(AcknowledgePacket { packet: msg.packet });
+
     Ok(CkbTxInfo {
         unsigned_tx: Some(packed_tx),
         envelope,
         input_capacity: channel_capacity + packet_capacity,
-        event: None,
+        event: Some(event),
     })
 }

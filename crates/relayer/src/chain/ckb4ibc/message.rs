@@ -3,9 +3,7 @@ mod client;
 mod connection;
 mod packet;
 
-use std::{cell::Ref, collections::HashMap};
-
-use crate::{config::ckb4ibc::ChainConfig, error::Error, keyring::Secp256k1KeyPair};
+use crate::{config::ckb4ibc::ChainConfig, error::Error};
 use ckb_ics_axon::{
     handler::{IbcChannel, IbcConnections, IbcPacket},
     message::Envelope,
@@ -32,8 +30,6 @@ use ibc_relayer_types::{
         conn_open_try::MsgConnectionOpenTry, conn_open_try::TYPE_URL as CONN_OPEN_TRY_TYPE_URL,
     },
     core::{
-        ics02_client::client_type::ClientType,
-        ics03_connection::connection::IdentifiedConnectionEnd,
         ics04_channel::{
             msgs::{
                 acknowledgement::{MsgAcknowledgement, TYPE_URL as ACK_PACKET_TYPE_URL},
@@ -51,7 +47,6 @@ use ibc_relayer_types::{
             },
             packet::Sequence,
         },
-        ics23_commitment::commitment::CommitmentPrefix,
         ics24_host::identifier::{ChannelId, ConnectionId, PortId},
     },
     events::IbcEvent,
@@ -61,6 +56,7 @@ use ibc_relayer_types::{
 use super::{
     monitor::WriteAckMonitorCmd,
     utils::{generate_connection_id, get_script_hash},
+    Ckb4IbcChain,
 };
 use client::{convert_create_client, convert_update_client};
 
@@ -77,31 +73,33 @@ macro_rules! convert {
 }
 
 pub trait MsgToTxConverter {
-    fn get_key(&self) -> &Secp256k1KeyPair;
-
-    fn get_ibc_connections(&self, client_id: &str) -> Result<&IbcConnections, Error>;
+    fn get_ibc_connections(&self, client_id: &str) -> Result<IbcConnections, Error>;
 
     fn get_ibc_connections_by_connection_id(
         &self,
         connection_id: &ConnectionId,
-    ) -> Result<&IbcConnections, Error>;
+    ) -> Result<IbcConnections, Error>;
 
     fn get_ibc_connections_by_port_id(
         &self,
         channel_id: &ChannelId,
-    ) -> Result<&IbcConnections, Error>;
+    ) -> Result<IbcConnections, Error>;
 
-    fn get_ibc_connections_input(&self, client_id: &str) -> Result<(&CellInput, u64), Error>;
+    fn get_ibc_connections_input(&self, client_id: &str) -> Result<(CellInput, u64), Error>;
 
-    fn get_ibc_channel(&self, id: &ChannelId) -> Result<&IbcChannel, Error>;
+    fn get_ibc_channel(
+        &self,
+        channel_id: &ChannelId,
+        port: Option<&PortId>,
+    ) -> Result<IbcChannel, Error>;
 
     fn get_ibc_channel_input(
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-    ) -> Result<(&CellInput, u64), Error>;
+    ) -> Result<(CellInput, u64), Error>;
 
-    fn get_client_outpoint(&self, client_id: &str) -> Option<&OutPoint>;
+    fn get_client_outpoint(&self, client_id: &str) -> Option<OutPoint>;
 
     fn get_conn_contract_outpoint(&self) -> &OutPoint;
 
@@ -119,15 +117,15 @@ pub trait MsgToTxConverter {
         &self,
         chan: &ChannelId,
         port: &PortId,
-        seq: &Sequence,
-    ) -> Result<(&CellInput, u64), Error>;
+        seq: Sequence,
+    ) -> Result<(CellInput, u64), Error>;
 
     fn get_ibc_packet(
         &self,
         chan: &ChannelId,
         port: &PortId,
-        seq: &Sequence,
-    ) -> Result<&IbcPacket, Error>;
+        seq: Sequence,
+    ) -> Result<IbcPacket, Error>;
 
     fn get_commitment_prefix(&self) -> Vec<u8>;
 
@@ -141,52 +139,44 @@ pub trait MsgToTxConverter {
 
 pub struct Converter<'a> {
     pub write_ack_cmd: &'a Option<WriteAckMonitorCmd>,
-    pub channel_input_data: Ref<'a, HashMap<(ChannelId, PortId), (CellInput, u64)>>,
-    pub channel_cache: Ref<'a, HashMap<ChannelId, IbcChannel>>,
-    #[allow(clippy::type_complexity)]
-    pub connection_cache: Ref<
-        'a,
-        HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>,
-    >,
-    #[allow(clippy::type_complexity)]
-    pub packet_input_data: Ref<'a, HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>>,
-    pub packet_cache: Ref<'a, HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
-    pub config: &'a ChainConfig,
-    pub client_outpoints: Ref<'a, HashMap<ClientType, OutPoint>>,
-    pub chan_contract_outpoint: &'a OutPoint,
-    pub packet_contract_outpoint: &'a OutPoint,
-    pub conn_contract_outpoint: &'a OutPoint,
-    pub commitment_prefix: CommitmentPrefix,
+    pub ckb_instance: &'a Ckb4IbcChain,
 }
 
 impl<'a> MsgToTxConverter for Converter<'a> {
-    fn get_key(&self) -> &Secp256k1KeyPair {
-        todo!()
-    }
-
-    fn get_ibc_connections(&self, client_id: &str) -> Result<&IbcConnections, Error> {
-        let client_type = self.config.lc_client_type(client_id)?;
-        if let Some((connection, _, _, _)) = self.connection_cache.get(&client_type) {
-            Ok(connection)
-        } else {
-            Err(Error::query(format!(
-                "client_type {client_type} isn't in cache"
-            )))
+    fn get_ibc_connections(&self, client_id: &str) -> Result<IbcConnections, Error> {
+        let client_type = self.get_config().lc_client_type(client_id)?;
+        if let Some((connection, _, _, _)) = self
+            .ckb_instance
+            .connection_cache
+            .borrow()
+            .get(&client_type)
+        {
+            return Ok(connection.clone());
         }
+        self.ckb_instance.query_connection_and_cache()?;
+        let connection_cache = self.ckb_instance.connection_cache.borrow();
+        let (connection, _, _, _) =
+            connection_cache
+                .get(&client_type)
+                .ok_or(Error::query(format!(
+                    "client_type {client_type} isn't in cache"
+                )))?;
+        Ok(connection.clone())
     }
 
     fn get_ibc_connections_by_connection_id(
         &self,
         connection_id: &ConnectionId,
-    ) -> Result<&IbcConnections, Error> {
-        let ibc_connections = self.connection_cache.iter().find(|(_, (v, _, _, _))| {
+    ) -> Result<IbcConnections, Error> {
+        let conneciton_cache = self.ckb_instance.connection_cache.borrow();
+        let ibc_connections = conneciton_cache.iter().find(|(_, (v, _, _, _))| {
             v.connections
                 .iter()
                 .enumerate()
                 .any(|(idx, c)| connection_id == &generate_connection_id(idx as u16, &c.client_id))
         });
         if let Some((_, (value, _, _, _))) = ibc_connections {
-            Ok(value)
+            Ok(value.clone())
         } else {
             Err(Error::query(format!(
                 "connection {connection_id} not found in cache"
@@ -197,9 +187,9 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     fn get_ibc_connections_by_port_id(
         &self,
         channel_id: &ChannelId,
-    ) -> Result<&IbcConnections, Error> {
-        let channel = self
-            .channel_cache
+    ) -> Result<IbcConnections, Error> {
+        let channel_cache = self.ckb_instance.channel_cache.borrow();
+        let channel = channel_cache
             .get(channel_id)
             .ok_or_else(|| Error::query(format!("channel {channel_id} not found in cache")))?;
         // FIXME: should modify ibc contract
@@ -207,74 +197,129 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         self.get_ibc_connections_by_connection_id(&connection_id)
     }
 
-    fn get_ibc_connections_input(&self, client_id: &str) -> Result<(&CellInput, u64), Error> {
-        let client_type = self.config.lc_client_type(client_id)?;
-        if let Some((_, cell_input, capacity, _)) = self.connection_cache.get(&client_type) {
-            Ok((cell_input, *capacity))
-        } else {
-            Err(Error::query(format!(
-                "client_type {client_type} isn't in cache"
-            )))
+    fn get_ibc_connections_input(&self, client_id: &str) -> Result<(CellInput, u64), Error> {
+        let client_type = self.get_config().lc_client_type(client_id)?;
+        if let Some((_, cell_input, capacity, _)) = self
+            .ckb_instance
+            .connection_cache
+            .borrow()
+            .get(&client_type)
+        {
+            return Ok((cell_input.clone(), *capacity));
         }
+        self.ckb_instance.query_connection_and_cache()?;
+        let connection_cache = self.ckb_instance.connection_cache.borrow();
+        let (_, cell_input, capacity, _) =
+            connection_cache
+                .get(&client_type)
+                .ok_or(Error::query(format!(
+                    "client_type {client_type} isn't in cache"
+                )))?;
+        Ok((cell_input.clone(), *capacity))
     }
 
-    fn get_ibc_channel(&self, channel_id: &ChannelId) -> Result<&IbcChannel, Error> {
-        self.channel_cache
-            .get(channel_id)
-            .ok_or(Error::query(format!("no channel_id {channel_id}")))
+    fn get_ibc_channel(
+        &self,
+        channel_id: &ChannelId,
+        port_id: Option<&PortId>,
+    ) -> Result<IbcChannel, Error> {
+        if let Some(channel) = self.ckb_instance.channel_cache.borrow().get(channel_id) {
+            return Ok(channel.clone());
+        }
+        if let Some(port_id) = port_id {
+            self.ckb_instance
+                .fetch_channel_cell_and_extract(channel_id, port_id, true)?;
+            self.ckb_instance
+                .channel_cache
+                .borrow()
+                .get(channel_id)
+                .ok_or(Error::query(format!("no channel_id {channel_id}")))
+                .cloned()
+        } else {
+            Err(Error::query(format!("no channel_id {channel_id}")))
+        }
     }
 
     fn get_ibc_channel_input(
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-    ) -> Result<(&CellInput, u64), Error> {
-        self.channel_input_data
+    ) -> Result<(CellInput, u64), Error> {
+        if let Some((input, capacity)) = self
+            .ckb_instance
+            .channel_input_data
+            .borrow()
             .get(&(channel_id.clone(), port_id.clone()))
-            .map(|(input, capacity)| (input, *capacity))
+        {
+            return Ok((input.clone(), *capacity));
+        }
+        self.ckb_instance
+            .fetch_channel_cell_and_extract(channel_id, port_id, true)?;
+        self.ckb_instance
+            .channel_input_data
+            .borrow()
+            .get(&(channel_id.clone(), port_id.clone()))
+            .map(|(input, capacity)| (input.clone(), *capacity))
             .ok_or(Error::query(format!("no channel({channel_id}/{port_id})")))
     }
 
-    fn get_client_outpoint(&self, client_id: &str) -> Option<&OutPoint> {
-        let Some(client_type) = self.config.lc_client_type(client_id).ok() else {
+    fn get_client_outpoint(&self, client_id: &str) -> Option<OutPoint> {
+        let Some(client_type) = self.get_config().lc_client_type(client_id).ok() else {
             return None;
         };
-        self.client_outpoints.get(&client_type)
+        self.ckb_instance
+            .client_outpoints
+            .borrow()
+            .get(&client_type)
+            .cloned()
     }
 
     fn get_conn_contract_outpoint(&self) -> &OutPoint {
-        self.conn_contract_outpoint
+        &self.ckb_instance.connection_outpoint
     }
 
     fn get_chan_contract_outpoint(&self) -> &OutPoint {
-        self.chan_contract_outpoint
+        &self.ckb_instance.channel_outpoint
     }
 
     fn get_packet_contract_outpoint(&self) -> &OutPoint {
-        self.packet_contract_outpoint
+        &self.ckb_instance.packet_outpoint
     }
 
     fn get_channel_code_hash(&self) -> Byte32 {
-        get_script_hash(&self.config.channel_type_args)
+        get_script_hash(&self.get_config().channel_type_args)
     }
 
     fn get_packet_code_hash(&self) -> Byte32 {
-        get_script_hash(&self.config.packet_type_args)
+        get_script_hash(&self.get_config().packet_type_args)
     }
 
     fn get_connection_code_hash(&self) -> Byte32 {
-        get_script_hash(&self.config.connection_type_args)
+        get_script_hash(&self.get_config().connection_type_args)
     }
 
     fn get_ibc_packet_input(
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-        sequence: &Sequence,
-    ) -> Result<(&CellInput, u64), Error> {
-        self.packet_input_data
-            .get(&(channel_id.clone(), port_id.clone(), *sequence))
-            .map(|(input, capacity)| (input, *capacity))
+        sequence: Sequence,
+    ) -> Result<(CellInput, u64), Error> {
+        if let Some((input, capacity)) = self
+            .ckb_instance
+            .packet_input_data
+            .borrow()
+            .get(&(channel_id.clone(), port_id.clone(), sequence))
+            .map(|(input, capacity)| (input.clone(), *capacity))
+        {
+            return Ok((input, capacity));
+        }
+        self.ckb_instance
+            .fetch_packet_cells_and_extract(channel_id, port_id, Some(sequence))?;
+        self.ckb_instance
+            .packet_input_data
+            .borrow()
+            .get(&(channel_id.clone(), port_id.clone(), sequence))
+            .map(|(input, capacity)| (input.clone(), *capacity))
             .ok_or(Error::query(format!(
                 "no packet({channel_id}/{port_id}/{sequence})"
             )))
@@ -284,21 +329,33 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-        sequence: &Sequence,
-    ) -> Result<&IbcPacket, Error> {
-        self.packet_cache
-            .get(&(channel_id.clone(), port_id.clone(), *sequence))
+        sequence: Sequence,
+    ) -> Result<IbcPacket, Error> {
+        if let Some(packet) = self.ckb_instance.packet_cache.borrow().get(&(
+            channel_id.clone(),
+            port_id.clone(),
+            sequence,
+        )) {
+            return Ok(packet.clone());
+        }
+        self.ckb_instance
+            .fetch_packet_cells_and_extract(channel_id, port_id, Some(sequence))?;
+        self.ckb_instance
+            .packet_cache
+            .borrow()
+            .get(&(channel_id.clone(), port_id.clone(), sequence))
             .ok_or(Error::query(format!(
                 "no packet({channel_id}/{port_id}/{sequence})"
             )))
+            .cloned()
     }
 
     fn get_commitment_prefix(&self) -> Vec<u8> {
-        self.commitment_prefix.as_bytes().to_vec()
+        self.get_config().store_prefix.clone().into_bytes()
     }
 
     fn get_config(&self) -> &ChainConfig {
-        self.config
+        &self.ckb_instance.config
     }
 
     fn require_useless_write_ack_packet(
@@ -325,7 +382,7 @@ pub struct CkbTxInfo {
 
 // Return a transaction which needs to be added relayer's input in it and to be signed.
 pub fn convert_msg_to_ckb_tx<C: MsgToTxConverter>(
-    msg: Any,
+    msg: &Any,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     match msg.type_url.as_str() {
