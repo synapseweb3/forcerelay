@@ -698,6 +698,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                     .block_on(self.rpc_client.send_transaction(&tx.inner, None))
                 {
                     Ok(tx_hash) => {
+                        // TODO: put confirms count into config
                         let confirms = 3;
                         info!(
                             "{msg_type:?} transaction {} committed to {}, wait {confirms} blocks confirmation",
@@ -752,6 +753,9 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok(result_events)
     }
 
+    // FIXME: this method should be in non-blocking mode, but we can't be confident it
+    //        won't leave a protential issue if we do so, and working in blocking mode
+    //        is ok for now, so leave this comment to fix in upcomming days
     fn send_messages_and_wait_check_tx(
         &mut self,
         tracked_msgs: TrackedMsgs,
