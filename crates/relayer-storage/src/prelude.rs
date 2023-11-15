@@ -27,7 +27,11 @@ pub trait StorageWriter<S: EthSpec>: Send + Sync + Sized {
 }
 
 pub trait StorageAsMMRStore<S: EthSpec>:
-    mmr::lib::MMRStore<packed::HeaderDigest> + StorageReader<S> + StorageWriter<S> + Clone
+    mmr::lib::MMRStoreReadOps<packed::HeaderDigest>
+    + mmr::lib::MMRStoreWriteOps<packed::HeaderDigest>
+    + StorageReader<S>
+    + StorageWriter<S>
+    + Clone
 {
     /// Checks if there is any data in the MMR.
     fn is_initialized(&self) -> Result<bool> {

@@ -29,7 +29,7 @@ impl CKB4IbcPacketTest {
     ) -> Result<(), Error> {
         // 2. trigger SendPacket event on ChainA
         info!("send send_packet transaction to chain_a");
-        let relayer_on_a = chain_a_config.user_lock_script().calc_script_hash();
+        let relayer_on_a = chain_a_config.module_lock_script().calc_script_hash();
         let message = ICS20Transfer {
             denom: "AT".to_owned(),
             amount: 1000,
@@ -56,7 +56,7 @@ impl CKB4IbcPacketTest {
         })?;
         let payload: ICS20Transfer =
             serde_json::from_slice(&recv_packet.packet.packet.data).expect("ics20 message");
-        let relayer_on_b = chain_b_config.user_lock_script().calc_script_hash();
+        let relayer_on_b = chain_b_config.module_lock_script().calc_script_hash();
         assert!(payload == message && payload.receiver == relayer_on_b.raw_data().to_vec());
         info!("🍻 successfully find recv_packet cell on chain_b: {payload}");
 
@@ -136,8 +136,8 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         )?;
         info!(
             "relayer wallet balance: {} CKB on chain_a, {} CKB on chain_b",
-            wallet_balance(&rt, &chain_a_url, &chain_a_config.user_lock_script())?,
-            wallet_balance(&rt, &chain_b_url, &chain_b_config.user_lock_script())?
+            wallet_balance(&rt, &chain_a_url, &chain_a_config.module_lock_script())?,
+            wallet_balance(&rt, &chain_b_url, &chain_b_config.module_lock_script())?
         );
 
         // run for first time

@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dev-dependencies]
-ckb-sdk = "2.5.0"
-ckb-jsonrpc-types = "0.108.0"
-ckb-types = "0.108.0"
-ckb-chain-spec = "0.108.0"
+ckb-sdk = "3.0.0"
+ckb-jsonrpc-types = "0.111.0"
+ckb-types = "0.111.0"
+ckb-chain-spec = "0.111.0"
 hex = "0.4"
 eyre = "0.6.8"
 
@@ -45,7 +45,7 @@ toml_edit = "0.19.14"
 lazy_static = "1.4.0"
 ethers = { version = "2.0.2", features = ["rustls", "ws"] }
 
-forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "cd82be97" }
+forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "64978b97" }
 
 [dependencies]
 bytes = "1.5.0"

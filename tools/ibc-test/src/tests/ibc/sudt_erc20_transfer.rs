@@ -149,7 +149,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
             .args(CLIENT_TYPE_ARGS.as_bytes().pack())
             .build();
         let sdk_config = forcerelay_ckb_sdk::config::Config {
-            user_lock_script: AddressOrScript::Script(ibc_sudt_transfer_lock.clone().into()),
+            module_lock_script: AddressOrScript::Script(ibc_sudt_transfer_lock.clone().into()),
             axon_metadata_type_script: AddressOrScript::Script(metadata_script.clone().into()),
             channel_contract_type_id_args: ckb_config.channel_type_args.clone(),
             packet_contract_type_id_args: ckb_config.packet_type_args.clone(),
@@ -446,7 +446,7 @@ fn complete_tx(
     //   * HeaderDepResolver
     //   * CellCollector
     //   * TransactionDependencyProvider
-    let mut ckb_client = CkbRpcClient::new(ckb_rpc);
+    let ckb_client = CkbRpcClient::new(ckb_rpc);
     let cell_dep_resolver = {
         let genesis_block = ckb_client.get_block_by_number(0.into())?.unwrap();
         DefaultCellDepResolver::from_genesis(&BlockView::from(genesis_block))?
@@ -516,7 +516,7 @@ pub struct FungibleTokenPacketData {
 }
 
 fn send_transaction(url: &str, tx: TransactionView) -> eyre::Result<[u8; 32]> {
-    let mut client = CkbRpcClient::new(url);
+    let client = CkbRpcClient::new(url);
     let tx_hash = client.send_transaction(
         tx.data().into(),
         Some(ckb_jsonrpc_types::OutputsValidator::Passthrough),
