@@ -111,6 +111,7 @@ impl CkbReader for RpcClient {
             transaction: Some(transaction),
             tx_status: TxStatus::committed(hash.clone()),
             cycles: None,
+            time_added_to_pool: None,
         };
         Box::pin(async { Ok(Some(resp)) })
     }

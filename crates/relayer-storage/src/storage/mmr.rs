@@ -1,13 +1,13 @@
 use eth2_types::EthSpec;
 use eth_light_client_in_ckb_verification::{
-    mmr::lib::{Error as MMRError, MMRStore, Result as MMRResult},
+    mmr::lib::{Error as MMRError, MMRStoreReadOps, MMRStoreWriteOps, Result as MMRResult},
     types::packed,
 };
 
 use super::Storage;
 use crate::prelude::*;
 
-impl<S> MMRStore<packed::HeaderDigest> for Storage<S>
+impl<S> MMRStoreReadOps<packed::HeaderDigest> for Storage<S>
 where
     S: EthSpec,
 {
@@ -19,7 +19,12 @@ where
             ))
         })
     }
+}
 
+impl<S> MMRStoreWriteOps<packed::HeaderDigest> for Storage<S>
+where
+    S: EthSpec,
+{
     fn append(&mut self, pos: u64, elems: Vec<packed::HeaderDigest>) -> MMRResult<()> {
         for (offset, elem) in elems.iter().enumerate() {
             let pos: u64 = pos + (offset as u64);

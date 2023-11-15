@@ -43,10 +43,10 @@ jobs:
       - name: prepare-ckb
         run: |
           if [ ! -f "/tmp/ckb.tar.gz" ]; then
-            curl -L https://github.com/nervosnetwork/ckb/releases/download/v0.107.0/ckb_v0.107.0_x86_64-unknown-linux-gnu.tar.gz -o /tmp/ckb.tar.gz
+            curl -L https://github.com/nervosnetwork/ckb/releases/download/v0.111.0/ckb_v0.111.0_x86_64-unknown-linux-gnu.tar.gz -o /tmp/ckb.tar.gz
           fi
           tar -zxf /tmp/ckb.tar.gz -C /tmp
-          echo "/tmp/ckb_v0.107.0_x86_64-unknown-linux-gnu" >> $GITHUB_PATH
+          echo "/tmp/ckb_v0.111.0_x86_64-unknown-linux-gnu" >> $GITHUB_PATH
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'

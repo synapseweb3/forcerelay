@@ -185,7 +185,7 @@ mod tests {
 
         sleep(80);
 
-        let mut indexer_rpc = IndexerRpcClient::new("http://127.0.0.1:8114");
+        let indexer_rpc = IndexerRpcClient::new("http://127.0.0.1:8114");
         let type_script = packed::Script::new_builder()
             .code_hash(TYPE_ID_CODE_HASH.0.pack())
             .hash_type(ScriptHashType::Type.into())
@@ -197,11 +197,13 @@ mod tests {
             .build();
         let code_hash = type_script.calc_script_hash();
 
+        let cells_count = 4u8;
+        let type_args = [&type_id[..], &[cells_count]].concat();
         let search_key = SearchKey {
             script: packed::Script::new_builder()
                 .code_hash(code_hash)
                 .hash_type(ScriptHashType::Type.into())
-                .args(Pack::pack(type_id.as_slice()))
+                .args(Pack::pack(type_args.as_slice()))
                 .build()
                 .into(),
             script_type: ScriptType::Type,
