@@ -79,7 +79,7 @@ impl AxonEventMonitor {
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
     }
 
-    // XXX: we met a connection error that ethers-rs doesn't reconnection if it meets error,
+    // XXX: we met a connection error that ethers-rs doesn't reconnect WebSocket if it meets error,
     //      we just choose to recreate provider mannully to solve connection problem
     //
     //      see: https://github.com/gakonst/ethers-rs/issues/2323
