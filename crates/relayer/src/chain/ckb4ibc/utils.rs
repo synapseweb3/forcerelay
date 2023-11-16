@@ -8,6 +8,7 @@ use crate::error::Error;
 use crate::event::IbcEventWithHeight;
 use ckb_ics_axon::consts::{CHANNEL_ID_PREFIX, CONNECTION_ID_PREFIX};
 use ckb_ics_axon::handler::IbcPacket;
+use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::object::Proofs as CkbProofs;
 use ckb_ics_axon::proof::ObjectProof;
 use ckb_jsonrpc_types::TransactionView;
@@ -21,17 +22,25 @@ use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script};
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::{h256, H256};
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
+use ibc_relayer_types::core::ics03_connection::events::Attributes as ConnectionAttributes;
 use ibc_relayer_types::core::ics04_channel::channel::ChannelEnd;
-use ibc_relayer_types::core::ics04_channel::events::{SendPacket, WriteAcknowledgement};
+use ibc_relayer_types::core::ics04_channel::events::{
+    AcknowledgePacket, CloseConfirm, CloseInit, OpenAck, OpenConfirm, OpenInit, OpenTry,
+    ReceivePacket, SendPacket, WriteAcknowledgement,
+};
 use ibc_relayer_types::core::ics04_channel::packet::{Packet, Sequence};
 use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
+use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ConnectionId, PortId};
-use ibc_relayer_types::events::WithBlockDataType;
+use ibc_relayer_types::events::{IbcEvent, WithBlockDataType};
 use ibc_relayer_types::proofs::{ConsensusProof, Proofs};
 use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
 use tiny_keccak::{Hasher, Keccak};
 
+use super::extractor::{
+    extract_channel_end_from_tx, extract_connections_from_tx, extract_packet_from_tx, get_envelope,
+};
 use super::message::MsgToTxConverter;
 
 const SUDT_CODE_HASH_MAINNET: H256 =
@@ -357,4 +366,162 @@ pub async fn tip_block_number(rpc_client: &impl CkbReader) -> Result<u64, Error>
         .number
         .into();
     Ok(tip_block_number)
+}
+
+pub fn transaction_to_event(
+    tx: &TransactionView,
+    prefix: &CommitmentPrefix,
+) -> Result<IbcEvent, Error> {
+    let extract_connection = |tx, prefix| {
+        let (connections, _) = extract_connections_from_tx(tx, prefix)?;
+        let Some(connection) = connections.last() else {
+            return Err(Error::other_error(
+                "on-chain connections is empty".to_owned(),
+            ));
+        };
+        Ok((
+            connection.connection_id.clone(),
+            connection.connection_end.clone(),
+        ))
+    };
+    let extract_channel = |tx| -> Result<_, Error> {
+        let (channel, _) = extract_channel_end_from_tx(tx)?;
+        Ok((channel.channel_id, channel.port_id, channel.channel_end))
+    };
+    let event = match get_envelope(tx)?.msg_type {
+        MsgType::MsgConnectionOpenInit => {
+            let (connection_id, connection) = extract_connection(tx, prefix)?;
+            IbcEvent::OpenInitConnection(
+                ConnectionAttributes {
+                    connection_id: Some(connection_id),
+                    client_id: connection.client_id().clone(),
+                    counterparty_connection_id: connection.counterparty().connection_id.clone(),
+                    counterparty_client_id: connection.counterparty().client_id().clone(),
+                }
+                .into(),
+            )
+        }
+        MsgType::MsgConnectionOpenTry => {
+            let (connection_id, connection) = extract_connection(tx, prefix)?;
+            IbcEvent::OpenTryConnection(
+                ConnectionAttributes {
+                    connection_id: None,
+                    client_id: connection.counterparty().client_id().clone(),
+                    counterparty_connection_id: Some(connection_id),
+                    counterparty_client_id: connection.client_id().clone(),
+                }
+                .into(),
+            )
+        }
+        MsgType::MsgConnectionOpenAck => {
+            let (connection_id, connection) = extract_connection(tx, prefix)?;
+            IbcEvent::OpenAckConnection(
+                ConnectionAttributes {
+                    connection_id: connection.counterparty().connection_id.clone(),
+                    client_id: connection.counterparty().client_id().clone(),
+                    counterparty_connection_id: Some(connection_id),
+                    counterparty_client_id: connection.client_id().clone(),
+                }
+                .into(),
+            )
+        }
+        MsgType::MsgConnectionOpenConfirm => {
+            let (connection_id, connection) = extract_connection(tx, prefix)?;
+            IbcEvent::OpenConfirmConnection(
+                ConnectionAttributes {
+                    connection_id: Some(connection_id),
+                    client_id: connection.client_id().clone(),
+                    counterparty_connection_id: connection.counterparty().connection_id.clone(),
+                    counterparty_client_id: connection.counterparty().client_id().clone(),
+                }
+                .into(),
+            )
+        }
+        MsgType::MsgChannelOpenInit => {
+            let (channel_id, port_id, channel) = extract_channel(tx)?;
+            IbcEvent::OpenInitChannel(OpenInit {
+                port_id,
+                channel_id: Some(channel_id),
+                connection_id: channel.connection_hops[0].clone(),
+                counterparty_port_id: channel.counterparty().port_id.clone(),
+                counterparty_channel_id: channel.counterparty().channel_id.clone(),
+            })
+        }
+        MsgType::MsgChannelOpenTry => {
+            let (channel_id, port_id, channel) = extract_channel(tx)?;
+            IbcEvent::OpenTryChannel(OpenTry {
+                port_id: channel.counterparty().port_id.clone(),
+                channel_id: channel.counterparty().channel_id.clone(),
+                connection_id: channel.connection_hops[0].clone(),
+                counterparty_port_id: port_id,
+                counterparty_channel_id: Some(channel_id),
+            })
+        }
+        MsgType::MsgChannelOpenAck => {
+            let (channel_id, port_id, channel) = extract_channel(tx)?;
+            IbcEvent::OpenAckChannel(OpenAck {
+                port_id: channel.counterparty().port_id.clone(),
+                channel_id: channel.counterparty().channel_id.clone(),
+                connection_id: channel.connection_hops[0].clone(),
+                counterparty_port_id: port_id,
+                counterparty_channel_id: Some(channel_id),
+            })
+        }
+        MsgType::MsgChannelOpenConfirm => {
+            let (channel_id, port_id, channel) = extract_channel(tx)?;
+            IbcEvent::OpenConfirmChannel(OpenConfirm {
+                port_id,
+                channel_id: Some(channel_id),
+                connection_id: channel.connection_hops[0].clone(),
+                counterparty_port_id: channel.counterparty().port_id.clone(),
+                counterparty_channel_id: channel.counterparty().channel_id.clone(),
+            })
+        }
+        MsgType::MsgChannelCloseInit => {
+            let (channel_id, port_id, channel) = extract_channel(tx)?;
+            IbcEvent::CloseInitChannel(CloseInit {
+                port_id,
+                channel_id,
+                connection_id: channel.connection_hops[0].clone(),
+                counterparty_port_id: channel.counterparty().port_id.clone(),
+                counterparty_channel_id: channel.counterparty().channel_id.clone(),
+            })
+        }
+        MsgType::MsgChannelCloseConfirm => {
+            let (channel_id, port_id, channel) = extract_channel(tx)?;
+            IbcEvent::CloseConfirmChannel(CloseConfirm {
+                port_id: channel.counterparty().port_id.clone(),
+                channel_id: channel.counterparty().channel_id.clone(),
+                connection_id: channel.connection_hops[0].clone(),
+                counterparty_port_id: port_id,
+                counterparty_channel_id: Some(channel_id),
+            })
+        }
+        MsgType::MsgSendPacket => {
+            let (packet, _) = extract_packet_from_tx(tx)?;
+            IbcEvent::SendPacket(SendPacket { packet })
+        }
+        MsgType::MsgRecvPacket => {
+            let (packet, _) = extract_packet_from_tx(tx)?;
+            IbcEvent::ReceivePacket(ReceivePacket { packet })
+        }
+        MsgType::MsgWriteAckPacket => {
+            let (packet, Some(ack)) = extract_packet_from_tx(tx)? else {
+                return Err(Error::other_error(
+                    "WriteAckPacket has empty acknowledgement content".to_owned(),
+                ));
+            };
+            IbcEvent::WriteAcknowledgement(WriteAcknowledgement { packet, ack })
+        }
+        MsgType::MsgAckPacket => {
+            let (packet, _) = extract_packet_from_tx(tx)?;
+            IbcEvent::AcknowledgePacket(AcknowledgePacket { packet })
+        }
+        event => {
+            return Err(Error::other_error(format!(
+                "Ckb4Ibc doesn't support query {event:?} message"
+            )))
+        }
+    };
+    Ok(event)
 }

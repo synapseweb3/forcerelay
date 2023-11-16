@@ -1,16 +1,19 @@
 use std::str::FromStr;
 use std::time::Duration;
 
+use crate::chain::SEC_TO_NANO;
 use crate::error::Error;
 
 use ckb_ics_axon::handler::{IbcChannel as CkbIbcChannel, IbcConnections, IbcPacket};
 use ckb_ics_axon::message::{Envelope, MsgType};
 use ckb_ics_axon::object::{
-    ConnectionEnd as CkbConnectionEnd, Ordering as CkbOrdering, State as CkbState,
+    ConnectionEnd as CkbConnectionEnd, Ordering as CkbOrdering, Packet as CkbPacket,
+    State as CkbState,
 };
 use ckb_jsonrpc_types::TransactionView;
 use ckb_types::packed::WitnessArgs;
 use ckb_types::prelude::Entity;
+use ibc_relayer_types::core::ics02_client::height::Height;
 use ibc_relayer_types::core::ics03_connection::connection::{
     ConnectionEnd, IdentifiedConnectionEnd,
 };
@@ -22,9 +25,12 @@ use ibc_relayer_types::core::ics04_channel::channel::{
     ChannelEnd, Counterparty as ChannelCounterparty, IdentifiedChannelEnd, Order,
     State as ChannelState,
 };
+use ibc_relayer_types::core::ics04_channel::packet::Packet;
+use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
 use ibc_relayer_types::core::ics04_channel::version::Version as ChanVersion;
 use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
+use ibc_relayer_types::timestamp::Timestamp;
 
 use super::utils::{generate_channel_id, generate_connection_id};
 
@@ -78,6 +84,11 @@ pub fn extract_ibc_packet_from_tx(tx: &TransactionView) -> Result<(IbcPacket, Ve
         rlp::decode::<IbcPacket>(&witness_args.output_type().to_opt().unwrap().raw_data())
             .map_err(|_| Error::extract_chan_tx_error(tx.hash.to_string()))?;
     Ok((ibc_packet, envelope.content))
+}
+
+pub fn extract_packet_from_tx(tx: &TransactionView) -> Result<(Packet, Option<Vec<u8>>), Error> {
+    let (packet, _) = extract_ibc_packet_from_tx(tx)?;
+    Ok((convert_packet(packet.packet)?, packet.ack))
 }
 
 fn navigate(t: &MsgType, object_type: &ObjectType) -> usize {
@@ -202,6 +213,28 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
         channel_end,
     };
     Ok(result)
+}
+
+fn convert_packet(packet: CkbPacket) -> Result<Packet, Error> {
+    fn other_error<E: ToString>(error: E) -> Error {
+        Error::other_error(error.to_string())
+    }
+    Ok(Packet {
+        sequence: (packet.sequence as u64).try_into().map_err(other_error)?,
+        source_port: PortId::from_str(&packet.source_port_id).map_err(other_error)?,
+        source_channel: ChannelId::from_str(&packet.source_channel_id).map_err(other_error)?,
+        destination_port: PortId::from_str(&packet.destination_port_id).map_err(other_error)?,
+        destination_channel: ChannelId::from_str(&packet.destination_channel_id)
+            .map_err(other_error)?,
+        timeout_height: if packet.timeout_height == 0 {
+            TimeoutHeight::Never
+        } else {
+            TimeoutHeight::At(Height::from_noncosmos_height(packet.timeout_height))
+        },
+        timeout_timestamp: Timestamp::from_nanoseconds(packet.timeout_timestamp * SEC_TO_NANO)
+            .map_err(other_error)?,
+        data: packet.data,
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
