@@ -33,7 +33,7 @@ use crate::{
 use eth_light_client_in_ckb_prover::Receipts;
 use ethers::{
     prelude::*,
-    providers::{Middleware, Provider, Ws},
+    providers::{Http, Middleware, Provider},
     signers::{Signer as _, Wallet},
     utils::rlp,
 };
@@ -84,7 +84,7 @@ use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 
 use self::{contract::OwnableIBCHandler, monitor::AxonEventMonitor};
 
-type ContractProvider = SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>;
+type ContractProvider = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
 type IBCContract = OwnableIBCHandler<ContractProvider>;
 type ERC20Contract = ERC20<ContractProvider>;
 type ICS20TransferERC20Contract = ICS20TransferERC20<ContractProvider>;
@@ -153,7 +153,7 @@ pub struct AxonChain {
     light_client: AxonLightClient,
     tx_monitor_cmd: Option<TxMonitorCmd>,
     rpc_client: rpc::AxonRpcClient,
-    client: Provider<Ws>,
+    client: Provider<Http>,
     keybase: KeyRing<Secp256k1KeyPair>,
     chain_id: u64,
     ibc_cache: Arc<RwLock<IBCInfoCache>>,
@@ -206,11 +206,9 @@ impl ChainEndpoint for AxonChain {
         let keybase = KeyRing::new_secp256k1(Default::default(), "axon", &config.id)
             .map_err(Error::key_base)?;
 
-        let url = config.websocket_addr.clone();
+        let url = config.rpc_addr.clone();
         let rpc_client = rpc::AxonRpcClient::new(&config.rpc_addr);
-        let client = rt
-            .block_on(Provider::<Ws>::connect(url.to_string()))
-            .map_err(|_| Error::web_socket(url.into()))?;
+        let client = rt.block_on(Provider::<Http>::connect(&url.to_string()));
         let chain_id = rt
             .block_on(client.get_chainid())
             .map_err(|e| Error::other_error(e.to_string()))?
