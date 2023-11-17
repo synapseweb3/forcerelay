@@ -1073,7 +1073,7 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=bfd8ab46a1f1fc#bfd8ab46a1f1fcef7c5610916849381c61122b90"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=0299a91#0299a9126a7cb28ff54b1a02f286f0618133731c"
 dependencies = [
  "bytes",
  "ethereum-types",
@@ -2923,7 +2923,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "forcerelay-ckb-sdk"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=8830439#8830439708b049dca848224706cc5ec61be69a3d"
+source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=61a78aa#61a78aaa2a4fb1609aa97196b50aa45f6c084f66"
 dependencies = [
  "anyhow",
  "async-stream",
