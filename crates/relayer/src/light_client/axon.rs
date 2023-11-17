@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use axon_tools::types::AxonHeader as AxonChainHeader;
+use axon_tools::types::Header as AxonChainHeader;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
 use futures::TryFutureExt;

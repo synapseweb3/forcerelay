@@ -1,7 +1,7 @@
 use crate::error::Error;
 
 use async_trait::async_trait;
-use axon_tools::types::{AxonBlock, CkbRelatedInfo, Metadata, Proof};
+use axon_tools::types::{Block as AxonBlock, CkbRelatedInfo, Metadata, Proof};
 use ethers::types::{BlockId, BlockNumber};
 use reqwest::Client;
 use std::sync::atomic::{AtomicU64, Ordering};
