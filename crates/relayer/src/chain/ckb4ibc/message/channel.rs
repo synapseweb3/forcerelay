@@ -310,10 +310,10 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     };
 
     let connection_id = old_channel.connection_hops[0].clone();
-    let (client_cell_type_args, client_id) =
+    let (client_cell_type_id, client_id) =
         extract_client_id_by_connection_id(&connection_id, converter)?;
     let channel_args = ChannelArgs {
-        client_id: client_cell_type_args,
+        client_id: client_cell_type_id,
         open: true,
         channel_id: get_channel_number(&msg.channel_id)?,
         port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -375,10 +375,10 @@ pub fn convert_chan_close_init_to_tx<C: MsgToTxConverter>(
     let connection_id = ConnectionId::from_str(&old_channel.connection_hops[0])
         .map_err(|_| Error::ckb_conn_id_invalid(old_channel.connection_hops[0].clone()))?;
 
-    let (client_cell_type_args, client_id) =
+    let (client_cell_type_id, client_id) =
         extract_client_id_by_connection_id(&connection_id.to_string(), converter)?;
     let channel_args = ChannelArgs {
-        client_id: client_cell_type_args,
+        client_id: client_cell_type_id,
         open: false,
         channel_id: new_channel.number,
         port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -429,7 +429,7 @@ pub fn convert_chan_close_confirm_to_tx<C: MsgToTxConverter>(
     new_channel.state = CkbState::Closed;
 
     let envelope = Envelope {
-        msg_type: MsgType::MsgChannelCloseInit,
+        msg_type: MsgType::MsgChannelCloseConfirm,
         content: rlp::encode(&CkbMsgChannelCloseConfirm {
             proofs: convert_proof(msg.proofs)?,
         })
@@ -443,10 +443,10 @@ pub fn convert_chan_close_confirm_to_tx<C: MsgToTxConverter>(
     let connection_id = ConnectionId::from_str(&old_channel.connection_hops[0])
         .map_err(|_| Error::ckb_conn_id_invalid(old_channel.connection_hops[0].clone()))?;
 
-    let (client_cell_type_args, client_id) =
+    let (client_cell_type_id, client_id) =
         extract_client_id_by_connection_id(&connection_id.to_string(), converter)?;
     let channel_args = ChannelArgs {
-        client_id: client_cell_type_args,
+        client_id: client_cell_type_id,
         open: false,
         channel_id: new_channel.number,
         port_id: convert_port_id_to_array(&msg.port_id)?,

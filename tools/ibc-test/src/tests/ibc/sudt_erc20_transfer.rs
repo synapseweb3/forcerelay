@@ -395,9 +395,6 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         }
         log::info!("checked ack on axon");
 
-        println!("\n================ Close Channel ===================\n");
-        channels.channel.build_chan_close_init_and_send()?;
-
         Ok(())
     }
 }

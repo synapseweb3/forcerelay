@@ -167,7 +167,19 @@ impl BinaryChannelTest for CKB4IbcPacketTest {
         // )?;
 
         println!("\n================ Close Channel ===================\n");
-        channels.channel.build_chan_close_init_and_send()?;
+        let channel_close_tx = generate_channel_close_init_transaction(
+            &rt,
+            &chain_b_config,
+            &chain_b_url,
+            &chain_b_signer,
+        )?;
+        let hash = send_transaction(&chain_b_url, channel_close_tx)?;
+        info!(
+            "🍻 successfully sent channel_close transaction to chain_b, hash = {}",
+            hex::encode(hash)
+        );
+        listen_and_wait_closed_channel_cell(&rt, &chain_a_url, &chain_a_config)?;
+        info!("🍻 successfully found the closed channel on chain_a");
 
         Ok(())
     }
