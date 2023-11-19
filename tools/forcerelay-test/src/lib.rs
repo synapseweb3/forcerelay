@@ -180,7 +180,7 @@ mod tests {
                     println!("{}", line);
                 }
             });
-            hex::decode(&type_id).expect("decode type_id failed")
+            hex::decode(type_id).expect("decode type_id failed")
         };
 
         sleep(80);
