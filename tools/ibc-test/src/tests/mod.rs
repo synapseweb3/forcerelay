@@ -1,7 +1,7 @@
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ibc_test_framework::prelude::Error;
 
-use crate::consts::{CHANNEL_TYPE_ARGS, CLIENT_TYPE_ARGS, CONNECTION_TYPE_ARGS, PACKET_TYPE_ARGS};
+use crate::consts::*;
 use crate::framework::binary::channel::{
     run_arbitrary_binary_channel_test, run_arbitrary_binary_connection_test,
 };
@@ -25,6 +25,7 @@ fn init_envs() -> Result<(), Error> {
             {"CHANNEL_TYPE_ARGS", hex::encode(CHANNEL_TYPE_ARGS)},
             {"PACKET_TYPE_ARGS", hex::encode(PACKET_TYPE_ARGS)},
             {"CLIENT_TYPE_ARGS", hex::encode(CLIENT_TYPE_ARGS)},
+            {"AXON_IBC_HANDLER_ADDRESS", hex::encode(AXON_IBC_HANDLER_ADDRESS)},
         );
     }
     Ok(())

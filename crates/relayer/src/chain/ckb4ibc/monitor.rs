@@ -6,7 +6,7 @@ use std::time::Duration;
 use ckb_ics_axon::handler::{IbcPacket, PacketStatus};
 use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::object::State as CkbState;
-use ckb_ics_axon::ChannelArgs;
+use ckb_ics_axon::{connection_id, ChannelArgs};
 use ckb_jsonrpc_types::{JsonBytes, Status, TransactionView};
 use ckb_sdk::rpc::ckb_indexer::SearchKey;
 use ckb_types::core::ScriptHashType;
@@ -47,9 +47,7 @@ use crate::event::monitor::{Error, EventBatch, MonitorCmd, Next, Result, TxMonit
 use crate::event::IbcEventWithHeight;
 
 use super::cache_set::CacheSet;
-use super::utils::{
-    generate_connection_id, get_prefix_search_key, get_script_hash, tip_block_number,
-};
+use super::utils::{get_prefix_search_key, get_script_hash, tip_block_number};
 
 #[derive(Eq, PartialOrd, Ord, PartialEq, Hash, Clone, Copy)]
 pub enum IbcProtocolType {
@@ -175,15 +173,15 @@ impl Ckb4IbcEventMonitor {
 
     async fn fetch_connection_events(&mut self) -> Result<EventBatch> {
         let connection_code_hash = get_script_hash(&self.config.connection_type_args);
-        let client_type_hash = self
+        let connection_args = self
             .config
-            .lc_client_type_hash(self.counterparty_client_type)
+            .lc_connection_args(self.counterparty_client_type)
             .map_err(|e| Error::collect_events_failed(e.to_string()))?;
-        let client_id: ClientId = hex::encode(client_type_hash.0).parse().unwrap();
+        let client_id = connection_args.client_id();
         let script = Script::new_builder()
             .code_hash(connection_code_hash)
             .hash_type(ScriptHashType::Type.into())
-            .args(client_type_hash.as_bytes().pack())
+            .args(connection_args.encode().pack())
             .build();
         let key = get_prefix_search_key(script);
         let connections = self
@@ -206,7 +204,7 @@ impl Ckb4IbcEventMonitor {
                 events: vec![],
             });
         }
-        let ((ibc_connection_cell, tx), (block_number, _, _)) =
+        let (((_, connections), tx), (block_number, _, _)) =
             connections.into_iter().next().unwrap();
         if self.cache_set.read().unwrap().has(&tx.hash) {
             return Ok(EventBatch {
@@ -217,21 +215,23 @@ impl Ckb4IbcEventMonitor {
             });
         }
         self.cache_set.write().unwrap().insert(tx.hash.clone());
-        let events = ibc_connection_cell
+        let events = connections
             .connections
             .into_iter()
             .enumerate()
             .flat_map(|(idx, connection_end)| match connection_end.state {
                 CkbState::Init => {
-                    let connection_id = generate_connection_id(idx as u16, client_id.as_str());
+                    let connection_id = connection_id(client_id.as_str(), idx).parse().unwrap();
                     info!(
                         "🫡  {} received ConnectionOpenInit event, connection_id = {connection_id}",
                         self.config.id
                     );
                     let attrs = Attributes {
                         connection_id: Some(connection_id),
-                        client_id: client_id.clone(),
-                        counterparty_connection_id: None,
+                        client_id: client_id.parse().unwrap(),
+                        counterparty_connection_id: Some(
+                            connection_end.counterparty.connection_id.parse().unwrap(),
+                        ),
                         counterparty_client_id: ClientId::from_str(
                             &connection_end.counterparty.client_id,
                         )
@@ -245,14 +245,14 @@ impl Ckb4IbcEventMonitor {
                     })
                 }
                 CkbState::OpenTry => {
-                    let connection_id = generate_connection_id(idx as u16, client_id.as_str());
+                    let connection_id = connection_id(client_id.as_str(), idx).parse().unwrap();
                     info!(
                         "🫡  {} received ConnectionOpenTry event, connection_id = {connection_id}",
                         self.config.id
                     );
                     let attrs = Attributes {
                         connection_id: Some(connection_id),
-                        client_id: client_id.clone(),
+                        client_id: client_id.parse().unwrap(),
                         counterparty_connection_id: None,
                         counterparty_client_id: ClientId::from_str(
                             &connection_end.counterparty.client_id,
@@ -282,12 +282,13 @@ impl Ckb4IbcEventMonitor {
     }
 
     async fn fetch_channel_events(&mut self) -> Result<EventBatch> {
-        let client_id = self
+        let args = self
             .config
-            .lc_client_type_hash(self.counterparty_client_type)
+            .lc_connection_args(self.counterparty_client_type)
             .map_err(|e| Error::collect_events_failed(e.to_string()))?;
         let channel_args = ChannelArgs {
-            client_id: client_id.into(),
+            metadata_type_id: args.metadata_type_id,
+            ibc_handler_address: args.ibc_handler_address,
             open: false,
             ..Default::default()
         };

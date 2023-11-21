@@ -42,7 +42,7 @@ fn generate_consts_file(
     packet_metadata_attr: &PacketMetataAttribute,
 ) {
     let consts_rs = format!(
-        r#"use ckb_types::{{h256, H256}};
+        r#"use ckb_types::{{h160, h256, H160, H256}};
 
 pub const SUDT_CODE_HASH: H256 =
     h256!("0x{}");
@@ -61,6 +61,10 @@ pub const PACKET_TYPE_ARGS: H256 =
     h256!("0x{}");
 pub const CLIENT_TYPE_ARGS: H256 =
     h256!("0x{}");
+
+// Don't know how to pass this from axon to ckb. It doesn't change often, so
+// let's hardcode it for now.
+pub const AXON_IBC_HANDLER_ADDRESS: H160 = h160!("0xdc64a140aa3e981100a9beca4e685f962f0cf6c9");
 "#,
         sudt_attr.sudt_code_hash,
         connection_attr.connection_code_hash,

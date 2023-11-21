@@ -1,8 +1,9 @@
+use ckb_ics_axon::ConnectionArgs;
 use ckb_types::{
     core::ScriptHashType,
     packed::Script,
     prelude::{Builder, Entity, Pack, Unpack},
-    H256,
+    H160, H256,
 };
 use ibc_relayer_types::core::{
     ics02_client::client_type::ClientType,
@@ -21,6 +22,7 @@ use super::filter::PacketFilter;
 pub struct LightClientItem {
     pub chain_id: ChainId,
     pub client_cell_type_args: H256,
+    pub ibc_handler_address: H160,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,14 +46,19 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub fn lc_chain_id(&self, client_id: &String) -> Result<ChainId, Error> {
+    pub fn lc_chain_id_by_client_id(&self, client_id: &str) -> Result<ChainId, Error> {
         let chain_id = self
             .onchain_light_clients
             .iter()
             .find_map(|(_, v)| {
-                let client_type_hash =
+                let metadata_type_hash =
                     calc_type_hash(&self.client_code_hash, &v.client_cell_type_args);
-                if hex::encode(client_type_hash) == client_id.as_str() {
+                let v_client_id = ConnectionArgs {
+                    metadata_type_id: metadata_type_hash.0,
+                    ibc_handler_address: v.ibc_handler_address.0,
+                }
+                .client_id();
+                if client_id == v_client_id {
                     Some(v.chain_id.clone())
                 } else {
                     None
@@ -68,9 +75,14 @@ impl ChainConfig {
             .onchain_light_clients
             .iter()
             .find_map(|(k, v)| {
-                let client_type_hash =
+                let metadata_type_hash =
                     calc_type_hash(&self.client_code_hash, &v.client_cell_type_args);
-                if hex::encode(client_type_hash) == client_id {
+                let v_client_id = ConnectionArgs {
+                    metadata_type_id: metadata_type_hash.0,
+                    ibc_handler_address: v.ibc_handler_address.0,
+                }
+                .client_id();
+                if client_id == v_client_id {
                     Some(*k)
                 } else {
                     None
@@ -82,28 +94,61 @@ impl ChainConfig {
         Ok(client_type)
     }
 
-    pub fn lc_client_id(&self, client_type: ClientType) -> Result<ClientId, Error> {
-        let client_type_args = self.lc_client_type_args(client_type)?;
-        let client_type_hash = calc_type_hash(&self.client_code_hash, &client_type_args);
-        let client_id = hex::encode(client_type_hash).parse().unwrap();
-        Ok(client_id)
-    }
-
-    pub fn lc_client_type_args(&self, client_type: ClientType) -> Result<H256, Error> {
-        let (_, item) = self
-            .onchain_light_clients
+    pub fn lc_connection_args_by_id(&self, client_id: &str) -> Result<ConnectionArgs, Error> {
+        self.onchain_light_clients
             .iter()
-            .find(|(v, _)| **v == client_type)
+            .find_map(|(_, v)| {
+                let metadata_type_hash =
+                    calc_type_hash(&self.client_code_hash, &v.client_cell_type_args);
+                let args = ConnectionArgs {
+                    metadata_type_id: metadata_type_hash.0,
+                    ibc_handler_address: v.ibc_handler_address.0,
+                };
+                if client_id == args.client_id() {
+                    Some(args)
+                } else {
+                    None
+                }
+            })
             .ok_or(Error::other_error(format!(
-                "config.toml missing client_type {client_type}"
-            )))?;
-        Ok(item.client_cell_type_args.clone())
+                "config.toml missing client_id {client_id}"
+            )))
     }
 
-    pub fn lc_client_type_hash(&self, client_type: ClientType) -> Result<H256, Error> {
-        let client_type_args = self.lc_client_type_args(client_type)?;
-        let client_type_hash = calc_type_hash(&self.client_code_hash, &client_type_args);
-        Ok(client_type_hash)
+    pub fn lc_client_id(&self, client_type: ClientType) -> Result<ClientId, Error> {
+        let lc_item = self
+            .onchain_light_clients
+            .get(&client_type)
+            .ok_or_else(|| {
+                Error::other_error(format!("config.toml missing client_type {client_type}"))
+            })?;
+        let args = ConnectionArgs {
+            metadata_type_id: calc_type_hash(
+                &self.client_code_hash,
+                &lc_item.client_cell_type_args,
+            )
+            .0,
+            ibc_handler_address: lc_item.ibc_handler_address.0,
+        };
+        Ok(args.client_id().parse().unwrap())
+    }
+
+    pub fn lc_connection_args(&self, client_type: ClientType) -> Result<ConnectionArgs, Error> {
+        let lc_item = self
+            .onchain_light_clients
+            .get(&client_type)
+            .ok_or_else(|| {
+                Error::other_error(format!("config.toml missing client_type {client_type}"))
+            })?;
+        let args = ConnectionArgs {
+            metadata_type_id: calc_type_hash(
+                &self.client_code_hash,
+                &lc_item.client_cell_type_args,
+            )
+            .0,
+            ibc_handler_address: lc_item.ibc_handler_address.0,
+        };
+        Ok(args)
     }
 }
 

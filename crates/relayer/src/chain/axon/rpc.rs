@@ -2,8 +2,9 @@ use crate::error::Error;
 
 use async_trait::async_trait;
 use axon_tools::types::{Block as AxonBlock, CkbRelatedInfo, Metadata, Proof};
-use ethers::types::{BlockId, BlockNumber};
+use ethers::types::{BlockId, BlockNumber, Bytes, H160, U256};
 use reqwest::Client;
+use serde::Deserialize;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tendermint_rpc::Url;
@@ -21,6 +22,28 @@ pub trait AxonRpc {
     async fn get_current_metadata(&self) -> Response<Metadata>;
 
     async fn get_ckb_related_info(&self) -> Response<CkbRelatedInfo>;
+
+    /// ethers StorageProof key is wrong so we define our own.
+    async fn eth_get_proof(
+        &self,
+        address: H160,
+        positions: Vec<U256>,
+        block_id: Option<BlockId>,
+    ) -> Response<EIP1186ProofResponse>;
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EIP1186ProofResponse {
+    pub account_proof: Vec<Bytes>,
+    pub storage_proof: Vec<StorageProof>,
+}
+
+#[derive(Deserialize)]
+pub struct StorageProof {
+    pub key: U256,
+    pub value: U256,
+    pub proof: Vec<Bytes>,
 }
 
 #[derive(Clone)]
@@ -95,5 +118,21 @@ impl AxonRpc for AxonRpcClient {
 
     async fn get_ckb_related_info(&self) -> Response<CkbRelatedInfo> {
         jsonrpc!("axon_getCkbRelatedInfo", self, CkbRelatedInfo)
+    }
+
+    async fn eth_get_proof(
+        &self,
+        address: H160,
+        positions: Vec<U256>,
+        block_id: Option<BlockId>,
+    ) -> Response<EIP1186ProofResponse> {
+        jsonrpc!(
+            "eth_getProof",
+            self,
+            EIP1186ProofResponse,
+            address,
+            positions,
+            block_id
+        )
     }
 }

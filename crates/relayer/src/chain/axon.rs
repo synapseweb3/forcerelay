@@ -1,15 +1,12 @@
-use std::{
-    collections::HashMap,
-    str::FromStr,
-    sync::{Arc, RwLock},
-    thread,
-    time::Duration,
-};
+use std::{str::FromStr, sync::Arc, thread, time::Duration};
 
 use axon_tools::types::{Block as AxonBlock, Proof as AxonProof, ValidatorExtend};
+use ckb_ics_axon::{
+    axon_client::{commitment_slot, AxonCommitmentProof},
+    commitment::{channel_path, connection_path},
+};
 use eth2_types::Hash256;
 use k256::ecdsa::SigningKey;
-use rlp::Encodable;
 use tracing::{debug, warn};
 
 use crate::{
@@ -30,12 +27,10 @@ use crate::{
     light_client::{axon::LightClient as AxonLightClient, LightClient},
     misbehaviour::MisbehaviourEvidence,
 };
-use eth_light_client_in_ckb_prover::Receipts;
 use ethers::{
     prelude::*,
     providers::{Http, Middleware, Provider},
     signers::{Signer as _, Wallet},
-    utils::rlp,
 };
 use ibc_proto::{
     google::protobuf::Any,
@@ -93,7 +88,7 @@ use super::{
     client::ClientSettings,
     cosmos::encode::key_pair_to_signer,
     endpoint::{ChainEndpoint, ChainStatus, HealthCheck},
-    handle::{CacheTxHashStatus, Subscription},
+    handle::Subscription,
     requests::{
         CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest, QueryChannelRequest,
         QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientEventRequest,
@@ -140,13 +135,6 @@ abigen!(
     ]"
 );
 
-#[derive(Default)]
-pub struct IBCInfoCache {
-    conn_tx_hash: HashMap<ConnectionId, TxHash>,
-    chan_tx_hash: HashMap<(ChannelId, PortId), TxHash>,
-    packet_tx_hash: HashMap<(ChannelId, PortId, u64), TxHash>,
-}
-
 pub struct AxonChain {
     rt: Arc<TokioRuntime>,
     config: AxonChainConfig,
@@ -156,7 +144,6 @@ pub struct AxonChain {
     client: Provider<Http>,
     keybase: KeyRing<Secp256k1KeyPair>,
     chain_id: u64,
-    ibc_cache: Arc<RwLock<IBCInfoCache>>,
 }
 
 impl AxonChain {
@@ -214,7 +201,6 @@ impl ChainEndpoint for AxonChain {
             .map_err(|e| Error::other_error(e.to_string()))?
             .as_u64();
         let light_client = AxonLightClient::from_config(&config, rt.clone())?;
-        let ibc_cache = Arc::new(RwLock::new(IBCInfoCache::default()));
 
         // TODO: since Ckb endpoint uses Axon metadata cell as its light client, Axon
         //       endpoint has no need to monitor the update of its metadata
@@ -234,7 +220,6 @@ impl ChainEndpoint for AxonChain {
             chain_id,
             rpc_client,
             client,
-            ibc_cache,
         })
     }
 
@@ -1133,7 +1118,6 @@ impl ChainEndpoint for AxonChain {
         Ok(vec![])
     }
 
-    // TODO do we need to implement this?
     fn build_connection_proofs_and_client_state(
         &self,
         message_type: ConnectionMsgType,
@@ -1141,20 +1125,13 @@ impl ChainEndpoint for AxonChain {
         _client_id: &ClientId,
         height: Height,
     ) -> Result<(Option<AnyClientState>, Proofs), Error> {
+        let path = connection_path(connection_id.as_str());
         let state = match message_type {
             ConnectionMsgType::OpenTry => connection::State::Init,
             ConnectionMsgType::OpenAck => connection::State::TryOpen,
             ConnectionMsgType::OpenConfirm => connection::State::Open,
         };
-        let ibc_cache = self.ibc_cache.read().unwrap();
-        let tx_hash = ibc_cache
-            .conn_tx_hash
-            .get(connection_id)
-            .ok_or(Error::conn_proof(
-                connection_id.clone(),
-                format!("missing connection tx_hash, state {state:?}"),
-            ))?;
-        let proofs = self.get_proofs(tx_hash, height).map_err(|e| {
+        let proofs = self.get_proofs(height, &path).map_err(|e| {
             Error::conn_proof(
                 connection_id.clone(),
                 format!("{}, state {state:?}", e.detail()),
@@ -1169,16 +1146,8 @@ impl ChainEndpoint for AxonChain {
         channel_id: &ChannelId,
         height: Height,
     ) -> Result<Proofs, Error> {
-        let ibc_cache = self.ibc_cache.read().unwrap();
-        let tx_hash = ibc_cache
-            .chan_tx_hash
-            .get(&(channel_id.clone(), port_id.clone()))
-            .ok_or(Error::chan_proof(
-                port_id.clone(),
-                channel_id.clone(),
-                "missing channel tx_hash".to_owned(),
-            ))?;
-        let proofs = self.get_proofs(tx_hash, height).map_err(|e| {
+        let path = channel_path(port_id.as_str(), channel_id.as_str());
+        let proofs = self.get_proofs(height, &path).map_err(|e| {
             Error::chan_proof(port_id.clone(), channel_id.clone(), e.detail().to_string())
         })?;
         Ok(proofs)
@@ -1192,19 +1161,12 @@ impl ChainEndpoint for AxonChain {
         sequence: Sequence,
         height: Height,
     ) -> Result<Proofs, Error> {
-        let ibc_cache = self.ibc_cache.read().unwrap();
-        let tx_hash = ibc_cache
-            .packet_tx_hash
-            .get(&(channel_id.clone(), port_id.clone(), sequence.into()))
-            .ok_or(Error::packet_proof(
-                port_id.clone(),
-                channel_id.clone(),
-                sequence.into(),
-                format!(
-                    "missing packet tx_hash on {packet_type}({channel_id}/{port_id}/{sequence})"
-                ),
-            ))?;
-        let proofs = self.get_proofs(tx_hash, height).map_err(|e| {
+        let path_fn = match packet_type {
+            PacketMsgType::Ack => ckb_ics_axon::commitment::packet_acknowledgement_commitment_path,
+            _ => ckb_ics_axon::commitment::packet_commitment_path,
+        };
+        let path = path_fn(port_id.as_str(), channel_id.as_str(), sequence.into());
+        let proofs = self.get_proofs(height, &path).map_err(|e| {
             Error::chan_proof(
                 port_id.clone(),
                 channel_id.clone(),
@@ -1264,123 +1226,93 @@ impl AxonChain {
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
         crate::time!("axon_init_event_monitor");
         // let header_receiver = self.light_client.subscribe();
-        let ibc_cache = self.ibc_cache.clone();
-        let (mut event_monitor, monitor_tx) = AxonEventMonitor::new(
+
+        // TODO: monitor should start from tip - restore_block_number. Or better
+        // yet, it should start from where it's shutdown.
+        let (event_monitor, monitor_tx) = AxonEventMonitor::new(
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
             self.config.contract_address,
             // header_receiver,
             self.rt.clone(),
-            ibc_cache.clone(),
         )
         .map_err(Error::event_monitor)?;
-
-        // restore past events to initialize tx_hash caches
-        let mut ibc_cache = ibc_cache.write().unwrap();
-        let latest_block_count = self.config.restore_block_count;
-        event_monitor
-            .restore_event_tx_hashes(latest_block_count)
-            .map_err(Error::event_monitor)?
-            .into_iter()
-            .for_each(|v| cache_ics_tx_hash_with_event(&mut ibc_cache, v.event, v.tx_hash));
 
         thread::spawn(move || event_monitor.run());
         Ok(monitor_tx)
     }
 
-    fn get_proofs(&self, tx_hash: &TxHash, height: Height) -> Result<Proofs, Error> {
-        let receipt = self
+    fn get_proofs(&self, height: Height, commitment_path: &str) -> Result<Proofs, Error> {
+        let block_number = height.revision_height();
+        let (block, previous_state_root, block_proof, mut validators) = self
             .rt
-            .block_on(self.client.get_transaction_receipt(*tx_hash))
-            .map_err(|e| Error::rpc_response(e.to_string()))?
-            .ok_or_else(|| {
-                Error::other_error(format!(
-                    "can't find transaction receipt with hash {}",
-                    hex::encode(tx_hash)
-                ))
-            })?;
+            .block_on(self.get_proofs_ingredients(block_number.into()))?;
 
-        let block_number = receipt.block_number.ok_or_else(|| {
-            Error::other_error(format!(
-                "transaction {} is still pending",
-                hex::encode(tx_hash)
-            ))
+        let debug_content =
+            generate_debug_content(&block, &previous_state_root, &block_proof, &validators);
+
+        // check the validation of Axon block
+        axon_tools::verify_proof(
+            block.clone(),
+            previous_state_root,
+            &mut validators,
+            block_proof.clone(),
+        )
+        .map_err(|err| {
+            std::fs::write(
+                format!("./debug/axon_block_{block_number}.log"),
+                debug_content,
+            )
+            .unwrap();
+            let err_msg = format!("unverified axon block #{block_number}, err: {:?}", err);
+            Error::rpc_response(err_msg)
         })?;
 
-        let block = self
+        let commitment_slot = commitment_slot(commitment_path.as_bytes());
+
+        let mut commitment_proof = self
             .rt
-            .block_on(self.client.get_block(block_number))
-            .map_err(|e| Error::rpc_response(e.to_string()))?
-            .ok_or_else(|| {
-                Error::other_error(format!("can't find block with number {}", block_number))
-            })?;
-
-        let tx_receipts = block
-            .transactions
-            .into_iter()
-            .map(|tx_hash| {
-                let receipt = self
-                    .rt
-                    .block_on(self.client.get_transaction_receipt(tx_hash));
-                match receipt {
-                    Ok(Some(receipt)) => Ok(receipt),
-                    Ok(None) => Err(Error::other_error(format!(
-                        "can't find transaction receipt with hash {}",
-                        hex::encode(tx_hash)
-                    ))),
-                    Err(e) => Err(Error::rpc_response(e.to_string())),
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let receipts: Receipts = tx_receipts.into();
-        let receipt_proof = receipts.generate_proof(receipt.transaction_index.as_usize());
-
-        let (block, state_root, block_proof, mut validators) = self
-            .rt
-            .block_on(self.get_proofs_ingredients(block_number))?;
-
-        // check the validation of receipts mpt proof
-        let key = rlp::encode(&receipt.transaction_index.as_u64());
-        let result =
-            axon_tools::verify_trie_proof(block.header.receipts_root, &key, receipt_proof.clone())
-                .map_err(|e| Error::rpc_response(format!("unverified receipts mpt: {e:?}")))?;
-        if result.is_none() {
-            return Err(Error::rpc_response(format!(
-                "trie key: {} doesn't exist",
-                receipt.transaction_index
-            )));
-        }
-
-        let object_proof =
-            to_ckb_like_object_proof(&receipt, &receipt_proof, &block, &state_root, &block_proof)
-                .rlp_bytes()
-                .to_vec();
+            .block_on(self.rpc_client.eth_get_proof(
+                self.config.contract_address,
+                vec![commitment_slot.into()],
+                Some(block_number.into()),
+            ))
+            .unwrap();
+        assert!(!commitment_proof.storage_proof.is_empty());
+        let commitment_proof = AxonCommitmentProof {
+            block,
+            block_proof,
+            previous_state_root,
+            account_proof: commitment_proof
+                .account_proof
+                .into_iter()
+                .map(|p| p.0.into())
+                .collect(),
+            storage_proof: commitment_proof
+                .storage_proof
+                .remove(0)
+                .proof
+                .into_iter()
+                .map(|p| p.0.into())
+                .collect(),
+        };
+        let object_proof = rlp::encode(&commitment_proof)
+            .freeze()
+            .to_vec()
+            .try_into()
+            .unwrap();
 
         let useless_client_proof = vec![0u8].try_into().unwrap();
         let useless_consensus_proof =
             ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
         let proofs = Proofs::new(
-            object_proof.try_into().unwrap(),
+            object_proof,
             Some(useless_client_proof),
             Some(useless_consensus_proof),
             None,
             height,
         )
         .unwrap();
-        let debug_content = generate_debug_content(&block, &state_root, &block_proof, &validators);
-
-        // check the validation of Axon block
-        axon_tools::verify_proof(block, state_root, &mut validators, block_proof).map_err(
-            |err| {
-                std::fs::write(
-                    format!("./debug/axon_block_{block_number}.log"),
-                    debug_content,
-                )
-                .unwrap();
-                let err_msg = format!("unverified axon block #{block_number}, err: {:?}", err);
-                Error::rpc_response(err_msg)
-            },
-        )?;
 
         Ok(proofs)
     }
@@ -1624,8 +1556,6 @@ impl AxonChain {
             })?;
             Height::from_noncosmos_height(block_height.as_u64())
         };
-        let mut ibc_cache = self.ibc_cache.write().unwrap();
-        cache_ics_tx_hash_with_event(&mut ibc_cache, event.clone(), tx_hash);
         tracing::info!(
             "{} transaciton {} committed to {}",
             event.event_type().as_str(),
@@ -1637,79 +1567,5 @@ impl AxonChain {
             height,
             tx_hash,
         })
-    }
-}
-
-fn cache_ics_tx_hash<T: Into<[u8; 32]>>(
-    ibc_cache: &mut IBCInfoCache,
-    cached_status: CacheTxHashStatus,
-    tx_hash: T,
-) {
-    let hash: [u8; 32] = tx_hash.into();
-    match cached_status {
-        CacheTxHashStatus::Connection(conn_id) => {
-            ibc_cache.conn_tx_hash.insert(conn_id, hash.into());
-        }
-        CacheTxHashStatus::Channel(chan_id, port_id) => {
-            ibc_cache
-                .chan_tx_hash
-                .insert((chan_id, port_id), hash.into());
-        }
-        CacheTxHashStatus::Packet(chan_id, port_id, sequence) => {
-            ibc_cache
-                .packet_tx_hash
-                .insert((chan_id, port_id, sequence), hash.into());
-        }
-    }
-}
-
-pub(crate) fn cache_ics_tx_hash_with_event<T: Into<[u8; 32]>>(
-    ibc_cache: &mut IBCInfoCache,
-    event: IbcEvent,
-    tx_hash: T,
-) {
-    let tx_hash_status = match event {
-        IbcEvent::OpenInitConnection(event) => Some(CacheTxHashStatus::new_with_conn(
-            event.0.connection_id.unwrap(),
-        )),
-        IbcEvent::OpenTryConnection(event) => Some(CacheTxHashStatus::new_with_conn(
-            event.0.connection_id.unwrap(),
-        )),
-        IbcEvent::OpenAckConnection(event) => Some(CacheTxHashStatus::new_with_conn(
-            event.0.connection_id.unwrap(),
-        )),
-        IbcEvent::OpenConfirmConnection(event) => Some(CacheTxHashStatus::new_with_conn(
-            event.0.connection_id.unwrap(),
-        )),
-        IbcEvent::OpenInitChannel(event) => Some(CacheTxHashStatus::new_with_chan(
-            event.channel_id.unwrap(),
-            event.port_id,
-        )),
-        IbcEvent::OpenTryChannel(event) => Some(CacheTxHashStatus::new_with_chan(
-            event.channel_id.unwrap(),
-            event.port_id,
-        )),
-        IbcEvent::OpenAckChannel(event) => Some(CacheTxHashStatus::new_with_chan(
-            event.channel_id.unwrap(),
-            event.port_id,
-        )),
-        IbcEvent::OpenConfirmChannel(event) => Some(CacheTxHashStatus::new_with_chan(
-            event.channel_id.unwrap(),
-            event.port_id,
-        )),
-        IbcEvent::SendPacket(event) => Some(CacheTxHashStatus::new_with_packet(
-            event.packet.source_channel,
-            event.packet.source_port,
-            event.packet.sequence.into(),
-        )),
-        IbcEvent::ReceivePacket(event) => Some(CacheTxHashStatus::new_with_packet(
-            event.packet.destination_channel,
-            event.packet.destination_port,
-            event.packet.sequence.into(),
-        )),
-        _ => None,
-    };
-    if let Some(tx_hash_status) = tx_hash_status {
-        cache_ics_tx_hash(ibc_cache, tx_hash_status, tx_hash);
     }
 }

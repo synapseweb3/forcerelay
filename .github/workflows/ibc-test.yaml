@@ -28,7 +28,8 @@ jobs:
     timeout-minutes: 75
     env:
       SRC_DIR: ${{ github.workspace }}/ibc-test-src
-      AXON_COMMIT: 5a5c8493e27a58867304f8ccf9b0e17e0b0290d9
+      # blckngm/tmp-forcerelay-test
+      AXON_COMMIT: 9f45a314bdef19ea94
       IBC_CONTRACT_COMMIT: c5417573ec15c8aaab048caa1ec5f3bd50c2170e
     strategy:
       fail-fast: false

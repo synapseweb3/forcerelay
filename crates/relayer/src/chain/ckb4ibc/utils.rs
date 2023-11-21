@@ -6,11 +6,9 @@ use crate::chain::SEC_TO_NANO;
 use crate::config::ckb4ibc::ChainConfig;
 use crate::error::Error;
 use crate::event::IbcEventWithHeight;
-use ckb_ics_axon::consts::{CHANNEL_ID_PREFIX, CONNECTION_ID_PREFIX};
+use ckb_ics_axon::consts::CHANNEL_ID_PREFIX;
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::message::MsgType;
-use ckb_ics_axon::object::Proofs as CkbProofs;
-use ckb_ics_axon::proof::ObjectProof;
 use ckb_jsonrpc_types::TransactionView;
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
@@ -23,7 +21,6 @@ use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::{h256, H256};
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics03_connection::events::Attributes as ConnectionAttributes;
-use ibc_relayer_types::core::ics04_channel::channel::ChannelEnd;
 use ibc_relayer_types::core::ics04_channel::events::{
     AcknowledgePacket, CloseConfirm, CloseInit, OpenAck, OpenConfirm, OpenInit, OpenTry,
     ReceivePacket, SendPacket, WriteAcknowledgement,
@@ -71,17 +68,6 @@ pub fn get_encoded_object<T: rlp::Encodable>(obj: &T) -> EncodedObject {
     }
 }
 
-pub fn convert_proof(ckb_proofs: Proofs) -> Result<CkbProofs, Error> {
-    let object_proof_data: Vec<u8> = ckb_proofs.object_proof().clone().into();
-    let object_proof = rlp::decode::<ObjectProof>(&object_proof_data)
-        .map_err(|_| Error::other_error(String::from("convert object proof error")))?;
-    Ok(CkbProofs {
-        height: ckb_proofs.height().revision_number().to_le_bytes().to_vec(),
-        object_proof,
-        client_proof: vec![],
-    })
-}
-
 pub fn convert_port_id_to_array(port_id: &PortId) -> Result<[u8; 32], Error> {
     let port_id = H256::from_str(port_id.as_str())
         .map_err(|_| Error::ckb_port_id_invalid(port_id.as_str().to_string()))?;
@@ -105,19 +91,6 @@ pub fn get_channel_number(id: &ChannelId) -> Result<u16, Error> {
     result
         .parse::<u16>()
         .map_err(|_| Error::ckb_chan_id_invalid(s.to_string()))
-}
-
-pub fn get_connection_id_prefix(client_id: &str) -> String {
-    // to keep connection_id unique in global
-    format!("{}-{CONNECTION_ID_PREFIX}", &client_id[..6])
-}
-
-pub fn generate_connection_id(idx: u16, client_id: &str) -> ConnectionId {
-    ConnectionId::from_str(&format!("{}{idx}", get_connection_id_prefix(client_id))).unwrap()
-}
-
-pub fn generate_channel_id(idx: u16) -> ChannelId {
-    ChannelId::from_str(&format!("{CHANNEL_ID_PREFIX}{idx}")).unwrap()
 }
 
 pub fn get_connection_index_by_id(id: &ConnectionId) -> Result<u16, Error> {
@@ -160,15 +133,14 @@ pub fn get_connection_lock_script(
     client_id: Option<String>,
 ) -> Result<Script, Error> {
     // fetch specific (concrete client cell) or all (prefix search)
-    let mut client_cell_type_args = vec![];
+    let mut connection_lock_args = vec![];
     if let Some(client_id) = client_id {
-        let client_type = config.lc_client_type(&client_id)?;
-        client_cell_type_args
-            .append(&mut config.lc_client_type_hash(client_type)?.as_bytes().to_vec());
+        let args = config.lc_connection_args_by_id(&client_id)?;
+        connection_lock_args = args.encode();
     }
     let script = Script::new_builder()
         .code_hash(get_script_hash(&config.connection_type_args))
-        .args(client_cell_type_args.pack())
+        .args(connection_lock_args.pack())
         .hash_type(ScriptHashType::Type.into())
         .build();
     Ok(script)
@@ -231,7 +203,7 @@ pub fn get_search_key_with_sudt(
 }
 
 pub fn get_dummy_merkle_proof(height: Height) -> Proofs {
-    let encoded = rlp::encode(&ObjectProof::default()).to_vec();
+    let encoded = vec![0];
     let useless_client_proof = vec![0u8].try_into().unwrap();
     let useless_consensus_proof =
         ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
@@ -252,36 +224,6 @@ pub fn get_client_outpoint(
     converter
         .get_client_outpoint(client_id)
         .ok_or(Error::other_error(format!("not found {client_id}")))
-}
-
-pub fn get_client_id_from_channel(
-    channel: &ChannelEnd,
-    converter: &impl MsgToTxConverter,
-) -> Result<([u8; 32], String), Error> {
-    let connection_id = channel.connection_hops[0].clone();
-    extract_client_id_by_connection_id(&connection_id.to_string(), converter)
-}
-
-pub fn extract_client_id_by_connection_id(
-    connection_id: &String,
-    converter: &impl MsgToTxConverter,
-) -> Result<([u8; 32], String), Error> {
-    let connection_id = connection_id
-        .parse()
-        .map_err(|_| Error::other_error(format!("bad connection_id {connection_id}")))?;
-    let idx = get_connection_index_by_id(&connection_id)
-        .map_err(|_| Error::other_error(format!("bad connection_id {connection_id}")))?;
-    let ibc_conn = converter.get_ibc_connections_by_connection_id(&connection_id)?;
-    let connection_end = ibc_conn
-        .connections
-        .get(idx as usize)
-        .ok_or(Error::other_error(format!("exceed connection index {idx}")))?;
-    let client_id = connection_end.client_id.clone();
-    let client_cell_type_args = hex::decode(&client_id)
-        .map_err(|_| Error::other_error(format!("client_id {client_id} hex decodeable")))?
-        .try_into()
-        .map_err(|_| Error::other_error(format!("client_id {client_id} size = 32")))?;
-    Ok((client_cell_type_args, client_id))
 }
 
 pub fn generate_ibc_packet_event(

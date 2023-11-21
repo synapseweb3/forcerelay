@@ -1,4 +1,6 @@
-use crate::consts::{CHANNEL_CODE_HASH, CLIENT_TYPE_ARGS, CONNECTION_CODE_HASH};
+use crate::consts::{
+    AXON_IBC_HANDLER_ADDRESS, CHANNEL_CODE_HASH, CLIENT_TYPE_ARGS, CONNECTION_CODE_HASH,
+};
 use crate::generator::{calc_script_hash, GENESIS_TXHASH};
 use crate::rpc_client::RpcClient;
 
@@ -334,7 +336,8 @@ fn channel_id_to_u16(channel_id: &ChannelId) -> u16 {
 pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &ChannelId) -> IbcChannel {
     let rpc_client = get_client(port);
     let channel_args = ChannelArgs {
-        client_id: get_test_client_id().into(),
+        metadata_type_id: get_test_client_id().into(),
+        ibc_handler_address: AXON_IBC_HANDLER_ADDRESS.0,
         open: true,
         channel_id: channel_id_to_u16(channel_id),
         port_id,

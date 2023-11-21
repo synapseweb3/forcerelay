@@ -14,11 +14,11 @@ use ibc_relayer_types::core::ics04_channel::msgs::recv_packet::MsgRecvPacket;
 use ibc_relayer_types::core::ics04_channel::packet::Packet;
 use ibc_relayer_types::events::IbcEvent;
 
+use super::convert_proof_height;
 use super::{CkbTxInfo, MsgToTxConverter, TxBuilder};
 use crate::chain::ckb4ibc::utils::{
-    convert_port_id_to_array, convert_proof, extract_client_id_by_connection_id,
-    get_channel_lock_script, get_channel_number, get_client_outpoint, get_encoded_object,
-    get_packet_lock_script,
+    convert_port_id_to_array, get_channel_lock_script, get_channel_number, get_client_outpoint,
+    get_encoded_object, get_packet_lock_script,
 };
 use crate::chain::SEC_TO_NANO;
 use crate::error::Error;
@@ -54,26 +54,22 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
     match old_channel_end.order {
         Ordering::Ordered => new_channel_end.sequence.next_sequence_recvs += 1,
         Ordering::Unordered => {
-            if new_channel_end
-                .sequence
-                .received_sequences
-                .contains(&packet.sequence)
-            {
-                return Err(Error::recv_packet(
-                    channel_id,
-                    format!("packet({}) has contained", packet.sequence),
-                ));
-            }
             new_channel_end
                 .sequence
-                .received_sequences
-                .push(packet.sequence);
+                .unorder_receive(packet.sequence)
+                .map_err(|_| {
+                    Error::recv_packet(
+                        channel_id.clone(),
+                        format!("packet({}) has contained", packet.sequence),
+                    )
+                })?;
         }
         Ordering::Unknown => return Err(Error::other("channel ordering must be Order or Unorder")),
     }
 
     let recv_packet = CkbMsgRecvPacket {
-        proofs: convert_proof(msg.proofs)?,
+        proof_height: convert_proof_height(msg.proofs.height()),
+        proof_commitment: msg.proofs.object_proof().clone().into(),
     };
     let envelope = Envelope {
         msg_type: MsgType::MsgRecvPacket,
@@ -88,10 +84,14 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         sequence: packet.sequence,
     };
 
-    let (client_cell_type_args, client_id) =
-        extract_client_id_by_connection_id(&new_channel_end.connection_hops[0], converter)?;
+    let connection_id = new_channel_end.connection_hops[0].parse().unwrap();
+    let connection_args = converter
+        .get_ibc_connections_by_connection_id(&connection_id)?
+        .0;
+    let client_id = connection_args.client_id();
     let channel_args = ChannelArgs {
-        client_id: client_cell_type_args,
+        metadata_type_id: connection_args.metadata_type_id,
+        ibc_handler_address: connection_args.ibc_handler_address,
         open: true,
         channel_id: channel_number,
         port_id,
@@ -167,7 +167,8 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     let new_channel = get_encoded_object(&new_channel_end);
 
     let ack_packet = CkbMsgAckPacket {
-        proofs: convert_proof(msg.proofs)?,
+        proof_height: convert_proof_height(msg.proofs.height()),
+        proof_acked: msg.proofs.object_proof().clone().into(),
     };
     let envelope = Envelope {
         msg_type: MsgType::MsgAckPacket,
@@ -200,10 +201,14 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         converter.get_ibc_packet(&channel_id, &msg.packet.source_port, msg.packet.sequence)?;
     let old_packet = get_encoded_object(&old_ibc_packet);
 
-    let (client_cell_type_args, client_id) =
-        extract_client_id_by_connection_id(&new_channel_end.connection_hops[0], converter)?;
+    let connection_id = new_channel_end.connection_hops[0].parse().unwrap();
+    let connection_args = converter
+        .get_ibc_connections_by_connection_id(&connection_id)?
+        .0;
+    let client_id = connection_args.client_id();
     let channel_args = ChannelArgs {
-        client_id: client_cell_type_args,
+        metadata_type_id: connection_args.metadata_type_id,
+        ibc_handler_address: connection_args.ibc_handler_address,
         open: true,
         channel_id: channel_number,
         port_id,

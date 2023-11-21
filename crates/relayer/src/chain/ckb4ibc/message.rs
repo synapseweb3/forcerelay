@@ -7,6 +7,7 @@ use crate::{config::ckb4ibc::ChainConfig, error::Error};
 use ckb_ics_axon::{
     handler::{IbcChannel, IbcConnections, IbcPacket},
     message::Envelope,
+    ConnectionArgs,
 };
 use ckb_types::{
     core::{Capacity, DepType, TransactionBuilder, TransactionView},
@@ -51,13 +52,10 @@ use ibc_relayer_types::{
     },
     events::IbcEvent,
     tx_msg::Msg,
+    Height,
 };
 
-use super::{
-    monitor::WriteAckMonitorCmd,
-    utils::{generate_connection_id, get_script_hash},
-    Ckb4IbcChain,
-};
+use super::{monitor::WriteAckMonitorCmd, utils::get_script_hash, Ckb4IbcChain};
 use client::{convert_create_client, convert_update_client};
 
 use channel::*;
@@ -78,12 +76,7 @@ pub trait MsgToTxConverter {
     fn get_ibc_connections_by_connection_id(
         &self,
         connection_id: &ConnectionId,
-    ) -> Result<IbcConnections, Error>;
-
-    fn get_ibc_connections_by_port_id(
-        &self,
-        channel_id: &ChannelId,
-    ) -> Result<IbcConnections, Error>;
+    ) -> Result<(ConnectionArgs, IbcConnections), Error>;
 
     fn get_ibc_connections_input(&self, client_id: &str) -> Result<(CellInput, u64), Error>;
 
@@ -167,34 +160,23 @@ impl<'a> MsgToTxConverter for Converter<'a> {
     fn get_ibc_connections_by_connection_id(
         &self,
         connection_id: &ConnectionId,
-    ) -> Result<IbcConnections, Error> {
+    ) -> Result<(ConnectionArgs, IbcConnections), Error> {
         let conneciton_cache = self.ckb_instance.connection_cache.borrow();
-        let ibc_connections = conneciton_cache.iter().find(|(_, (v, _, _, _))| {
-            v.connections
-                .iter()
-                .enumerate()
-                .any(|(idx, c)| connection_id == &generate_connection_id(idx as u16, &c.client_id))
-        });
-        if let Some((_, (value, _, _, _))) = ibc_connections {
-            Ok(value.clone())
-        } else {
-            Err(Error::query(format!(
-                "connection {connection_id} not found in cache"
-            )))
-        }
-    }
-
-    fn get_ibc_connections_by_port_id(
-        &self,
-        channel_id: &ChannelId,
-    ) -> Result<IbcConnections, Error> {
-        let channel_cache = self.ckb_instance.channel_cache.borrow();
-        let channel = channel_cache
-            .get(channel_id)
-            .ok_or_else(|| Error::query(format!("channel {channel_id} not found in cache")))?;
-        // FIXME: should modify ibc contract
-        let connection_id = channel.connection_hops[0].parse().unwrap();
-        self.get_ibc_connections_by_connection_id(&connection_id)
+        conneciton_cache
+            .iter()
+            .find_map(|(k, (v, _, _, _))| {
+                let args = self.ckb_instance.config.lc_connection_args(*k).unwrap();
+                let client_id = args.client_id();
+                let found = v.connections.iter().enumerate().any(|(idx, _)| {
+                    connection_id.as_str() == ckb_ics_axon::connection_id(client_id.as_str(), idx)
+                });
+                if found {
+                    Some((args, v.clone()))
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| Error::query(format!("connection {connection_id} not found in cache")))
     }
 
     fn get_ibc_connections_input(&self, client_id: &str) -> Result<(CellInput, u64), Error> {
@@ -522,5 +504,12 @@ impl TxBuilder {
 
     pub fn build(self) -> TransactionView {
         self.builder.build()
+    }
+}
+
+fn convert_proof_height(height: Height) -> ckb_ics_axon::proto::client::Height {
+    ckb_ics_axon::proto::client::Height {
+        revision_number: height.revision_number(),
+        revision_height: height.revision_height(),
     }
 }
