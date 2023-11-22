@@ -106,15 +106,22 @@ impl Display for ChainsScan {
                 writeln!(f, "  - Client: {}", client.client.client_id)?;
 
                 for conn in client.connections.values() {
-                    let counterparty = conn
+                    let state = conn
                         .counterparty_state
                         .as_ref()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "<none>".to_string());
+                    let counterparty_id = conn
+                        .connection
+                        .connection_end
+                        .counterparty()
+                        .connection_id()
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| "<none>".to_string());
 
                     writeln!(f, "    * Connection: {}", conn.connection.connection_id)?;
                     writeln!(f, "      | State: {}", conn.state())?;
-                    writeln!(f, "      | Counterparty state: {counterparty}")?;
+                    writeln!(f, "      | Counterparty: {counterparty_id} ({state})")?;
 
                     for chan in conn.channels.values() {
                         let counterparty = chan

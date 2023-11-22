@@ -1292,7 +1292,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 block
                     .transactions
                     .into_iter()
-                    .map(|tx| {
+                    .flat_map(|tx| -> Result<_, Error> {
                         let event = transaction_to_event(&tx, &prefix)?;
                         Ok(IbcEventWithHeight {
                             event,
@@ -1300,7 +1300,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                             tx_hash: tx.hash.into(),
                         })
                     })
-                    .collect::<Result<_, Error>>()?
+                    .collect::<Vec<_>>()
             }
             QueryTxRequest::Transaction(QueryTxHash(TxHash::Sha256(hash))) => {
                 let tx = self
