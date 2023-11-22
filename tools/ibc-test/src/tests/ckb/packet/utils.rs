@@ -1,3 +1,4 @@
+use ckb_ics_axon::object::State;
 use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
@@ -19,8 +20,9 @@ use forcerelay_ckb_sdk::search::{
     IbcChannelCell, PacketCell,
 };
 use forcerelay_ckb_sdk::transaction::{
-    add_ibc_envelope, assemble_consume_ack_packet_partial_transaction,
-    assemble_send_packet_partial_transaction, assemble_write_ack_partial_transaction,
+    add_ibc_envelope, assemble_channel_close_init_partial_transaction,
+    assemble_consume_ack_packet_partial_transaction, assemble_send_packet_partial_transaction,
+    assemble_write_ack_partial_transaction,
 };
 use futures::{pin_mut, StreamExt, TryStreamExt};
 use ibc_test_framework::prelude::*;
@@ -455,4 +457,63 @@ pub fn generate_consume_ack_packet_transaction(
         None,
     )?;
     Ok(signed_tx)
+}
+
+pub fn generate_channel_close_init_transaction(
+    rt: &Runtime,
+    sdk_config: &SdkConfig,
+    ckb_url: &str,
+    signer: &SecpSighashScriptSigner,
+) -> EyreResult<TransactionView> {
+    let (metadata_celldep, channel_celldep, _, ibc_channel) =
+        prepare_celldeps_and_channel(rt, ckb_url, sdk_config)?;
+    let (channel_close_init_tx, envelope) = assemble_channel_close_init_partial_transaction(
+        metadata_celldep,
+        channel_celldep,
+        ibc_channel,
+    )
+    .map_err(error_cast)?;
+
+    let signed_tx = complete_partial_transaction(
+        rt,
+        channel_close_init_tx,
+        ckb_url,
+        sdk_config,
+        Some(envelope),
+        signer,
+        None,
+    )?;
+    Ok(signed_tx)
+}
+
+pub fn listen_and_wait_closed_channel_cell(
+    rt: &Runtime,
+    ckb_url: &str,
+    sdk_config: &SdkConfig,
+) -> EyreResult<()> {
+    let sdk_rpc = SdkRpcClient::new(ckb_url.to_owned());
+    loop {
+        let search_key = SearchKey {
+            script: sdk_config.channel_cell_lock_script(false).into(),
+            script_type: ScriptType::Lock,
+            script_search_mode: Some(ScriptSearchMode::Exact),
+            filter: None,
+            with_data: Some(false),
+            group_by_transaction: None,
+        };
+        let cells = rt
+            .block_on(sdk_rpc.get_cells(search_key, Order::Desc, 1.into(), None))
+            .map_err(error_cast)?;
+        if cells.objects.is_empty() {
+            std::thread::sleep(Duration::from_secs(1));
+            continue;
+        }
+        let channel_cell = rt
+            .block_on(IbcChannelCell::get_latest_with_open(
+                &sdk_rpc, sdk_config, false,
+            ))
+            .map_err(error_cast)?;
+        assert!(channel_cell.channel.state == State::Closed);
+        return Ok(());
+    }
 }

@@ -66,6 +66,7 @@ use ibc_relayer_types::Height;
 use rlp::Encodable;
 use semver::Version;
 use std::sync::RwLock;
+use tendermint::Hash as TxHash;
 use tendermint_rpc::endpoint::broadcast::tx_sync::Response;
 use tokio::runtime::Runtime;
 use tokio::sync::watch::Sender as WatchSender;
@@ -77,7 +78,7 @@ use self::monitor::{Ckb4IbcEventMonitor, WriteAckMonitorCmd};
 use self::utils::{
     convert_port_id_to_array, fetch_transaction_by_hash, generate_ibc_packet_event,
     get_channel_number, get_dummy_merkle_proof, get_encoded_object, get_prefix_search_key,
-    get_search_key_with_sudt,
+    get_search_key_with_sudt, transaction_to_event,
 };
 
 use super::ckb::rpc_client::RpcClient;
@@ -88,15 +89,15 @@ use super::endpoint::{ChainStatus, HealthCheck};
 use super::handle::Subscription;
 use super::requests::{
     CrossChainQueryRequest, IncludeProof, QueryChannelClientStateRequest, QueryChannelRequest,
-    QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientStateRequest,
-    QueryClientStatesRequest, QueryConnectionChannelsRequest, QueryConnectionRequest,
-    QueryConnectionsRequest, QueryConsensusStateHeightsRequest, QueryConsensusStateRequest,
-    QueryHeight, QueryHostConsensusStateRequest, QueryNextSequenceReceiveRequest,
-    QueryPacketAcknowledgementRequest, QueryPacketAcknowledgementsRequest,
-    QueryPacketCommitmentRequest, QueryPacketCommitmentsRequest, QueryPacketEventDataRequest,
-    QueryPacketReceiptRequest, QueryTxRequest, QueryUnreceivedAcksRequest,
-    QueryUnreceivedPacketsRequest, QueryUpgradedClientStateRequest,
-    QueryUpgradedConsensusStateRequest,
+    QueryChannelsRequest, QueryClientConnectionsRequest, QueryClientEventRequest,
+    QueryClientStateRequest, QueryClientStatesRequest, QueryConnectionChannelsRequest,
+    QueryConnectionRequest, QueryConnectionsRequest, QueryConsensusStateHeightsRequest,
+    QueryConsensusStateRequest, QueryHeight, QueryHostConsensusStateRequest,
+    QueryNextSequenceReceiveRequest, QueryPacketAcknowledgementRequest,
+    QueryPacketAcknowledgementsRequest, QueryPacketCommitmentRequest,
+    QueryPacketCommitmentsRequest, QueryPacketEventDataRequest, QueryPacketReceiptRequest,
+    QueryTxHash, QueryTxRequest, QueryUnreceivedAcksRequest, QueryUnreceivedPacketsRequest,
+    QueryUpgradedClientStateRequest, QueryUpgradedConsensusStateRequest,
 };
 use super::tracking::TrackedMsgs;
 use tokio::runtime::Runtime as TokioRuntime;
@@ -234,7 +235,7 @@ impl Ckb4IbcChain {
                 let tx = self
                     .rt
                     .block_on(fetch_transaction_by_hash(self.rpc_client.as_ref(), tx_hash))?;
-                let (packet, _) = extract_ibc_packet_from_tx(tx)?;
+                let (packet, _) = extract_ibc_packet_from_tx(&tx)?;
                 let cell_input = CellInput::new_builder()
                     .previous_output(cell.out_point.into())
                     .build();
@@ -312,7 +313,7 @@ impl Ckb4IbcChain {
                         serde_json::from_slice(json_bytes.as_bytes()).unwrap()
                     }
                 };
-                let channel_end = extract_channel_end_from_tx(tx)?;
+                let channel_end = extract_channel_end_from_tx(&tx)?;
                 let input = CellInput::new_builder()
                     .previous_output(cell.out_point.clone().into())
                     .build();
@@ -375,7 +376,7 @@ impl Ckb4IbcChain {
                     serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
                 }
             };
-            let (connections, ibc_connection) = extract_connections_from_tx(tx, &prefix)?;
+            let (connections, ibc_connection) = extract_connections_from_tx(&tx, &prefix)?;
             cache.insert(
                 client_type,
                 (ibc_connection, cell_input, capacity, connections),
@@ -848,9 +849,10 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok(vec![ckb_balance])
     }
 
-    // TODO Need to align with CKB ibc contract
+    // TODO: Ckb4Ibc's denom is hash of `sudt_type_script`, we cannot recover it to type_script,
+    //       so it's hard to watch denom trace
     fn query_denom_trace(&self, _hash: String) -> Result<DenomTrace, Error> {
-        warn!("axon query_denom_trace() cannot implement");
+        warn!("ckb4ibc query_denom_trace() cannot implement");
         Ok(DenomTrace {
             path: "".to_owned(),
             base_denom: "".to_owned(),
@@ -1046,7 +1048,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                         serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
                     }
                 };
-                extract_channel_end_from_tx(tx)
+                extract_channel_end_from_tx(&tx)
             })
             .map(|(channel, _)| channel)
             .collect();
@@ -1273,9 +1275,62 @@ impl ChainEndpoint for Ckb4IbcChain {
         Ok((sequence, None))
     }
 
-    fn query_txs(&self, _request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
-        warn!("ckb4ibc query_txs() not support");
-        Ok(vec![])
+    fn query_txs(&self, request: QueryTxRequest) -> Result<Vec<IbcEventWithHeight>, Error> {
+        let prefix = self.query_commitment_prefix()?;
+        let events = match request {
+            QueryTxRequest::Client(QueryClientEventRequest {
+                query_height: _,
+                event_id: _,
+                client_id: _,
+                consensus_height,
+            }) => {
+                let block = self.rt.block_on(
+                    self.rpc_client
+                        .get_block_by_number(consensus_height.revision_height().into()),
+                )?;
+                let block_number: u64 = block.header.inner.number.into();
+                block
+                    .transactions
+                    .into_iter()
+                    .flat_map(|tx| -> Result<_, Error> {
+                        let event = transaction_to_event(&tx, &prefix)?;
+                        Ok(IbcEventWithHeight {
+                            event,
+                            height: Height::from_noncosmos_height(block_number),
+                            tx_hash: tx.hash.into(),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            }
+            QueryTxRequest::Transaction(QueryTxHash(TxHash::Sha256(hash))) => {
+                let tx = self
+                    .rt
+                    .block_on(self.rpc_client.get_transaction(&hash.into()))?
+                    .expect("query_txs");
+                let Some(block_hash) = tx.tx_status.block_hash else {
+                    return Ok(vec![]);
+                };
+                let block = self.rt.block_on(self.rpc_client.get_block(&block_hash))?;
+                let block_number: u64 = block.header.inner.number.into();
+                let Some(tx) = tx.transaction else {
+                    return Ok(vec![]);
+                };
+                let tx = match tx.inner {
+                    ckb_jsonrpc_types::Either::Left(tx) => tx,
+                    ckb_jsonrpc_types::Either::Right(json_bytes) => {
+                        serde_json::from_slice(json_bytes.as_bytes()).unwrap()
+                    }
+                };
+                let event = transaction_to_event(&tx, &prefix)?;
+                vec![IbcEventWithHeight {
+                    event,
+                    height: Height::from_noncosmos_height(block_number),
+                    tx_hash: tx.hash.into(),
+                }]
+            }
+            _ => vec![],
+        };
+        Ok(events)
     }
 
     fn query_packet_events(

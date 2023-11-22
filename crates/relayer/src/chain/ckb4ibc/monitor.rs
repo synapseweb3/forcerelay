@@ -4,6 +4,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use ckb_ics_axon::handler::{IbcPacket, PacketStatus};
+use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::object::State as CkbState;
 use ckb_ics_axon::ChannelArgs;
 use ckb_jsonrpc_types::{JsonBytes, Status, TransactionView};
@@ -20,7 +21,8 @@ use ibc_relayer_types::core::ics03_connection::events::{
 };
 use ibc_relayer_types::core::ics04_channel::channel::State;
 use ibc_relayer_types::core::ics04_channel::events::{
-    OpenInit as ChannelOpenInit, OpenTry as ChannelOpenTry, SendPacket, WriteAcknowledgement,
+    CloseConfirm, CloseInit, OpenInit as ChannelOpenInit, OpenTry as ChannelOpenTry, SendPacket,
+    WriteAcknowledgement,
 };
 use ibc_relayer_types::core::ics04_channel::packet::{Packet, Sequence};
 use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
@@ -35,6 +37,7 @@ use crate::chain::ckb::prelude::CkbReader;
 use crate::chain::ckb::rpc_client::RpcClient;
 use crate::chain::ckb4ibc::extractor::{
     extract_channel_end_from_tx, extract_ibc_connections_from_tx, extract_ibc_packet_from_tx,
+    get_envelope,
 };
 use crate::chain::tracking::TrackingId;
 use crate::chain::SEC_TO_NANO;
@@ -187,10 +190,9 @@ impl Ckb4IbcEventMonitor {
             .search_and_extract(
                 key,
                 &|tx| {
-                    let hash = tx.hash.clone();
-                    let obj = extract_ibc_connections_from_tx(tx)
+                    let obj = extract_ibc_connections_from_tx(&tx)
                         .map_err(|_| Error::collect_events_failed("channel".to_string()))?;
-                    Ok((obj, hash))
+                    Ok((obj, tx))
                 },
                 1,
                 IbcProtocolType::Connection,
@@ -204,9 +206,9 @@ impl Ckb4IbcEventMonitor {
                 events: vec![],
             });
         }
-        let ((ibc_connection_cell, tx_hash), (block_number, _, _)) =
+        let ((ibc_connection_cell, tx), (block_number, _, _)) =
             connections.into_iter().next().unwrap();
-        if self.cache_set.read().unwrap().has(&tx_hash) {
+        if self.cache_set.read().unwrap().has(&tx.hash) {
             return Ok(EventBatch {
                 chain_id: self.config.id.clone(),
                 tracking_id: TrackingId::Static("ckb connection events collection"),
@@ -214,7 +216,7 @@ impl Ckb4IbcEventMonitor {
                 events: vec![],
             });
         }
-        self.cache_set.write().unwrap().insert(tx_hash.clone());
+        self.cache_set.write().unwrap().insert(tx.hash.clone());
         let events = ibc_connection_cell
             .connections
             .into_iter()
@@ -239,7 +241,7 @@ impl Ckb4IbcEventMonitor {
                     Some(IbcEventWithHeight {
                         event,
                         height: Height::from_noncosmos_height(block_number),
-                        tx_hash: tx_hash.clone().into(),
+                        tx_hash: tx.hash.clone().into(),
                     })
                 }
                 CkbState::OpenTry => {
@@ -261,7 +263,7 @@ impl Ckb4IbcEventMonitor {
                     Some(IbcEventWithHeight {
                         event,
                         height: Height::from_noncosmos_height(block_number),
-                        tx_hash: tx_hash.clone().into(),
+                        tx_hash: tx.hash.clone().into(),
                     })
                 }
                 _ => None,
@@ -300,11 +302,10 @@ impl Ckb4IbcEventMonitor {
             .search_and_extract(
                 key,
                 &|tx| {
-                    let hash = tx.hash.clone();
-                    let obj = extract_channel_end_from_tx(tx)
+                    let obj = extract_channel_end_from_tx(&tx)
                         .map_err(|_| Error::collect_events_failed("channel".to_string()))?
                         .0;
-                    Ok((obj, hash))
+                    Ok((obj, tx))
                 },
                 5,
                 IbcProtocolType::Channel,
@@ -314,10 +315,10 @@ impl Ckb4IbcEventMonitor {
         let events = identified_channel_ends
             .into_iter()
             .filter(|((_, tx), _)| {
-                if self.cache_set.read().unwrap().has(tx) {
+                if self.cache_set.read().unwrap().has(&tx.hash) {
                     return false;
                 }
-                self.cache_set.write().unwrap().insert(tx.clone());
+                self.cache_set.write().unwrap().insert(tx.hash.clone());
                 true
             })
             .map(|((channel, tx), (block_number, _, _))| match channel.channel_end.state {
@@ -337,7 +338,7 @@ impl Ckb4IbcEventMonitor {
                             counterparty_channel_id: channel.channel_end.remote.channel_id,
                         }),
                         height: Height::from_noncosmos_height(block_number),
-                        tx_hash: tx.into(),
+                        tx_hash: tx.hash.into(),
                     }
                 },
                 State::TryOpen => {
@@ -356,9 +357,51 @@ impl Ckb4IbcEventMonitor {
                             counterparty_channel_id: channel.channel_end.remote.channel_id,
                         }),
                         height: Height::from_noncosmos_height(block_number),
-                        tx_hash: tx.into(),
+                        tx_hash: tx.hash.into(),
                     }
                 },
+                State::Closed => {
+                    let connection_id = channel.channel_end.connection_hops[0].clone();
+                    match get_envelope(&tx).expect("channel envelope").msg_type {
+                        MsgType::MsgChannelCloseInit => {
+                            info!(
+                                "🫡  {} received ChannelCloseInit event, channel_id = {}, connection_id = {connection_id}", 
+                                self.config.id,
+                                channel.channel_id
+                            );
+                            IbcEventWithHeight {
+                                event: IbcEvent::CloseInitChannel(CloseInit {
+                                    port_id: channel.port_id,
+                                    channel_id: channel.channel_id,
+                                    connection_id,
+                                    counterparty_port_id: channel.channel_end.remote.port_id,
+                                    counterparty_channel_id: channel.channel_end.remote.channel_id,
+                                }),
+                                height: Height::from_noncosmos_height(block_number),
+                                tx_hash: tx.hash.into()
+                            }
+                        }
+                        MsgType::MsgChannelCloseConfirm => {
+                            info!(
+                                "🫡  {} received ChannelCloseConfirm event, channel_id = {}, connection_id = {connection_id}", 
+                                self.config.id,
+                                channel.channel_id
+                            );
+                            IbcEventWithHeight {
+                                event: IbcEvent::CloseConfirmChannel(CloseConfirm {
+                                    port_id: channel.port_id,
+                                    channel_id: Some(channel.channel_id),
+                                    connection_id,
+                                    counterparty_port_id: channel.channel_end.remote.port_id,
+                                    counterparty_channel_id: channel.channel_end.remote.channel_id,
+                                }),
+                                height: Height::from_noncosmos_height(block_number),
+                                tx_hash: tx.hash.into()
+                            }
+                        }
+                        _ => unreachable!("Closed channel only has CloseInit or CloseConfirm event")
+                    }
+                }
                 _ => unreachable!(),
             })
             .collect::<Vec<_>>();
@@ -384,10 +427,9 @@ impl Ckb4IbcEventMonitor {
             .search_and_extract(
                 key,
                 &|tx| {
-                    let hash = tx.hash.clone();
-                    let obj_with_content = extract_ibc_packet_from_tx(tx)
+                    let obj_with_content = extract_ibc_packet_from_tx(&tx)
                         .map_err(|_| Error::collect_events_failed("packet".to_string()))?;
-                    Ok((obj_with_content, hash))
+                    Ok((obj_with_content, tx))
                 },
                 10,
                 IbcProtocolType::Packet,
@@ -404,11 +446,11 @@ impl Ckb4IbcEventMonitor {
             .filter(|(((packet, _), tx), _)| {
                 if packet.status == PacketStatus::Ack
                     || packet.status == PacketStatus::Recv
-                    || self.cache_set.read().unwrap().has(tx)
+                    || self.cache_set.read().unwrap().has(&tx.hash)
                 {
                     return false;
                 }
-                self.cache_set.write().unwrap().insert(tx.clone());
+                self.cache_set.write().unwrap().insert(tx.hash.clone());
                 true
             })
             .map(
@@ -428,7 +470,7 @@ impl Ckb4IbcEventMonitor {
                                 packet: convert_packet(packet),
                             }),
                             height: Height::from_noncosmos_height(block_number),
-                            tx_hash: tx.into(),
+                            tx_hash: tx.hash.into(),
                         }
                     }
                     PacketStatus::WriteAck => {
@@ -452,7 +494,7 @@ impl Ckb4IbcEventMonitor {
                                 packet: convert_packet(packet),
                             }),
                             height: Height::from_noncosmos_height(block_number),
-                            tx_hash: tx.into(),
+                            tx_hash: tx.hash.into(),
                         }
                     }
                     PacketStatus::Ack | PacketStatus::Recv => unreachable!(),
@@ -474,9 +516,9 @@ impl Ckb4IbcEventMonitor {
         extractor: &F,
         limit: u32,
         ibc_protocol: IbcProtocolType,
-    ) -> Result<Vec<((T, H256), (u64, CellInput, u64))>>
+    ) -> Result<Vec<((T, TransactionView), (u64, CellInput, u64))>>
     where
-        F: Fn(TransactionView) -> Result<(T, H256)>,
+        F: Fn(TransactionView) -> Result<(T, TransactionView)>,
     {
         let cursor = self.fetch_cursors.get(&ibc_protocol).cloned();
         let cells = self

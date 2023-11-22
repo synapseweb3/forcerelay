@@ -1,16 +1,19 @@
 use std::str::FromStr;
 use std::time::Duration;
 
+use crate::chain::SEC_TO_NANO;
 use crate::error::Error;
 
 use ckb_ics_axon::handler::{IbcChannel as CkbIbcChannel, IbcConnections, IbcPacket};
 use ckb_ics_axon::message::{Envelope, MsgType};
 use ckb_ics_axon::object::{
-    ConnectionEnd as CkbConnectionEnd, Ordering as CkbOrdering, State as CkbState,
+    ConnectionEnd as CkbConnectionEnd, Ordering as CkbOrdering, Packet as CkbPacket,
+    State as CkbState,
 };
 use ckb_jsonrpc_types::TransactionView;
 use ckb_types::packed::WitnessArgs;
 use ckb_types::prelude::Entity;
+use ibc_relayer_types::core::ics02_client::height::Height;
 use ibc_relayer_types::core::ics03_connection::connection::{
     ConnectionEnd, IdentifiedConnectionEnd,
 };
@@ -22,16 +25,19 @@ use ibc_relayer_types::core::ics04_channel::channel::{
     ChannelEnd, Counterparty as ChannelCounterparty, IdentifiedChannelEnd, Order,
     State as ChannelState,
 };
+use ibc_relayer_types::core::ics04_channel::packet::Packet;
+use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
 use ibc_relayer_types::core::ics04_channel::version::Version as ChanVersion;
 use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
+use ibc_relayer_types::timestamp::Timestamp;
 
 use super::utils::{generate_channel_id, generate_connection_id};
 
 pub fn extract_channel_end_from_tx(
-    tx: TransactionView,
+    tx: &TransactionView,
 ) -> Result<(IdentifiedChannelEnd, CkbIbcChannel), Error> {
-    let idx = get_object_index(&tx, ObjectType::ChannelEnd)?;
+    let idx = get_object_index(tx, ObjectType::ChannelEnd)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
         .map_err(|_| Error::ckb_decode_witness_args())?;
@@ -43,8 +49,8 @@ pub fn extract_channel_end_from_tx(
     Ok((channel_end, ckb_channel_end))
 }
 
-pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnections, Error> {
-    let idx = get_object_index(&tx, ObjectType::IbcConnections)?;
+pub fn extract_ibc_connections_from_tx(tx: &TransactionView) -> Result<IbcConnections, Error> {
+    let idx = get_object_index(tx, ObjectType::IbcConnections)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes()).unwrap();
     let ibc_connection_cells =
@@ -55,7 +61,7 @@ pub fn extract_ibc_connections_from_tx(tx: TransactionView) -> Result<IbcConnect
 }
 
 pub fn extract_connections_from_tx(
-    tx: TransactionView,
+    tx: &TransactionView,
     prefix: &CommitmentPrefix,
 ) -> Result<(Vec<IdentifiedConnectionEnd>, IbcConnections), Error> {
     let ibc_connection_cell = extract_ibc_connections_from_tx(tx)?;
@@ -68,8 +74,8 @@ pub fn extract_connections_from_tx(
     Ok((result, ibc_connection_cell))
 }
 
-pub fn extract_ibc_packet_from_tx(tx: TransactionView) -> Result<(IbcPacket, Vec<u8>), Error> {
-    let envelope = get_envelope(&tx)?;
+pub fn extract_ibc_packet_from_tx(tx: &TransactionView) -> Result<(IbcPacket, Vec<u8>), Error> {
+    let envelope = get_envelope(tx)?;
     let idx = navigate(&envelope.msg_type, &ObjectType::IbcPacket);
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes())
@@ -78,6 +84,11 @@ pub fn extract_ibc_packet_from_tx(tx: TransactionView) -> Result<(IbcPacket, Vec
         rlp::decode::<IbcPacket>(&witness_args.output_type().to_opt().unwrap().raw_data())
             .map_err(|_| Error::extract_chan_tx_error(tx.hash.to_string()))?;
     Ok((ibc_packet, envelope.content))
+}
+
+pub fn extract_packet_from_tx(tx: &TransactionView) -> Result<(Packet, Option<Vec<u8>>), Error> {
+    let (packet, _) = extract_ibc_packet_from_tx(tx)?;
+    Ok((convert_packet(packet.packet)?, packet.ack))
 }
 
 fn navigate(t: &MsgType, object_type: &ObjectType) -> usize {
@@ -204,6 +215,28 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
     Ok(result)
 }
 
+fn convert_packet(packet: CkbPacket) -> Result<Packet, Error> {
+    fn other_error<E: ToString>(error: E) -> Error {
+        Error::other_error(error.to_string())
+    }
+    Ok(Packet {
+        sequence: (packet.sequence as u64).try_into().map_err(other_error)?,
+        source_port: PortId::from_str(&packet.source_port_id).map_err(other_error)?,
+        source_channel: ChannelId::from_str(&packet.source_channel_id).map_err(other_error)?,
+        destination_port: PortId::from_str(&packet.destination_port_id).map_err(other_error)?,
+        destination_channel: ChannelId::from_str(&packet.destination_channel_id)
+            .map_err(other_error)?,
+        timeout_height: if packet.timeout_height == 0 {
+            TimeoutHeight::Never
+        } else {
+            TimeoutHeight::At(Height::from_noncosmos_height(packet.timeout_height))
+        },
+        timeout_timestamp: Timestamp::from_nanoseconds(packet.timeout_timestamp * SEC_TO_NANO)
+            .map_err(other_error)?,
+        data: packet.data,
+    })
+}
+
 #[derive(Debug, Clone, Copy)]
 enum ObjectType {
     ChannelEnd,
@@ -216,7 +249,7 @@ fn get_object_index(tx: &TransactionView, object_type: ObjectType) -> Result<usi
     Ok(navigate(&envelope.msg_type, &object_type))
 }
 
-fn get_envelope(tx: &TransactionView) -> Result<Envelope, Error> {
+pub fn get_envelope(tx: &TransactionView) -> Result<Envelope, Error> {
     let msg = tx.inner.witnesses.last().ok_or(Error::ckb_none_witness())?;
 
     let bytes = msg.as_bytes();

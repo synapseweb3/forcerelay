@@ -1,5 +1,7 @@
 use ckb_ics_axon::handler::{IbcChannel, Sequence};
 use ckb_ics_axon::message::Envelope;
+use ckb_ics_axon::message::MsgChannelCloseConfirm as CkbMsgChannelCloseConfirm;
+use ckb_ics_axon::message::MsgChannelCloseInit as CkbMsgChannelCloseInit;
 use ckb_ics_axon::message::MsgChannelOpenAck as CkbMsgChannelOpenAck;
 use ckb_ics_axon::message::MsgChannelOpenConfirm as CkbMsgChannelOpenConfirm;
 use ckb_ics_axon::message::MsgChannelOpenInit as CkbMsgChannelOpenInit;
@@ -9,13 +11,15 @@ use ckb_ics_axon::object::{ChannelCounterparty, Ordering as CkbOrdering, State a
 use ckb_ics_axon::ChannelArgs;
 use ckb_types::packed::BytesOpt;
 use ibc_relayer_types::core::ics04_channel::channel::{ChannelEnd, Order, State};
-use ibc_relayer_types::core::ics04_channel::events::{OpenAck, OpenConfirm, OpenInit, OpenTry};
+use ibc_relayer_types::core::ics04_channel::events::{
+    CloseConfirm, CloseInit, OpenAck, OpenConfirm, OpenInit, OpenTry,
+};
 use ibc_relayer_types::core::ics04_channel::msgs::{
     chan_close_confirm::MsgChannelCloseConfirm, chan_close_init::MsgChannelCloseInit,
     chan_open_ack::MsgChannelOpenAck, chan_open_confirm::MsgChannelOpenConfirm,
     chan_open_init::MsgChannelOpenInit, chan_open_try::MsgChannelOpenTry,
 };
-use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, PortId};
+use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ConnectionId, PortId};
 use ibc_relayer_types::events::IbcEvent;
 use std::str::FromStr;
 
@@ -217,7 +221,13 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
     let channel_idx = get_channel_number(&msg.channel_id)?;
-    let old_channel = converter.get_ibc_channel(&msg.channel_id, None)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, Some(&msg.port_id))?;
+    if old_channel.state == CkbState::Open {
+        return Err(Error::other_error(format!(
+            "channel {} has already opened",
+            msg.channel_id
+        )));
+    }
     let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id).unwrap();
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
@@ -276,7 +286,13 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     msg: MsgChannelOpenConfirm,
     converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    let old_channel = converter.get_ibc_channel(&msg.channel_id, None)?;
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, Some(&msg.port_id))?;
+    if old_channel.state == CkbState::Open {
+        return Err(Error::other_error(format!(
+            "channel {} has already opened",
+            msg.channel_id
+        )));
+    }
     let mut new_channel = old_channel.clone();
     new_channel.state = CkbState::Open;
 
@@ -294,10 +310,10 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
     };
 
     let connection_id = old_channel.connection_hops[0].clone();
-    let (client_cell_type_args, client_id) =
+    let (client_cell_type_id, client_id) =
         extract_client_id_by_connection_id(&connection_id, converter)?;
     let channel_args = ChannelArgs {
-        client_id: client_cell_type_args,
+        client_id: client_cell_type_id,
         open: true,
         channel_id: get_channel_number(&msg.channel_id)?,
         port_id: convert_port_id_to_array(&msg.port_id)?,
@@ -334,15 +350,134 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
 }
 
 pub fn convert_chan_close_init_to_tx<C: MsgToTxConverter>(
-    _msg: MsgChannelCloseInit,
-    _converter: &C,
+    msg: MsgChannelCloseInit,
+    converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    todo!()
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, Some(&msg.port_id))?;
+    if old_channel.state == CkbState::Closed {
+        return Err(Error::other_error(format!(
+            "channel {} has already closed",
+            msg.channel_id
+        )));
+    }
+    let mut new_channel = old_channel.clone();
+    new_channel.state = CkbState::Closed;
+
+    let envelope = Envelope {
+        msg_type: MsgType::MsgChannelCloseInit,
+        content: rlp::encode(&CkbMsgChannelCloseInit {}).to_vec(),
+    };
+
+    let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id)
+        .map_err(|_| Error::ckb_port_id_invalid(old_channel.counterparty.port_id.clone()))?;
+    let counterparty_channel_id =
+        ChannelId::from_str(&old_channel.counterparty.channel_id).unwrap();
+    let connection_id = ConnectionId::from_str(&old_channel.connection_hops[0])
+        .map_err(|_| Error::ckb_conn_id_invalid(old_channel.connection_hops[0].clone()))?;
+
+    let (client_cell_type_id, client_id) =
+        extract_client_id_by_connection_id(&connection_id.to_string(), converter)?;
+    let channel_args = ChannelArgs {
+        client_id: client_cell_type_id,
+        open: false,
+        channel_id: new_channel.number,
+        port_id: convert_port_id_to_array(&msg.port_id)?,
+    };
+    let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
+    let (channel_input, input_capacity) =
+        converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id)?;
+
+    let old_channel = get_encoded_object(&old_channel);
+    let new_channel = get_encoded_object(&new_channel);
+
+    let packed_tx = TxBuilder::default()
+        .cell_dep(get_client_outpoint(converter, &client_id)?)
+        .cell_dep(converter.get_chan_contract_outpoint().clone())
+        .input(channel_input.clone())
+        .output(channel_lock, new_channel.data)
+        .witness(old_channel.witness, new_channel.witness)
+        .build();
+
+    let event = IbcEvent::CloseInitChannel(CloseInit {
+        port_id: msg.port_id,
+        channel_id: msg.channel_id,
+        connection_id,
+        counterparty_port_id,
+        counterparty_channel_id: Some(counterparty_channel_id),
+    });
+
+    Ok(CkbTxInfo {
+        unsigned_tx: Some(packed_tx),
+        envelope,
+        input_capacity,
+        event: Some(event),
+    })
 }
 
 pub fn convert_chan_close_confirm_to_tx<C: MsgToTxConverter>(
-    _msg: MsgChannelCloseConfirm,
-    _converter: &C,
+    msg: MsgChannelCloseConfirm,
+    converter: &C,
 ) -> Result<CkbTxInfo, Error> {
-    todo!()
+    let old_channel = converter.get_ibc_channel(&msg.channel_id, Some(&msg.port_id))?;
+    if old_channel.state == CkbState::Closed {
+        return Err(Error::other_error(format!(
+            "channel {} has already closed",
+            msg.channel_id
+        )));
+    }
+    let mut new_channel = old_channel.clone();
+    new_channel.state = CkbState::Closed;
+
+    let envelope = Envelope {
+        msg_type: MsgType::MsgChannelCloseConfirm,
+        content: rlp::encode(&CkbMsgChannelCloseConfirm {
+            proofs: convert_proof(msg.proofs)?,
+        })
+        .to_vec(),
+    };
+
+    let counterparty_port_id = PortId::from_str(&old_channel.counterparty.port_id)
+        .map_err(|_| Error::ckb_port_id_invalid(old_channel.counterparty.port_id.clone()))?;
+    let counterparty_channel_id =
+        ChannelId::from_str(&old_channel.counterparty.channel_id).unwrap();
+    let connection_id = ConnectionId::from_str(&old_channel.connection_hops[0])
+        .map_err(|_| Error::ckb_conn_id_invalid(old_channel.connection_hops[0].clone()))?;
+
+    let (client_cell_type_id, client_id) =
+        extract_client_id_by_connection_id(&connection_id.to_string(), converter)?;
+    let channel_args = ChannelArgs {
+        client_id: client_cell_type_id,
+        open: false,
+        channel_id: new_channel.number,
+        port_id: convert_port_id_to_array(&msg.port_id)?,
+    };
+    let channel_lock = get_channel_lock_script(converter, channel_args.to_args());
+    let (channel_input, input_capacity) =
+        converter.get_ibc_channel_input(&msg.channel_id, &msg.port_id)?;
+
+    let old_channel = get_encoded_object(&old_channel);
+    let new_channel = get_encoded_object(&new_channel);
+
+    let packed_tx = TxBuilder::default()
+        .cell_dep(get_client_outpoint(converter, &client_id)?)
+        .cell_dep(converter.get_chan_contract_outpoint().clone())
+        .input(channel_input.clone())
+        .output(channel_lock, new_channel.data)
+        .witness(old_channel.witness, new_channel.witness)
+        .build();
+
+    let event = IbcEvent::CloseConfirmChannel(CloseConfirm {
+        port_id: msg.port_id,
+        channel_id: Some(msg.channel_id),
+        connection_id,
+        counterparty_port_id,
+        counterparty_channel_id: Some(counterparty_channel_id),
+    });
+
+    Ok(CkbTxInfo {
+        unsigned_tx: Some(packed_tx),
+        envelope,
+        input_capacity,
+        event: Some(event),
+    })
 }
