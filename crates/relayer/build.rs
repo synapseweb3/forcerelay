@@ -1,3 +1,5 @@
+// note: the same as build.rs in `ibc-relayer-cli` crate
+
 use std::env;
 
 use git::Handle as GitHandle;
@@ -8,7 +10,7 @@ fn main() {
     // outputs consistent usage and help messages.
     // https://github.com/informalsystems/hermes/issues/590
     // Note: This can potentially break the normal cargo (or crates.io) workflow.
-    println!("cargo:rustc-env=CARGO_PKG_NAME=forcerelay");
+    // println!("cargo:rustc-env=CARGO_PKG_NAME=forcerelay");
     println!("cargo:rustc-env=CARGO_PKG_VERSION={}", version());
 }
 
