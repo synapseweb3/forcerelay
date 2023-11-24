@@ -9,7 +9,7 @@ use ckb_chain_spec::ChainSpec;
 
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections};
 use ckb_ics_axon::object::State;
-use ckb_ics_axon::ChannelArgs;
+use ckb_ics_axon::{ChannelArgs, ConnectionArgs};
 use ckb_jsonrpc_types::{Deserialize, JsonBytes, Status};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
@@ -285,7 +285,14 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
     let search_key = SearchKey {
         script: Script::new_builder()
             .code_hash(CONNECTION_CODE_HASH.pack())
-            .args(get_test_client_id().as_bytes().pack())
+            .args(
+                ConnectionArgs {
+                    metadata_type_id: get_test_client_id().0,
+                    ibc_handler_address: AXON_IBC_HANDLER_ADDRESS.0,
+                }
+                .encode()
+                .pack(),
+            )
             .hash_type(ScriptHashType::Type.into())
             .build()
             .into(),
