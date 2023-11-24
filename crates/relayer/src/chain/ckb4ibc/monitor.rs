@@ -229,9 +229,7 @@ impl Ckb4IbcEventMonitor {
                     let attrs = Attributes {
                         connection_id: Some(connection_id),
                         client_id: client_id.parse().unwrap(),
-                        counterparty_connection_id: Some(
-                            connection_end.counterparty.connection_id.parse().unwrap(),
-                        ),
+                        counterparty_connection_id: None,
                         counterparty_client_id: ClientId::from_str(
                             &connection_end.counterparty.client_id,
                         )
