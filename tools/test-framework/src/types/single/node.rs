@@ -127,7 +127,7 @@ fn h256_env(key: &str) -> [u8; 32] {
     raw.try_into().expect("convert to h256")
 }
 
-fn h160_env(key: &str) -> [u8; 20] {
+pub fn h160_env(key: &str) -> [u8; 20] {
     let value = std::env::var(key).expect("get type_args env");
     let raw = hex::decode(value).expect("decode hex");
     raw.try_into().expect("convert to h160")

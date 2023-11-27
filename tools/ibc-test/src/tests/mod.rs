@@ -18,6 +18,12 @@ macro_rules! env_vars {
 fn init_envs() -> Result<(), Error> {
     let value = std::env::var("ACCOUNT_PREFIXES")
         .map_err(|e| eyre::eyre!("no ENV entry \"ACCOUNT_PREFIXES\": {e}"))?;
+    let ibc_handler_address = if value.contains("axon") {
+        hex::encode(AXON_IBC_HANDLER_ADDRESS)
+    } else {
+        // For ckb,ckb test, use zero ibc handler address.
+        hex::encode([0; 20])
+    };
     if value.contains("ckb") {
         env_vars!(
             {"CLIENT_CODE_HASH", hex::encode(TYPE_ID_CODE_HASH)},
@@ -25,7 +31,7 @@ fn init_envs() -> Result<(), Error> {
             {"CHANNEL_TYPE_ARGS", hex::encode(CHANNEL_TYPE_ARGS)},
             {"PACKET_TYPE_ARGS", hex::encode(PACKET_TYPE_ARGS)},
             {"CLIENT_TYPE_ARGS", hex::encode(CLIENT_TYPE_ARGS)},
-            {"AXON_IBC_HANDLER_ADDRESS", hex::encode(AXON_IBC_HANDLER_ADDRESS)},
+            {"AXON_IBC_HANDLER_ADDRESS", ibc_handler_address},
         );
     }
     Ok(())

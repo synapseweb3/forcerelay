@@ -1,6 +1,4 @@
-use crate::consts::{
-    AXON_IBC_HANDLER_ADDRESS, CHANNEL_CODE_HASH, CLIENT_TYPE_ARGS, CONNECTION_CODE_HASH,
-};
+use crate::consts::{CHANNEL_CODE_HASH, CLIENT_TYPE_ARGS, CONNECTION_CODE_HASH};
 use crate::generator::{calc_script_hash, GENESIS_TXHASH};
 use crate::rpc_client::RpcClient;
 
@@ -22,6 +20,7 @@ use ckb_types::H256;
 
 use ibc_test_framework::prelude::{ChannelId, Wallet};
 use ibc_test_framework::types::process::ChildProcess;
+use ibc_test_framework::types::single::node::h160_env;
 use relayer::chain::ckb::prelude::CkbReader;
 use relayer::chain::ckb4ibc::extractor::{
     extract_channel_end_from_tx, extract_connections_from_tx,
@@ -288,7 +287,7 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
             .args(
                 ConnectionArgs {
                     metadata_type_id: get_test_client_id().0,
-                    ibc_handler_address: AXON_IBC_HANDLER_ADDRESS.0,
+                    ibc_handler_address: h160_env("AXON_IBC_HANDLER_ADDRESS"),
                 }
                 .encode()
                 .pack(),
@@ -344,7 +343,7 @@ pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &Channel
     let rpc_client = get_client(port);
     let channel_args = ChannelArgs {
         metadata_type_id: get_test_client_id().into(),
-        ibc_handler_address: AXON_IBC_HANDLER_ADDRESS.0,
+        ibc_handler_address: h160_env("AXON_IBC_HANDLER_ADDRESS"),
         open: true,
         channel_id: channel_id_to_u16(channel_id),
         port_id,
