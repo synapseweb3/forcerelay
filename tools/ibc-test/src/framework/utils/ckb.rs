@@ -7,7 +7,7 @@ use ckb_chain_spec::ChainSpec;
 
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections};
 use ckb_ics_axon::object::State;
-use ckb_ics_axon::ChannelArgs;
+use ckb_ics_axon::{ChannelArgs, ConnectionArgs};
 use ckb_jsonrpc_types::{Deserialize, JsonBytes, Status};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
@@ -20,6 +20,7 @@ use ckb_types::H256;
 
 use ibc_test_framework::prelude::{ChannelId, Wallet};
 use ibc_test_framework::types::process::ChildProcess;
+use ibc_test_framework::types::single::node::h160_env;
 use relayer::chain::ckb::prelude::CkbReader;
 use relayer::chain::ckb4ibc::extractor::{
     extract_channel_end_from_tx, extract_connections_from_tx,
@@ -283,7 +284,14 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
     let search_key = SearchKey {
         script: Script::new_builder()
             .code_hash(CONNECTION_CODE_HASH.pack())
-            .args(get_test_client_id().as_bytes().pack())
+            .args(
+                ConnectionArgs {
+                    metadata_type_id: get_test_client_id().0,
+                    ibc_handler_address: h160_env("AXON_IBC_HANDLER_ADDRESS"),
+                }
+                .encode()
+                .pack(),
+            )
             .hash_type(ScriptHashType::Type.into())
             .build()
             .into(),
@@ -334,7 +342,8 @@ fn channel_id_to_u16(channel_id: &ChannelId) -> u16 {
 pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &ChannelId) -> IbcChannel {
     let rpc_client = get_client(port);
     let channel_args = ChannelArgs {
-        client_id: get_test_client_id().into(),
+        metadata_type_id: get_test_client_id().into(),
+        ibc_handler_address: h160_env("AXON_IBC_HANDLER_ADDRESS"),
         open: true,
         channel_id: channel_id_to_u16(channel_id),
         port_id,

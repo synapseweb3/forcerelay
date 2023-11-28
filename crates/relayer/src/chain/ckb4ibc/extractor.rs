@@ -10,6 +10,7 @@ use ckb_ics_axon::object::{
     ConnectionEnd as CkbConnectionEnd, Ordering as CkbOrdering, Packet as CkbPacket,
     State as CkbState,
 };
+use ckb_ics_axon::{connection_id, get_channel_id_str, ConnectionArgs};
 use ckb_jsonrpc_types::TransactionView;
 use ckb_types::packed::WitnessArgs;
 use ckb_types::prelude::Entity;
@@ -27,12 +28,9 @@ use ibc_relayer_types::core::ics04_channel::channel::{
 };
 use ibc_relayer_types::core::ics04_channel::packet::Packet;
 use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
-use ibc_relayer_types::core::ics04_channel::version::Version as ChanVersion;
 use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
-use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
+use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, PortId};
 use ibc_relayer_types::timestamp::Timestamp;
-
-use super::utils::{generate_channel_id, generate_connection_id};
 
 pub fn extract_channel_end_from_tx(
     tx: &TransactionView,
@@ -49,29 +47,36 @@ pub fn extract_channel_end_from_tx(
     Ok((channel_end, ckb_channel_end))
 }
 
-pub fn extract_ibc_connections_from_tx(tx: &TransactionView) -> Result<IbcConnections, Error> {
+pub fn extract_ibc_connections_from_tx(
+    tx: &TransactionView,
+) -> Result<(ConnectionArgs, IbcConnections), Error> {
     let idx = get_object_index(tx, ObjectType::IbcConnections)?;
     let witness = tx.inner.witnesses.get(idx).unwrap();
     let witness_args = WitnessArgs::from_slice(witness.as_bytes()).unwrap();
+    let connection_args =
+        ConnectionArgs::from_slice(tx.inner.outputs[idx].lock.args.as_bytes()).unwrap();
     let ibc_connection_cells =
         rlp::decode::<IbcConnections>(&witness_args.output_type().to_opt().unwrap().raw_data())
             .map_err(|_| Error::extract_conn_tx_error(tx.hash.to_string()))?;
 
-    Ok(ibc_connection_cells)
+    Ok((connection_args, ibc_connection_cells))
 }
 
 pub fn extract_connections_from_tx(
     tx: &TransactionView,
     prefix: &CommitmentPrefix,
 ) -> Result<(Vec<IdentifiedConnectionEnd>, IbcConnections), Error> {
-    let ibc_connection_cell = extract_ibc_connections_from_tx(tx)?;
-    let result = ibc_connection_cell
+    let (args, connections) = extract_ibc_connections_from_tx(tx)?;
+    let client_id = args.client_id();
+    let result = connections
         .connections
         .iter()
         .enumerate()
-        .flat_map(|(idx, connection)| convert_connection_end(connection.clone(), idx, prefix))
+        .flat_map(|(idx, connection)| {
+            convert_connection_end(&client_id, connection.clone(), idx, prefix)
+        })
         .collect();
-    Ok((result, ibc_connection_cell))
+    Ok((result, connections))
 }
 
 pub fn extract_ibc_packet_from_tx(tx: &TransactionView) -> Result<(IbcPacket, Vec<u8>), Error> {
@@ -121,11 +126,12 @@ fn navigate(t: &MsgType, object_type: &ObjectType) -> usize {
 }
 
 fn convert_connection_end(
+    client_id: &str,
     connection: CkbConnectionEnd,
     idx: usize,
     prefix: &CommitmentPrefix,
 ) -> Result<IdentifiedConnectionEnd, Error> {
-    let connection_id = generate_connection_id(idx as u16, &connection.client_id);
+    let connection_id = connection_id(client_id, idx).parse().unwrap();
     let state = match connection.state {
         CkbState::Unknown => ConnectionState::Uninitialized,
         CkbState::Init => ConnectionState::Init,
@@ -133,18 +139,17 @@ fn convert_connection_end(
         CkbState::Open => ConnectionState::Open,
         _ => ConnectionState::Uninitialized,
     };
-    let client_id = {
-        let s = connection.client_id;
-        ClientId::from_str(&s).map_err(|_| Error::ckb_client_id_invalid(s))
-    }?;
+    let client_id = ClientId::from_str(client_id)
+        .map_err(|_| Error::ckb_client_id_invalid(client_id.to_string()))?;
     let remote_client_id = {
         let id = connection.counterparty.client_id;
         ClientId::from_str(&id).map_err(|_| Error::ckb_client_id_invalid(id))
     }?;
-    let remote_connection_id = connection
-        .counterparty
-        .connection_id
-        .map(|c| ConnectionId::from_str(&c).unwrap());
+    let remote_connection_id = if connection.counterparty.connection_id.is_empty() {
+        None
+    } else {
+        Some(connection.counterparty.connection_id.parse().unwrap())
+    };
     let delay_period = connection.delay_period;
     let result = IdentifiedConnectionEnd {
         connection_id,
@@ -175,6 +180,10 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
     };
     let remote_port_id = PortId::from_str(&ckb_channel_end.counterparty.port_id)
         .map_err(|_| Error::convert_channel_end())?;
+    let version = ckb_channel_end
+        .version
+        .parse()
+        .map_err(|_| Error::convert_channel_end())?;
     let remote_channel_id = if ckb_channel_end.counterparty.channel_id.is_empty() {
         None
     } else {
@@ -200,12 +209,12 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
         ordering,
         remote,
         connection_hops,
-        version: ChanVersion::empty(),
+        version,
     };
 
     let port_id =
         PortId::from_str(&ckb_channel_end.port_id).map_err(|_| Error::convert_channel_end())?;
-    let channel_id = generate_channel_id(ckb_channel_end.number);
+    let channel_id = get_channel_id_str(ckb_channel_end.number).parse().unwrap();
 
     let result = IdentifiedChannelEnd {
         port_id,

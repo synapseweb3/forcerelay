@@ -1,4 +1,4 @@
-use axon_types::metadata::{Metadata, ValidatorList};
+use axon_types::metadata::{Metadata, MetadataCellData, MetadataList, Validator, ValidatorList};
 use ckb_hash::new_blake2b;
 use ckb_sdk::{
     constants::TYPE_ID_CODE_HASH,
@@ -7,18 +7,17 @@ use ckb_sdk::{
     ScriptGroup, ScriptGroupType,
 };
 use ckb_types::{
-    core::{ScriptHashType, TransactionView},
+    core::{Capacity, ScriptHashType, TransactionView},
     packed::{CellInput, CellOutput, OutPoint, Script, ScriptOpt},
     prelude::*,
     H256,
 };
 
+use super::deploy_channel::ChannelAttribute;
 use crate::generator::{
     utils::{get_lock_script, get_secp256k1_cell_dep, wrap_rpc_request_and_save},
     PRIVKEY,
 };
-
-use super::deploy_channel::ChannelAttribute;
 
 pub struct PacketMetataAttribute {
     pub tx_hash: H256,
@@ -88,8 +87,23 @@ pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMe
         .args(type_1_args.as_slice().pack())
         .build();
 
+    // Same as axon example single node spec which is used in ibc-tests.
+    let bls_pub_key = hex::decode("a26e3fe1cf51bd4822072c61bdc315ac32e3d3c2e2484bb92942666399e863b4bf56cf2926383cc706ffc15dfebc85c6").unwrap();
     let metadata = Metadata::new_builder()
-        .validators(ValidatorList::new_builder().build())
+        .validators(
+            ValidatorList::new_builder()
+                .push(
+                    Validator::new_builder()
+                        // Only bls_pub_key matters for now.
+                        .bls_pub_key(Entity::from_slice(&bls_pub_key).unwrap())
+                        .build(),
+                )
+                .build(),
+        )
+        .build();
+
+    let metadata_cell_data = MetadataCellData::new_builder()
+        .metadata(MetadataList::new_builder().push(metadata).build())
         .build();
 
     let metadata_output = CellOutput::new_builder()
@@ -99,8 +113,8 @@ pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMe
                 .set(Some(mock_metadata_script))
                 .build(),
         )
-        .capacity(100_000_000_000u64.pack())
-        .build();
+        .build_exact_capacity(Capacity::bytes(metadata_cell_data.as_bytes().len()).unwrap())
+        .unwrap();
 
     let change_output = CellOutput::new_builder()
         .lock(lock_script.clone())
@@ -119,7 +133,7 @@ pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMe
         .output(metadata_output)
         .output(change_output)
         .output_data(std::fs::read("./contracts/ics-packet").unwrap().pack())
-        .output_data(metadata.as_slice().pack())
+        .output_data(metadata_cell_data.as_bytes().pack())
         .output_data(empty_data)
         .build();
 

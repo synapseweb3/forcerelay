@@ -24,7 +24,7 @@ use crate::misbehaviour::MisbehaviourEvidence;
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections, IbcPacket, PacketStatus};
 use ckb_ics_axon::message::{Envelope, MsgType};
 use ckb_ics_axon::object::Ordering;
-use ckb_ics_axon::{ChannelArgs, PacketArgs};
+use ckb_ics_axon::{ChannelArgs, ConnectionArgs, PacketArgs};
 use ckb_jsonrpc_types::{Status, TransactionView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::traits::SecpCkbRawKeySigner;
@@ -275,11 +275,12 @@ impl Ckb4IbcChain {
         is_open: bool,
     ) -> Result<(ChannelEnd, IbcChannel), Error> {
         let channel_code_hash = self.get_converter()?.get_channel_code_hash();
-        let client_id = self
+        let args = self
             .config
-            .lc_client_type_hash(self.counterparty_client_type())?;
+            .lc_connection_args(self.counterparty_client_type())?;
         let channel_args = ChannelArgs {
-            client_id: client_id.into(),
+            metadata_type_id: args.metadata_type_id,
+            ibc_handler_address: args.ibc_handler_address,
             open: is_open,
             channel_id: get_channel_number(channel_id)?,
             port_id: convert_port_id_to_array(port_id)?,
@@ -345,9 +346,6 @@ impl Ckb4IbcChain {
             .and_then(|response| async {
                 let mut resps = vec![];
                 for cell in response.objects {
-                    if cell.output.lock.args.len() != 32 {
-                        continue;
-                    }
                     let tx = self
                         .rpc_client
                         .get_transaction(&cell.out_point.tx_hash)
@@ -356,8 +354,11 @@ impl Ckb4IbcChain {
                         .previous_output(cell.out_point.into())
                         .build();
                     let capacity: u64 = cell.output.capacity.into();
-                    let client_id = hex::encode(cell.output.lock.args.into_bytes());
-                    if let Ok(client_type) = self.config.lc_client_type(&client_id) {
+                    let args = match ConnectionArgs::from_slice(cell.output.lock.args.as_bytes()) {
+                        Ok(a) => a,
+                        Err(_) => continue,
+                    };
+                    if let Ok(client_type) = self.config.lc_client_type(&args.client_id()) {
                         resps.push((tx, cell_input, capacity, client_type));
                     }
                 }
@@ -553,6 +554,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             LightClientItem {
                 chain_id,
                 client_cell_type_args,
+                ..
             },
         ) in &config.onchain_light_clients
         {
@@ -700,7 +702,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 {
                     Ok(tx_hash) => {
                         // TODO: put confirms count into config
-                        let confirms = 3;
+                        let confirms = 1;
                         info!(
                             "{msg_type:?} transaction {} committed to {}, wait {confirms} blocks confirmation",
                             hex::encode(&tx_hash),
@@ -883,7 +885,10 @@ impl ChainEndpoint for Ckb4IbcChain {
             .map(|client_type| {
                 // TODO query latest_height from light client cell (for example Axon metadata cell)
                 let client_id = self.config.lc_client_id(*client_type).unwrap();
-                let chain_id = self.config.lc_chain_id(&client_id.to_string()).unwrap();
+                let chain_id = self
+                    .config
+                    .lc_chain_id_by_client_id(&client_id.to_string())
+                    .unwrap();
                 IdentifiedAnyClientState {
                     client_id,
                     client_state: CkbClientState {
@@ -901,7 +906,9 @@ impl ChainEndpoint for Ckb4IbcChain {
         request: QueryClientStateRequest,
         _include_proof: IncludeProof,
     ) -> Result<(AnyClientState, Option<MerkleProof>), Error> {
-        let chain_id = self.config.lc_chain_id(&request.client_id.to_string())?;
+        let chain_id = self
+            .config
+            .lc_chain_id_by_client_id(&request.client_id.to_string())?;
         // TODO query latest_height
         let client_state = CkbClientState {
             chain_id,

@@ -1,10 +1,6 @@
 use std::str::FromStr;
 
 use axon_tools::types::{Block as AxonBlock, Proof as AxonProof, ValidatorExtend};
-use ckb_ics_axon::proof::{
-    Log as CkbLog, ObjectProof, TransactionReceipt as CkbTransactionReceipt,
-};
-use rlp::Encodable;
 
 use crate::{
     chain::SEC_TO_NANO,
@@ -14,7 +10,7 @@ use crate::{
     event::IbcEventWithHeight,
     ibc_contract::OwnableIBCHandlerEvents,
 };
-use ethers::{types::TransactionReceipt, types::H256, utils::rlp};
+use ethers::types::H256;
 use ibc_relayer_types::{
     clients::{
         ics07_axon::{client_state::AxonClientState, consensus_state::AxonConsensusState},
@@ -105,59 +101,6 @@ pub fn to_any_consensus_state(
         _ => unimplemented!(),
     };
     Ok(any_consensus_state)
-}
-
-// use ObjectProof in Ckb repo to garrantee the correctness of encode/decode of Axon proof
-pub fn to_ckb_like_object_proof(
-    receipt: &TransactionReceipt,
-    receipt_proof: &[Vec<u8>],
-    block: &AxonBlock,
-    state_root: &H256,
-    block_proof: &AxonProof,
-) -> ObjectProof {
-    let logs = receipt
-        .logs
-        .iter()
-        .map(|log| CkbLog {
-            address: log.address,
-            topics: log.topics.clone(),
-            data: log.data.to_vec().into(),
-            block_hash: log.block_hash,
-            block_number: log.block_number,
-            transaction_hash: log.transaction_hash,
-            transaction_index: log.transaction_index,
-            log_index: log.log_index,
-            transaction_log_index: log.transaction_log_index,
-            log_type: log.log_type.clone(),
-            removed: log.removed,
-        })
-        .collect();
-    let receipt = CkbTransactionReceipt {
-        transaction_hash: receipt.transaction_hash,
-        transaction_index: receipt.transaction_index,
-        block_hash: receipt.block_hash,
-        block_number: receipt.block_number,
-        from: receipt.from,
-        to: receipt.to,
-        cumulative_gas_used: receipt.cumulative_gas_used,
-        gas_used: receipt.gas_used,
-        contract_address: receipt.contract_address,
-        logs,
-        status: receipt.status,
-        root: receipt.root,
-        logs_bloom: receipt.logs_bloom,
-        transaction_type: receipt.transaction_type,
-        effective_gas_price: receipt.effective_gas_price,
-    };
-    let block = block.rlp_bytes().to_vec();
-    let axon_proof = block_proof.rlp_bytes().to_vec();
-    ObjectProof {
-        receipt,
-        receipt_proof: receipt_proof.to_owned(),
-        block,
-        state_root: *state_root,
-        axon_proof,
-    }
 }
 
 pub fn ibc_event_from_ibc_handler_event(

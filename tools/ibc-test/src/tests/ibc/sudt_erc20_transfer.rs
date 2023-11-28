@@ -35,7 +35,7 @@ use prost::Message;
 use tokio::runtime::Runtime;
 
 use crate::{
-    consts::CLIENT_TYPE_ARGS,
+    consts::{AXON_IBC_HANDLER_ADDRESS, CLIENT_TYPE_ARGS},
     generator::{get_lock_script, PRIVKEY},
     tests::ckb::packet::utils::search_sudt_cells,
 };
@@ -151,6 +151,7 @@ impl BinaryConnectionTest for SudtErc20TransferTest {
         let sdk_config = forcerelay_ckb_sdk::config::Config {
             module_lock_script: AddressOrScript::Script(ibc_sudt_transfer_lock.clone().into()),
             axon_metadata_type_script: AddressOrScript::Script(metadata_script.clone().into()),
+            axon_ibc_handler_address: AXON_IBC_HANDLER_ADDRESS,
             channel_contract_type_id_args: ckb_config.channel_type_args.clone(),
             packet_contract_type_id_args: ckb_config.packet_type_args.clone(),
             channel_id: channels

@@ -1,8 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 
-use super::{contract::*, IBCInfoCache};
-use crate::chain::axon::cache_ics_tx_hash_with_event;
+use super::contract::*;
 use crate::event::bus::EventBus;
 use crate::event::IbcEventWithHeight;
 use crossbeam_channel as channel;
@@ -33,8 +32,6 @@ pub struct AxonEventMonitor {
     start_block_number: u64,
     rx_cmd: channel::Receiver<MonitorCmd>,
     event_bus: EventBus<Arc<Result<EventBatch>>>,
-    ibc_cache: Arc<RwLock<IBCInfoCache>>,
-    reprocess_events: Vec<(OwnableIBCHandlerEvents, LogMeta)>,
 }
 
 impl AxonEventMonitor {
@@ -50,7 +47,6 @@ impl AxonEventMonitor {
         websocket_addr: WebSocketClientUrl,
         contract_address: Address,
         rt: Arc<TokioRuntime>,
-        ibc_cache: Arc<RwLock<IBCInfoCache>>,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
 
@@ -73,8 +69,6 @@ impl AxonEventMonitor {
             start_block_number,
             rx_cmd,
             event_bus,
-            ibc_cache,
-            reprocess_events: vec![],
         };
         Ok((monitor, TxMonitorCmd::new(tx_cmd)))
     }
@@ -102,15 +96,7 @@ impl AxonEventMonitor {
     )]
     pub fn run(mut self) {
         if let Next::Continue = self.update_subscribe(false) {
-            info!(
-                "start Axon event monitor for {}, reprocess {} events",
-                self.chain_id,
-                self.reprocess_events.len()
-            );
-            (0..self.reprocess_events.len()).for_each(|_| {
-                let (event, meta) = self.reprocess_events.remove(0);
-                self.process_event(event, meta);
-            });
+            info!("start Axon event monitor for {}", self.chain_id,);
             let mut contract = Contract::new(self.contract_address, Arc::clone(&self.client));
             info!(
                 "start to fetch IBC events from block {}",
@@ -140,58 +126,6 @@ impl AxonEventMonitor {
             }
             debug!("event monitor is shutting down");
         }
-    }
-
-    pub fn restore_event_tx_hashes(
-        &mut self,
-        latest_block_count: u64,
-    ) -> Result<Vec<IbcEventWithHeight>> {
-        let contract = Arc::new(Contract::new(
-            self.contract_address,
-            Arc::clone(&self.client),
-        ));
-        let restore_block_number = self
-            .start_block_number
-            .checked_sub(latest_block_count)
-            .ok_or(Error::others(format!(
-                "latest_block_count {latest_block_count} exceeds start_block_number {}",
-                self.start_block_number
-            )))?;
-        let event_filter = |event: &OwnableIBCHandlerEvents| {
-            matches!(
-                event,
-                OwnableIBCHandlerEvents::SendPacketFilter(_)
-                    | OwnableIBCHandlerEvents::WriteAcknowledgementFilter(_)
-            )
-        };
-        let events = self
-            .rt
-            .block_on(
-                contract
-                    .events()
-                    .from_block(restore_block_number)
-                    .to_block(self.start_block_number)
-                    .query_with_meta(),
-            )
-            .map_err(|e| Error::others(e.to_string()))?
-            .into_iter()
-            .map(|(event, meta)| {
-                if event_filter(&event) {
-                    self.reprocess_events.push((event.clone(), meta.clone()));
-                }
-                IbcEventWithHeight::new_with_tx_hash(
-                    event.into(),
-                    Height::from_noncosmos_height(meta.block_number.as_u64()),
-                    meta.transaction_hash.into(),
-                )
-            })
-            .collect::<Vec<_>>();
-        debug!(
-            "restored {} events on contract {}",
-            events.len(),
-            self.contract_address
-        );
-        Ok(events)
     }
 
     fn update_subscribe(&mut self, use_try: bool) -> Next {
@@ -269,11 +203,6 @@ impl AxonEventMonitor {
             event.into(),
             Height::from_noncosmos_height(meta.block_number.as_u64()),
             meta.transaction_hash.into(),
-        );
-        cache_ics_tx_hash_with_event(
-            &mut self.ibc_cache.write().unwrap(),
-            event.event.clone(),
-            event.tx_hash,
         );
         let batch = EventBatch {
             chain_id: self.chain_id.clone(),

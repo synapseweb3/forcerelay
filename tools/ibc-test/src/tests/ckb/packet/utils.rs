@@ -26,6 +26,7 @@ use forcerelay_ckb_sdk::transaction::{
 };
 use futures::{pin_mut, StreamExt, TryStreamExt};
 use ibc_test_framework::prelude::*;
+use ibc_test_framework::types::single::node::h160_env;
 use relayer::chain::ckb::prelude::{CkbReader, TxCompleter};
 use relayer::chain::ckb::rpc_client::RpcClient;
 use relayer::config::ChainConfig;
@@ -264,6 +265,7 @@ pub fn prepare_artificials(
     let sdk_config = SdkConfig {
         module_lock_script: AddressOrScript::Script(relayer_script.into()),
         axon_metadata_type_script: AddressOrScript::Script(metadata_script.into()),
+        axon_ibc_handler_address: h160_env("AXON_IBC_HANDLER_ADDRESS").into(),
         channel_contract_type_id_args: ckb4ibc_config.channel_type_args.clone(),
         packet_contract_type_id_args: ckb4ibc_config.packet_type_args.clone(),
         channel_id: channel_number,

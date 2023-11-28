@@ -97,27 +97,6 @@ pub fn reply_channel<T>() -> (ReplyTo<T>, Reply<T>) {
     crossbeam_channel::bounded(1)
 }
 
-#[derive(Debug, Clone)]
-pub enum CacheTxHashStatus {
-    Connection(ConnectionId),
-    Channel(ChannelId, PortId),
-    Packet(ChannelId, PortId, u64),
-}
-
-impl CacheTxHashStatus {
-    pub fn new_with_conn(conn_id: ConnectionId) -> Self {
-        Self::Connection(conn_id)
-    }
-
-    pub fn new_with_chan(chan_id: ChannelId, port_id: PortId) -> Self {
-        Self::Channel(chan_id, port_id)
-    }
-
-    pub fn new_with_packet(chan_id: ChannelId, port_id: PortId, sequence: u64) -> Self {
-        Self::Packet(chan_id, port_id, sequence)
-    }
-}
-
 /// Requests that a `ChainHandle` may send to a `ChainRuntime`.
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]

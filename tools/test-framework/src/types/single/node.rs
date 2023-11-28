@@ -127,6 +127,12 @@ fn h256_env(key: &str) -> [u8; 32] {
     raw.try_into().expect("convert to h256")
 }
 
+pub fn h160_env(key: &str) -> [u8; 20] {
+    let value = std::env::var(key).expect("get type_args env");
+    let raw = hex::decode(value).expect("decode hex");
+    raw.try_into().expect("convert to h160")
+}
+
 impl FullNode {
     /**
        Generate the relayer's chain config based on the configuration of
@@ -166,6 +172,7 @@ impl FullNode {
                 LightClientItem {
                     chain_id: counterparty_chain_id,
                     client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
+                    ibc_handler_address: h160_env("AXON_IBC_HANDLER_ADDRESS").into(),
                 },
             );
         } else {
@@ -179,6 +186,7 @@ impl FullNode {
                 LightClientItem {
                     chain_id: counterparty_chain_id,
                     client_cell_type_args: h256_env("CLIENT_TYPE_ARGS").into(),
+                    ibc_handler_address: h160_env("AXON_IBC_HANDLER_ADDRESS").into(),
                 },
             );
         }
@@ -188,7 +196,7 @@ impl FullNode {
             ckb_rpc: ckb_rpc.clone(),
             ckb_indexer_rpc: ckb_rpc,
             key_name: "relayer_ckb_wallet".to_string(),
-            store_prefix: "forcerelay".to_string(),
+            store_prefix: "ibc".to_string(),
             client_code_hash: h256_env("CLIENT_CODE_HASH").into(),
             connection_type_args: h256_env("CONNECTION_TYPE_ARGS").into(),
             channel_type_args: h256_env("CHANNEL_TYPE_ARGS").into(),
@@ -228,7 +236,7 @@ impl FullNode {
         let axon_config = config::axon::AxonChainConfig {
             id: self.chain_driver.chain_id.clone(),
             key_name: "relayer".to_string(),
-            store_prefix: "forcerelay".to_string(),
+            store_prefix: "ibc".to_string(),
             packet_filter: Default::default(),
             websocket_addr,
             rpc_addr,
