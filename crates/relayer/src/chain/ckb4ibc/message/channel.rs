@@ -1,3 +1,4 @@
+use ckb_ics_axon::commitment::channel_path;
 use ckb_ics_axon::handler::{IbcChannel, Sequence};
 use ckb_ics_axon::message::Envelope;
 use ckb_ics_axon::message::MsgChannelCloseConfirm as CkbMsgChannelCloseConfirm;
@@ -153,9 +154,11 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
         .witness(BytesOpt::default(), ibc_channel.witness)
         .build();
 
+    let commitment_path = channel_path(msg.port_id.as_ref(), &get_channel_id_str(next_channel_num));
+    let channel_id = get_channel_id_str(next_channel_num);
     let event = IbcEvent::OpenInitChannel(OpenInit {
         port_id: msg.port_id,
-        channel_id: Some(get_channel_id_str(next_channel_num).parse().unwrap()),
+        channel_id: Some(channel_id.parse().unwrap()),
         connection_id: msg.channel.connection_hops[0].clone(),
         counterparty_port_id: msg.channel.remote.port_id,
         counterparty_channel_id: msg.channel.remote.channel_id,
@@ -166,6 +169,7 @@ pub fn convert_chan_open_init_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }
 
@@ -231,9 +235,11 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
         .witness(BytesOpt::default(), ibc_channel.witness)
         .build();
 
+    let commitment_path = channel_path(msg.port_id.as_ref(), &get_channel_id_str(next_channel_num));
+    let channel_id = get_channel_id_str(next_channel_num);
     let event = IbcEvent::OpenTryChannel(OpenTry {
         port_id: msg.port_id,
-        channel_id: Some(get_channel_id_str(next_channel_num).parse().unwrap()),
+        channel_id: Some(channel_id.parse().unwrap()),
         connection_id: msg.channel.connection_hops[0].clone(),
         counterparty_port_id: msg.channel.remote.port_id,
         counterparty_channel_id: msg.channel.remote.channel_id,
@@ -244,6 +250,7 @@ pub fn convert_chan_open_try_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }
 
@@ -300,6 +307,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
         .witness(old_channel.witness, new_channel.witness)
         .build();
 
+    let commitment_path = channel_path(msg.port_id.as_ref(), msg.channel_id.as_ref());
     let event = IbcEvent::OpenAckChannel(OpenAck {
         port_id: msg.port_id,
         channel_id: Some(msg.channel_id),
@@ -313,6 +321,7 @@ pub fn convert_chan_open_ack_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }
 
@@ -369,6 +378,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
         .witness(old_channel.witness, new_channel.witness)
         .build();
 
+    let commitment_path = channel_path(msg.port_id.as_ref(), msg.channel_id.as_ref());
     let event = IbcEvent::OpenConfirmChannel(OpenConfirm {
         port_id: msg.port_id,
         channel_id: Some(msg.channel_id),
@@ -382,6 +392,7 @@ pub fn convert_chan_open_confirm_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }
 
@@ -435,6 +446,7 @@ pub fn convert_chan_close_init_to_tx<C: MsgToTxConverter>(
         .witness(old_channel.witness, new_channel.witness)
         .build();
 
+    let commitment_path = channel_path(msg.port_id.as_ref(), msg.channel_id.as_ref());
     let event = IbcEvent::CloseInitChannel(CloseInit {
         port_id: msg.port_id,
         channel_id: msg.channel_id,
@@ -448,6 +460,7 @@ pub fn convert_chan_close_init_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }
 
@@ -505,6 +518,7 @@ pub fn convert_chan_close_confirm_to_tx<C: MsgToTxConverter>(
         .witness(old_channel.witness, new_channel.witness)
         .build();
 
+    let commitment_path = channel_path(msg.port_id.as_ref(), msg.channel_id.as_ref());
     let event = IbcEvent::CloseConfirmChannel(CloseConfirm {
         port_id: msg.port_id,
         channel_id: Some(msg.channel_id),
@@ -518,5 +532,6 @@ pub fn convert_chan_close_confirm_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }

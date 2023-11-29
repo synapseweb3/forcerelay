@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::account::Balance;
@@ -77,7 +77,7 @@ use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverte
 use self::monitor::{Ckb4IbcEventMonitor, WriteAckMonitorCmd};
 use self::utils::{
     convert_port_id_to_array, fetch_transaction_by_hash, generate_ibc_packet_event,
-    get_channel_number, get_dummy_merkle_proof, get_encoded_object, get_prefix_search_key,
+    generate_tx_proof_from_block, get_channel_number, get_encoded_object, get_prefix_search_key,
     get_search_key_with_sudt, transaction_to_event,
 };
 
@@ -136,6 +136,8 @@ pub struct Ckb4IbcChain {
     connection_cache: RefCell<ConnectionCache>,
     packet_input_data: RefCell<PacketInputData>,
     packet_cache: RefCell<HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
+
+    ibc_transactions_cache: Arc<Mutex<HashMap<String, ckb_types::H256>>>,
 }
 
 impl Ckb4IbcChain {
@@ -186,12 +188,20 @@ impl Ckb4IbcChain {
     }
 
     fn init_event_monitor(&mut self) -> Result<TxMonitorCmd, Error> {
-        let (monitor, monitor_tx, write_ack_tx) = Ckb4IbcEventMonitor::new(
+        let (monitor, monitor_tx, write_ack_tx, ibc_transaction_rx) = Ckb4IbcEventMonitor::new(
             self.rt.clone(),
             self.rpc_client.clone(),
             self.config.clone(),
             self.counterparty_client_type.subscribe(),
         );
+        let ibc_transaction_cache = self.ibc_transactions_cache.clone();
+        std::thread::spawn(move || loop {
+            if let Ok((commitment_path, tx_hash)) = ibc_transaction_rx.recv() {
+                if let Ok(mut cache) = ibc_transaction_cache.lock() {
+                    cache.insert(commitment_path, tx_hash);
+                }
+            }
+        });
         std::thread::spawn(move || monitor.run());
         self.tx_write_ack_cmd = Some(write_ack_tx);
         Ok(monitor_tx)
@@ -475,16 +485,17 @@ impl Ckb4IbcChain {
     fn assemble_transaction_from_msg(
         &self,
         msg: &Any,
-    ) -> Result<(Option<IbcEvent>, Option<(TransactionView, MsgType)>), Error> {
+    ) -> Result<(String, Option<IbcEvent>, Option<(TransactionView, MsgType)>), Error> {
         let converter = self.get_converter()?;
         let CkbTxInfo {
             unsigned_tx,
             envelope,
             input_capacity,
             event,
+            commitment_path,
         } = convert_msg_to_ckb_tx(msg, &converter)?;
         if unsigned_tx.is_none() {
-            return Ok((event, None));
+            return Ok((commitment_path, event, None));
         }
         let unsigned_tx = unsigned_tx.unwrap();
         let msg_type = envelope.msg_type;
@@ -517,7 +528,7 @@ impl Ckb4IbcChain {
                         },
                     )
                     .map_err(|err| Error::other_error(err.to_string()))?;
-                Ok((event, Some((tx.into(), msg_type))))
+                Ok((commitment_path, event, Some((tx.into(), msg_type))))
             }
             Err(err) => {
                 // return signing error such as no enough ckb
@@ -616,6 +627,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             connection_cache: RefCell::new(HashMap::new()),
             packet_input_data: RefCell::new(HashMap::new()),
             packet_cache: RefCell::new(HashMap::new()),
+            ibc_transactions_cache: Arc::new(Mutex::default()),
         };
         Ok(chain)
     }
@@ -687,7 +699,7 @@ impl ChainEndpoint for Ckb4IbcChain {
         while !msgs.is_empty() {
             let msg = msgs.remove(0);
             match self.assemble_transaction_from_msg(&msg)? {
-                (Some(event), None) => {
+                (_, Some(event), None) => {
                     if let Some(client_type) = sync_if_create_client(&event) {
                         self.sync_counterparty_client_type(client_type);
                         let ibc_event = IbcEventWithHeight::new(event, Height::default());
@@ -696,7 +708,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                         return Ok(vec![]);
                     }
                 }
-                (Some(event), Some((tx, msg_type))) => match self
+                (commitment_path, Some(event), Some((tx, msg_type))) => match self
                     .rt
                     .block_on(self.rpc_client.send_transaction(&tx.inner, None))
                 {
@@ -720,6 +732,10 @@ impl ChainEndpoint for Ckb4IbcChain {
                                 if let Some(client_type) = sync_if_create_client(&event) {
                                     self.sync_counterparty_client_type(client_type);
                                 }
+                                self.ibc_transactions_cache
+                                    .lock()
+                                    .unwrap()
+                                    .insert(commitment_path, tx_hash.clone());
                                 let ibc_event_with_height = IbcEventWithHeight {
                                     event,
                                     height: Height::from_noncosmos_height(height),
@@ -1483,39 +1499,147 @@ impl ChainEndpoint for Ckb4IbcChain {
     fn build_connection_proofs_and_client_state(
         &self,
         _message_type: ConnectionMsgType,
-        _connection_id: &ConnectionId,
+        connection_id: &ConnectionId,
         _client_id: &ClientId,
         height: Height,
     ) -> Result<(Option<AnyClientState>, Proofs), Error> {
+        let connection_event = self
+            .query_txs(QueryTxRequest::Client(
+                QueryClientEventRequest::from_height(height),
+            ))?
+            .into_iter()
+            .find(|v| match &v.event {
+                IbcEvent::OpenTryConnection(v) => v.connection_id() == Some(connection_id),
+                IbcEvent::OpenAckConnection(v) => v.connection_id() == Some(connection_id),
+                IbcEvent::OpenConfirmConnection(v) => v.connection_id() == Some(connection_id),
+                _ => false,
+            });
+
+        let Some(event) = connection_event else {
+            return Err(Error::other_error(format!(
+                "no connection event found for {connection_id}"
+            )));
+        };
+
+        let Some(proof) = self.rt.block_on(generate_tx_proof_from_block(
+            self.rpc_client.as_ref(),
+            height,
+            &event.tx_hash.into(),
+        ))?
+        else {
+            return Err(Error::other_error(format!(
+                "cannot generate connection proof for tx {} at block {height}",
+                hex::encode(event.tx_hash)
+            )));
+        };
+
         Ok((
             Some(AnyClientState::Ckb(CkbClientState {
                 chain_id: self.id(),
                 latest_height: height,
             })),
-            // FIXME: fix it until the hardfork of CKB
-            get_dummy_merkle_proof(height),
+            proof,
         ))
     }
 
     fn build_channel_proofs(
         &self,
-        _port_id: &PortId,
-        _channel_id: &ChannelId,
+        port_id: &PortId,
+        channel_id: &ChannelId,
         height: Height,
     ) -> Result<Proofs, Error> {
-        // FIXME: fix it until the hardfork of CKB
-        Ok(get_dummy_merkle_proof(height))
+        let channel_event = self
+            .query_txs(QueryTxRequest::Client(
+                QueryClientEventRequest::from_height(height),
+            ))?
+            .into_iter()
+            .find(|v| match &v.event {
+                IbcEvent::OpenTryChannel(v) => {
+                    v.channel_id() == Some(channel_id) && v.port_id() == port_id
+                }
+                IbcEvent::OpenAckChannel(v) => {
+                    v.channel_id() == Some(channel_id) && v.port_id() == port_id
+                }
+                IbcEvent::OpenConfirmChannel(v) => {
+                    v.channel_id() == Some(channel_id) && v.port_id() == port_id
+                }
+                IbcEvent::CloseConfirmChannel(v) => {
+                    v.channel_id() == Some(channel_id) && &v.port_id == port_id
+                }
+                _ => false,
+            });
+
+        let Some(event) = channel_event else {
+            return Err(Error::other_error(format!(
+                "no channel event found for {channel_id}/{port_id}"
+            )));
+        };
+
+        let Some(proof) = self.rt.block_on(generate_tx_proof_from_block(
+            self.rpc_client.as_ref(),
+            height,
+            &event.tx_hash.into(),
+        ))?
+        else {
+            return Err(Error::other_error(format!(
+                "cannot generate channel proof for tx {} at block {height}",
+                hex::encode(event.tx_hash)
+            )));
+        };
+
+        Ok(proof)
     }
 
     fn build_packet_proofs(
         &self,
         _packet_type: PacketMsgType,
-        _port_id: PortId,
-        _channel_id: ChannelId,
-        _sequence: Sequence,
+        port_id: PortId,
+        channel_id: ChannelId,
+        sequence: Sequence,
         height: Height,
     ) -> Result<Proofs, Error> {
-        // FIXME: fix it until the hardfork of CKB
-        Ok(get_dummy_merkle_proof(height))
+        let packet_event = self
+            .query_txs(QueryTxRequest::Client(
+                QueryClientEventRequest::from_height(height),
+            ))?
+            .into_iter()
+            .find(|v| match &v.event {
+                IbcEvent::SendPacket(v) => {
+                    v.src_port_id() == &port_id
+                        && v.src_channel_id() == &channel_id
+                        && v.packet.sequence == sequence
+                }
+                IbcEvent::ReceivePacket(v) => {
+                    v.dst_port_id() == &port_id
+                        && v.dst_channel_id() == &channel_id
+                        && v.packet.sequence == sequence
+                }
+                IbcEvent::WriteAcknowledgement(v) => {
+                    v.src_port_id() == &port_id
+                        && v.src_channel_id() == &channel_id
+                        && v.packet.sequence == sequence
+                }
+                _ => false,
+            });
+
+        let Some(event) = packet_event else {
+            return Err(Error::other_error(format!(
+                "no packet event found for {channel_id}/{port_id}"
+            )));
+        };
+
+        let Some(proof) = self.rt.block_on(generate_tx_proof_from_block(
+            self.rpc_client.as_ref(),
+            height,
+            &event.tx_hash.into(),
+        ))?
+        else {
+            return Err(Error::other_error(format!(
+                "cannot generate proof for tx {} at block {height}",
+                hex::encode(event.tx_hash)
+            )));
+        };
+
+        Ok(proof)
     }
 }

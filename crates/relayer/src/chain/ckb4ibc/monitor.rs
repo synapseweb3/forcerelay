@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use ckb_ics_axon::commitment::{channel_path, connection_path, packet_commitment_path};
 use ckb_ics_axon::handler::{IbcPacket, PacketStatus};
 use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::object::State as CkbState;
@@ -26,7 +27,7 @@ use ibc_relayer_types::core::ics04_channel::events::{
 };
 use ibc_relayer_types::core::ics04_channel::packet::{Packet, Sequence};
 use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
-use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, PortId};
+use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, ConnectionId, PortId};
 use ibc_relayer_types::events::IbcEvent;
 use ibc_relayer_types::timestamp::Timestamp;
 use tokio::runtime::Runtime as TokioRuntime;
@@ -59,6 +60,7 @@ pub enum IbcProtocolType {
 pub type UselessWriteAckCell = (IbcPacket, CellInput, u64);
 pub type WriteAckMonitorSender = (Sender<Option<UselessWriteAckCell>>, u64);
 pub type WriteAckMonitorCmd = Sender<WriteAckMonitorSender>;
+pub type IbcTransactionReceiver = Receiver<(String, H256)>;
 
 // TODO: add cell emitter here
 pub struct Ckb4IbcEventMonitor {
@@ -73,6 +75,7 @@ pub struct Ckb4IbcEventMonitor {
     counterparty_client_type: ClientType,
     fetch_cursors: HashMap<IbcProtocolType, JsonBytes>,
     useless_write_ack_packets: BTreeMap<u64, UselessWriteAckCell>,
+    ibc_transaction_notice: Sender<(String, H256)>,
 }
 
 impl Ckb4IbcEventMonitor {
@@ -81,9 +84,15 @@ impl Ckb4IbcEventMonitor {
         rpc_client: Arc<RpcClient>,
         config: ChainConfig,
         counterparty_client_type_rx: WatchReceiver<Option<ClientType>>,
-    ) -> (Self, TxMonitorCmd, WriteAckMonitorCmd) {
+    ) -> (
+        Self,
+        TxMonitorCmd,
+        WriteAckMonitorCmd,
+        IbcTransactionReceiver,
+    ) {
         let (tx_cmd, rx_cmd) = crossbeam_channel::unbounded();
         let (tx_write_ack, rx_write_ack) = crossbeam_channel::unbounded();
+        let (tx_notice, rx_notice) = crossbeam_channel::unbounded();
         let monitor = Ckb4IbcEventMonitor {
             rt,
             rpc_client,
@@ -96,8 +105,9 @@ impl Ckb4IbcEventMonitor {
             counterparty_client_type: ClientType::Mock,
             fetch_cursors: HashMap::new(),
             useless_write_ack_packets: BTreeMap::new(),
+            ibc_transaction_notice: tx_notice,
         };
-        (monitor, TxMonitorCmd::new(tx_cmd), tx_write_ack)
+        (monitor, TxMonitorCmd::new(tx_cmd), tx_write_ack, rx_notice)
     }
 
     pub fn run(mut self) {
@@ -221,11 +231,15 @@ impl Ckb4IbcEventMonitor {
             .enumerate()
             .flat_map(|(idx, connection_end)| match connection_end.state {
                 CkbState::Init => {
-                    let connection_id = connection_id(client_id.as_str(), idx).parse().unwrap();
+                    let connection_id: ConnectionId =
+                        connection_id(client_id.as_str(), idx).parse().unwrap();
                     info!(
                         "🫡  {} received ConnectionOpenInit event, connection_id = {connection_id}",
                         self.config.id
                     );
+                    self.ibc_transaction_notice
+                        .send((connection_path(&connection_id.to_string()), tx.hash.clone()))
+                        .expect("sync connection");
                     let attrs = Attributes {
                         connection_id: Some(connection_id),
                         client_id: client_id.parse().unwrap(),
@@ -243,11 +257,15 @@ impl Ckb4IbcEventMonitor {
                     })
                 }
                 CkbState::OpenTry => {
-                    let connection_id = connection_id(client_id.as_str(), idx).parse().unwrap();
+                    let connection_id: ConnectionId =
+                        connection_id(client_id.as_str(), idx).parse().unwrap();
                     info!(
                         "🫡  {} received ConnectionOpenTry event, connection_id = {connection_id}",
                         self.config.id
                     );
+                    self.ibc_transaction_notice
+                        .send((connection_path(&connection_id.to_string()), tx.hash.clone()))
+                        .expect("sync connection");
                     let attrs = Attributes {
                         connection_id: Some(connection_id),
                         client_id: client_id.parse().unwrap(),
@@ -328,6 +346,9 @@ impl Ckb4IbcEventMonitor {
                         self.config.id,
                         channel.channel_id
                     );
+                    self.ibc_transaction_notice
+                        .send((channel_path(channel.port_id.as_ref(), channel.channel_id.as_ref()), tx.hash.clone()))
+                        .expect("sync channel");
                     IbcEventWithHeight {
                         event: IbcEvent::OpenInitChannel(ChannelOpenInit {
                             port_id: channel.port_id,
@@ -347,6 +368,9 @@ impl Ckb4IbcEventMonitor {
                         self.config.id,
                         channel.channel_id
                     );
+                    self.ibc_transaction_notice
+                        .send((channel_path(channel.port_id.as_ref(), channel.channel_id.as_ref()), tx.hash.clone()))
+                        .expect("sync channel");
                     IbcEventWithHeight {
                         event: IbcEvent::OpenTryChannel(ChannelOpenTry {
                             port_id: channel.port_id,
@@ -368,6 +392,9 @@ impl Ckb4IbcEventMonitor {
                                 self.config.id,
                                 channel.channel_id
                             );
+                        self.ibc_transaction_notice
+                            .send((channel_path(channel.port_id.as_ref(), channel.channel_id.as_ref()), tx.hash.clone()))
+                            .expect("sync channel");
                             IbcEventWithHeight {
                                 event: IbcEvent::CloseInitChannel(CloseInit {
                                     port_id: channel.port_id,
@@ -386,6 +413,9 @@ impl Ckb4IbcEventMonitor {
                                 self.config.id,
                                 channel.channel_id
                             );
+                            self.ibc_transaction_notice
+                                .send((channel_path(channel.port_id.as_ref(), channel.channel_id.as_ref()), tx.hash.clone()))
+                                .expect("sync channel");
                             IbcEventWithHeight {
                                 event: IbcEvent::CloseConfirmChannel(CloseConfirm {
                                     port_id: channel.port_id,
@@ -464,6 +494,16 @@ impl Ckb4IbcEventMonitor {
                             packet.packet.destination_channel_id,
                             packet.packet.destination_port_id,
                         );
+                        self.ibc_transaction_notice
+                            .send((
+                                packet_commitment_path(
+                                    &packet.packet.source_port_id,
+                                    &packet.packet.source_channel_id,
+                                    packet.packet.sequence as u64,
+                                ),
+                                tx.hash.clone(),
+                            ))
+                            .expect("sync packet");
                         IbcEventWithHeight {
                             event: IbcEvent::SendPacket(SendPacket {
                                 packet: convert_packet(packet),
@@ -482,6 +522,16 @@ impl Ckb4IbcEventMonitor {
                             packet.packet.destination_channel_id,
                             packet.packet.destination_port_id,
                         );
+                        self.ibc_transaction_notice
+                            .send((
+                                packet_commitment_path(
+                                    &packet.packet.source_port_id,
+                                    &packet.packet.source_channel_id,
+                                    packet.packet.sequence as u64,
+                                ),
+                                tx.hash.clone(),
+                            ))
+                            .expect("sync packet");
                         useless_packets
                             .insert(block_number, (packet.clone(), cell_input, capacity));
                         IbcEventWithHeight {

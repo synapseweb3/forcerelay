@@ -28,7 +28,7 @@ jsonrpc-core = "18.0"
 futures = "0.3.27"
 serde_json = { version = "1", default-features = false }
 serde = { version = "1.0", default-features = false }
-ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "b026840b9599ba" }
+ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "8c4b958" }
 rlp = "0.5.2"
 secp256k1 = "0.24"
 ckb-hash = "0.106"
@@ -45,7 +45,7 @@ toml_edit = "0.19.14"
 lazy_static = "1.4.0"
 ethers = { version = "2.0.2", features = ["rustls", "ws"] }
 
-forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "595ff4855a3ca" }
+forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "5a4c605b6" }
 
 [dependencies]
 bytes = "1.5.0"

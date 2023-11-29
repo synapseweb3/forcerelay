@@ -77,6 +77,7 @@ pub fn convert_create_client<C: MsgToTxConverter>(
             client_type,
             consensus_height: Height::default(),
         }))),
+        commitment_path: Default::default(),
     })
 }
 
@@ -99,5 +100,6 @@ pub fn convert_update_client<C: MsgToTxConverter>(
             },
             header: None,
         })),
+        commitment_path: Default::default(),
     })
 }

@@ -1,3 +1,4 @@
+use ckb_ics_axon::commitment::packet_commitment_path;
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::handler::PacketStatus;
 use ckb_ics_axon::message::Envelope;
@@ -139,6 +140,11 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         .witness(write_ack_witness, ibc_packet.witness)
         .build();
 
+    let commitment_path = packet_commitment_path(
+        msg.packet.destination_port.as_ref(),
+        channel_id.as_ref(),
+        msg.packet.sequence.into(),
+    );
     let event = IbcEvent::ReceivePacket(ReceivePacket { packet: msg.packet });
 
     Ok(CkbTxInfo {
@@ -146,6 +152,7 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }
 
@@ -229,6 +236,11 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         .witness(old_packet.witness, new_packet.witness)
         .build();
 
+    let commitment_path = packet_commitment_path(
+        msg.packet.source_port.as_ref(),
+        channel_id.as_ref(),
+        msg.packet.sequence.into(),
+    );
     let event = IbcEvent::AcknowledgePacket(AcknowledgePacket { packet: msg.packet });
 
     Ok(CkbTxInfo {
@@ -236,5 +248,6 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity: channel_capacity + packet_capacity,
         event: Some(event),
+        commitment_path,
     })
 }

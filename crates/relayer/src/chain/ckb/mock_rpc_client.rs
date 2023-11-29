@@ -3,8 +3,8 @@
 
 use ckb_jsonrpc_types::{
     BlockNumber, BlockView, CellWithStatus, ChainInfo, Header, HeaderView, JsonBytes, OutPoint,
-    OutputsValidator, RawTxPool, ResponseFormat, Transaction, TransactionView,
-    TransactionWithStatusResponse, TxPoolInfo, TxStatus,
+    OutputsValidator, RawTxPool, ResponseFormat, Transaction, TransactionAndWitnessProof,
+    TransactionView, TransactionWithStatusResponse, TxPoolInfo, TxStatus,
 };
 use ckb_sdk::rpc::ckb_indexer::{Cell, Pagination, SearchKey};
 use ckb_types::{packed, prelude::*, H256};
@@ -124,6 +124,14 @@ impl CkbReader for RpcClient {
         &self,
         hashes: Vec<H256>,
     ) -> Rpc<Vec<Option<TransactionWithStatusResponse>>> {
+        todo!()
+    }
+
+    fn get_transaction_and_witness_proof(
+        &self,
+        tx_hashes: Vec<H256>,
+        block_hash: H256,
+    ) -> Rpc<TransactionAndWitnessProof> {
         todo!()
     }
 

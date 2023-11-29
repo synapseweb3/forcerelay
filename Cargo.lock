@@ -381,6 +381,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "axon-tools"
+version = "0.1.1"
+source = "git+https://github.com/axonweb3/axon.git?rev=f889d38#f889d38949d6201c448ac72ebaec4d4fb0e5ba51"
+dependencies = [
+ "bit-vec",
+ "blst",
+ "bytes",
+ "cita_trie",
+ "ckb-blst",
+ "derive_more",
+ "ethereum-types",
+ "ethers-contract",
+ "ethers-core",
+ "faster-hex 0.8.1",
+ "log",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "serde_json",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "axon-types"
 version = "0.1.0"
 source = "git+https://github.com/axonweb3/axon-contract?rev=8106ddc0266#8106ddc026652b0fce21923b710ac9a3f1c8e8a7"
@@ -1060,9 +1083,9 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=b026840b9599ba#b026840b9599ba277465efa2d3d4e2b33292b2e1"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=8c4b958#8c4b958ac7d89d247390a791d6807567a59416ea"
 dependencies = [
- "axon-tools",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=f889d38)",
  "axon-types",
  "bytes",
  "ethereum-types",
@@ -2909,7 +2932,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "forcerelay-ckb-sdk"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=595ff4855a3ca#595ff4855a3ca73432cddfb028c0ef8e731feb8d"
+source = "git+https://github.com/synapseweb3/forcerelay-ckb-sdk?rev=5a4c605b6#5a4c605b65a8985269801c0d93885c70f30818fd"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3697,7 +3720,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "axon-tools",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=f889d38)",
  "bech32 0.9.1",
  "bitcoin",
  "bs58 0.4.0",
@@ -3847,7 +3870,7 @@ dependencies = [
 name = "ibc-relayer-types"
 version = "0.23.0"
 dependencies = [
- "axon-tools",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=06340ba4)",
  "bls",
  "bytes",
  "derive_more",

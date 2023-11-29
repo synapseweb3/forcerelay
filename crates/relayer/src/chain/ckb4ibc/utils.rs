@@ -6,19 +6,23 @@ use crate::chain::SEC_TO_NANO;
 use crate::config::ckb4ibc::ChainConfig;
 use crate::error::Error;
 use crate::event::IbcEventWithHeight;
+use axon_tools::precompile::{Proof, VerifyProofPayload};
 use ckb_ics_axon::consts::CHANNEL_ID_PREFIX;
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::message::MsgType;
-use ckb_jsonrpc_types::TransactionView;
+use ckb_jsonrpc_types::{TransactionAndWitnessProof, TransactionView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
 use ckb_sdk::traits::{CellQueryOptions, ValueRangeOption};
 use ckb_sdk::NetworkType;
 use ckb_types::core::ScriptHashType;
-use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script};
-use ckb_types::prelude::{Builder, Entity, Pack};
+use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script, Transaction};
+use ckb_types::prelude::{Builder, Entity, Pack, Unpack};
+use ckb_types::utilities::merkle_root;
 use ckb_types::{h256, H256};
+use ethers::abi::AbiEncode;
+use ethers::contract::{EthAbiCodec, EthAbiType};
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics03_connection::events::Attributes as ConnectionAttributes;
 use ibc_relayer_types::core::ics04_channel::events::{
@@ -33,6 +37,7 @@ use ibc_relayer_types::events::{IbcEvent, WithBlockDataType};
 use ibc_relayer_types::proofs::{ConsensusProof, Proofs};
 use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
+use itertools::Itertools;
 use tiny_keccak::{Hasher, Keccak};
 
 use super::extractor::{
@@ -200,21 +205,6 @@ pub fn get_search_key_with_sudt(
     query.secondary_script = Some(sudt_script);
     query.data_len_range = Some(ValueRangeOption::new_exact(16));
     Ok(query.into())
-}
-
-pub fn get_dummy_merkle_proof(height: Height) -> Proofs {
-    let encoded = vec![0];
-    let useless_client_proof = vec![0u8].try_into().unwrap();
-    let useless_consensus_proof =
-        ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
-    Proofs::new(
-        encoded.try_into().unwrap(),
-        Some(useless_client_proof),
-        Some(useless_consensus_proof),
-        None,
-        height,
-    )
-    .unwrap()
 }
 
 pub fn get_client_outpoint(
@@ -466,4 +456,86 @@ pub fn transaction_to_event(
         }
     };
     Ok(event)
+}
+
+#[derive(EthAbiCodec, EthAbiType)]
+struct AxonObjectProof {
+    pub ckb_transaction: Vec<u8>,
+    pub block_hash: [u8; 32],
+    pub proof_payload: VerifyProofPayload,
+}
+
+pub async fn generate_tx_proof_from_block(
+    rpc_client: &impl CkbReader,
+    height: Height,
+    tx_hash: &H256,
+) -> Result<Option<Proofs>, Error> {
+    let mut transaction: Option<Transaction> = None;
+
+    // collect transaction hashes from block
+    let block = rpc_client
+        .get_block_by_number(height.revision_height().into())
+        .await?;
+    let tx_hashes = block
+        .transactions
+        .iter()
+        .map(|tx| {
+            if &tx.hash == tx_hash {
+                transaction = Some(tx.inner.clone().into());
+            }
+            tx.hash.clone()
+        })
+        .collect_vec();
+    let witness_hashes = block
+        .transactions
+        .into_iter()
+        .map(|tx| Transaction::from(tx.inner).calc_witness_hash().unpack())
+        .collect_vec();
+
+    let Some(transaction) = transaction else {
+        return Ok(None);
+    };
+
+    // generate transaction proof
+    let TransactionAndWitnessProof {
+        block_hash,
+        transactions_proof: _,
+        witnesses_proof: proof,
+    } = rpc_client
+        .get_transaction_and_witness_proof(tx_hashes.clone(), block.header.hash)
+        .await?;
+
+    let raw_transaction_root = merkle_root(&tx_hashes.iter().map(Pack::pack).collect_vec());
+    let witnesses_root = merkle_root(&witness_hashes.iter().map(Pack::pack).collect_vec());
+
+    let object_proof = AxonObjectProof {
+        ckb_transaction: transaction.as_slice().to_owned(),
+        block_hash: block_hash.into(),
+        proof_payload: VerifyProofPayload {
+            verify_type: 1, // to verify witness
+            transactions_root: block.header.inner.transactions_root.into(),
+            witnesses_root: witnesses_root.unpack().into(),
+            raw_transactions_root: raw_transaction_root.unpack().into(),
+            proof: Proof {
+                indices: proof.indices.into_iter().map(Into::into).collect(),
+                lemmas: proof.lemmas.into_iter().map(Into::into).collect(),
+                leaves: witness_hashes.into_iter().map(Into::into).collect(),
+            },
+        },
+    };
+
+    // assemble ibc-compatible proof
+    let useless_client_proof = vec![0u8].try_into().unwrap();
+    let useless_consensus_proof =
+        ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
+    let proofs = Proofs::new(
+        object_proof.encode().try_into().unwrap(),
+        Some(useless_client_proof),
+        Some(useless_consensus_proof),
+        None,
+        height,
+    )
+    .map_err(|err| Error::other_error(err.to_string()))?;
+
+    Ok(Some(proofs))
 }

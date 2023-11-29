@@ -360,6 +360,7 @@ pub struct CkbTxInfo {
     pub envelope: Envelope,
     pub input_capacity: u64,
     pub event: Option<IbcEvent>,
+    pub commitment_path: String,
 }
 
 // Return a transaction which needs to be added relayer's input in it and to be signed.

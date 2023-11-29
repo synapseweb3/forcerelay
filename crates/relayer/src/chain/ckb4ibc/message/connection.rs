@@ -1,4 +1,5 @@
 use ckb_ics_axon::{
+    commitment::connection_path,
     connection_id,
     message::{
         Envelope, MsgConnectionOpenAck as CkbMsgConnectionOpenAck,
@@ -71,8 +72,9 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         .witness(old_connection.witness, new_connection.witness)
         .build();
 
+    let connection_id = connection_id(&client_id, this_conn_idx);
     let event = IbcEvent::OpenInitConnection(OpenInit(Attributes {
-        connection_id: Some(connection_id(&client_id, this_conn_idx).parse().unwrap()),
+        connection_id: Some(connection_id.parse().unwrap()),
         client_id: msg.client_id,
         counterparty_connection_id: None,
         counterparty_client_id: msg.counterparty.client_id().clone(),
@@ -82,6 +84,7 @@ pub fn convert_conn_open_init_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path: connection_path(&connection_id),
     })
 }
 
@@ -135,8 +138,9 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
         .witness(old_connection.witness, new_connection.witness)
         .build();
 
+    let connection_id = connection_id(&client_id, this_conn_idx);
     let event = IbcEvent::OpenTryConnection(OpenTry(Attributes {
-        connection_id: Some(connection_id(&client_id, this_conn_idx).parse().unwrap()),
+        connection_id: Some(connection_id.parse().unwrap()),
         client_id: msg.client_id,
         counterparty_connection_id: msg.counterparty.connection_id.clone(),
         counterparty_client_id: msg.counterparty.client_id().clone(),
@@ -147,6 +151,7 @@ pub fn convert_conn_open_try_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path: connection_path(&connection_id),
     })
 }
 
@@ -190,6 +195,7 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
         .witness(old_connection.witness, new_connection.witness)
         .build();
 
+    let commitment_path = connection_path(&msg.connection_id.to_string());
     let event = IbcEvent::OpenAckConnection(OpenAck(Attributes {
         connection_id: Some(msg.connection_id),
         client_id: client_id.parse().unwrap(),
@@ -202,6 +208,7 @@ pub fn convert_conn_open_ack_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }
 
@@ -246,6 +253,7 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
         .witness(old_connection.witness, new_connection.witness)
         .build();
 
+    let commitment_path = connection_path(&msg.connection_id.to_string());
     let event = IbcEvent::OpenConfirmConnection(OpenConfirm(Attributes {
         connection_id: Some(msg.connection_id),
         client_id: client_id.parse().unwrap(),
@@ -258,5 +266,6 @@ pub fn convert_conn_open_confirm_to_tx<C: MsgToTxConverter>(
         envelope,
         input_capacity,
         event: Some(event),
+        commitment_path,
     })
 }
