@@ -77,8 +77,8 @@ use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverte
 use self::monitor::{Ckb4IbcEventMonitor, WriteAckMonitorCmd};
 use self::utils::{
     convert_port_id_to_array, fetch_transaction_by_hash, generate_ibc_packet_event,
-    generate_tx_proof_from_block, get_channel_number, get_encoded_object, get_prefix_search_key,
-    get_search_key_with_sudt, transaction_to_event,
+    generate_tx_proof_from_block, get_channel_number, get_encoded_object, get_ibc_merkle_proof,
+    get_prefix_search_key, get_search_key_with_sudt, transaction_to_event,
 };
 
 use super::ckb::rpc_client::RpcClient;
@@ -1503,6 +1503,16 @@ impl ChainEndpoint for Ckb4IbcChain {
         _client_id: &ClientId,
         height: Height,
     ) -> Result<(Option<AnyClientState>, Proofs), Error> {
+        let client_state = AnyClientState::Ckb(CkbClientState {
+            chain_id: self.id(),
+            latest_height: height,
+        });
+
+        // use dummy merkle proof when the counterparty is aslo CKB
+        if matches!(self.counterparty_client_type(), ClientType::Ckb4Ibc) {
+            return Ok((Some(client_state), get_ibc_merkle_proof(height, vec![0u8])?));
+        }
+
         let connection_event = self
             .query_txs(QueryTxRequest::Client(
                 QueryClientEventRequest::from_height(height),
@@ -1533,13 +1543,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             )));
         };
 
-        Ok((
-            Some(AnyClientState::Ckb(CkbClientState {
-                chain_id: self.id(),
-                latest_height: height,
-            })),
-            proof,
-        ))
+        Ok((Some(client_state), proof))
     }
 
     fn build_channel_proofs(
@@ -1548,6 +1552,11 @@ impl ChainEndpoint for Ckb4IbcChain {
         channel_id: &ChannelId,
         height: Height,
     ) -> Result<Proofs, Error> {
+        // use dummy merkle proof when the counterparty is aslo CKB
+        if matches!(self.counterparty_client_type(), ClientType::Ckb4Ibc) {
+            return get_ibc_merkle_proof(height, vec![0u8]);
+        }
+
         let channel_event = self
             .query_txs(QueryTxRequest::Client(
                 QueryClientEventRequest::from_height(height),
@@ -1598,6 +1607,11 @@ impl ChainEndpoint for Ckb4IbcChain {
         sequence: Sequence,
         height: Height,
     ) -> Result<Proofs, Error> {
+        // use dummy merkle proof when the counterparty is aslo CKB
+        if matches!(self.counterparty_client_type(), ClientType::Ckb4Ibc) {
+            return get_ibc_merkle_proof(height, vec![0u8]);
+        }
+
         let packet_event = self
             .query_txs(QueryTxRequest::Client(
                 QueryClientEventRequest::from_height(height),

@@ -458,6 +458,20 @@ pub fn transaction_to_event(
     Ok(event)
 }
 
+pub fn get_ibc_merkle_proof(height: Height, encoded: Vec<u8>) -> Result<Proofs, Error> {
+    let useless_client_proof = vec![0u8].try_into().unwrap();
+    let useless_consensus_proof =
+        ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
+    Proofs::new(
+        encoded.try_into().unwrap(),
+        Some(useless_client_proof),
+        Some(useless_consensus_proof),
+        None,
+        height,
+    )
+    .map_err(|err| Error::other_error(err.to_string()))
+}
+
 #[derive(EthAbiCodec, EthAbiType)]
 struct AxonObjectProof {
     pub ckb_transaction: Vec<u8>,
@@ -525,17 +539,6 @@ pub async fn generate_tx_proof_from_block(
     };
 
     // assemble ibc-compatible proof
-    let useless_client_proof = vec![0u8].try_into().unwrap();
-    let useless_consensus_proof =
-        ConsensusProof::new(vec![0u8].try_into().unwrap(), Height::default()).unwrap();
-    let proofs = Proofs::new(
-        object_proof.encode().try_into().unwrap(),
-        Some(useless_client_proof),
-        Some(useless_consensus_proof),
-        None,
-        height,
-    )
-    .map_err(|err| Error::other_error(err.to_string()))?;
-
+    let proofs = get_ibc_merkle_proof(height, object_proof.encode())?;
     Ok(Some(proofs))
 }
