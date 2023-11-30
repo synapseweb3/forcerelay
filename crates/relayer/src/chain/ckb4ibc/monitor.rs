@@ -286,13 +286,10 @@ impl Ckb4IbcEventMonitor {
             })
             .collect::<Vec<_>>();
 
-        let tip_block_number = tip_block_number(self.rpc_client.as_ref())
-            .await
-            .map_err(|err| Error::others(err.detail().to_string()))?;
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb connection events collection"),
-            height: Height::from_noncosmos_height(tip_block_number),
+            height: Height::from_noncosmos_height(block_number),
             events,
         })
     }
@@ -329,13 +326,18 @@ impl Ckb4IbcEventMonitor {
             )
             .await?;
 
+        let mut event_block_number = tip_block_number(self.rpc_client.as_ref())
+            .await
+            .map_err(|err| Error::others(err.detail().to_string()))?;
+
         let events = identified_channel_ends
             .into_iter()
-            .filter(|((_, tx), _)| {
+            .filter(|((_, tx), (block_number, _, _))| {
                 if self.cache_set.read().unwrap().has(&tx.hash) {
                     return false;
                 }
                 self.cache_set.write().unwrap().insert(tx.hash.clone());
+                event_block_number = *block_number;
                 true
             })
             .map(|((channel, tx), (block_number, _, _))| match channel.channel_end.state {
@@ -435,13 +437,10 @@ impl Ckb4IbcEventMonitor {
             })
             .collect::<Vec<_>>();
 
-        let tip_block_number = tip_block_number(self.rpc_client.as_ref())
-            .await
-            .map_err(|err| Error::others(err.detail().to_string()))?;
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb channel events collection"),
-            height: Height::from_noncosmos_height(tip_block_number),
+            height: Height::from_noncosmos_height(event_block_number),
             events,
         })
     }
@@ -465,14 +464,14 @@ impl Ckb4IbcEventMonitor {
             )
             .await?;
 
-        let tip_block_number = tip_block_number(self.rpc_client.as_ref())
+        let mut event_block_number = tip_block_number(self.rpc_client.as_ref())
             .await
             .map_err(|err| Error::others(err.detail().to_string()))?;
 
         let useless_packets = &mut self.useless_write_ack_packets;
         let events = ibc_packets
             .into_iter()
-            .filter(|(((packet, _), tx), _)| {
+            .filter(|(((packet, _), tx), (block_number, _, _))| {
                 if packet.status == PacketStatus::Ack
                     || packet.status == PacketStatus::Recv
                     || self.cache_set.read().unwrap().has(&tx.hash)
@@ -480,6 +479,7 @@ impl Ckb4IbcEventMonitor {
                     return false;
                 }
                 self.cache_set.write().unwrap().insert(tx.hash.clone());
+                event_block_number = *block_number;
                 true
             })
             .map(
@@ -554,7 +554,7 @@ impl Ckb4IbcEventMonitor {
         Ok(EventBatch {
             chain_id: self.config.id.clone(),
             tracking_id: TrackingId::Static("ckb packet events collection"),
-            height: Height::from_noncosmos_height(tip_block_number),
+            height: Height::from_noncosmos_height(event_block_number),
             events,
         })
     }

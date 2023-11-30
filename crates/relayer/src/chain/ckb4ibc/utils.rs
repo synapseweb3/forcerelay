@@ -481,15 +481,22 @@ struct AxonObjectProof {
 
 pub async fn generate_tx_proof_from_block(
     rpc_client: &impl CkbReader,
-    height: Height,
     tx_hash: &H256,
 ) -> Result<Option<Proofs>, Error> {
-    let mut transaction: Option<Transaction> = None;
+    let block_hash = rpc_client
+        .get_transaction(tx_hash)
+        .await?
+        .map(|v| v.tx_status.block_hash);
+    let Some(Some(block_hash)) = block_hash else {
+        return Err(Error::other_error(format!(
+            "cannot find block_hash from tx {}",
+            hex::encode(tx_hash)
+        )));
+    };
 
     // collect transaction hashes from block
-    let block = rpc_client
-        .get_block_by_number(height.revision_height().into())
-        .await?;
+    let mut transaction: Option<Transaction> = None;
+    let block = rpc_client.get_block(&block_hash).await?;
     let tx_hashes = block
         .transactions
         .iter()
@@ -539,6 +546,7 @@ pub async fn generate_tx_proof_from_block(
     };
 
     // assemble ibc-compatible proof
-    let proofs = get_ibc_merkle_proof(height, object_proof.encode())?;
+    let block_number = Height::from_noncosmos_height(block.header.inner.number.into());
+    let proofs = get_ibc_merkle_proof(block_number, object_proof.encode())?;
     Ok(Some(proofs))
 }
