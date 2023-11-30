@@ -1083,6 +1083,26 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=4ca20ad#4ca20ade6a479303a207084406248266bcbf80ec"
+dependencies = [
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=f889d38)",
+ "axon-types",
+ "bytes",
+ "ethereum-types",
+ "hex",
+ "molecule",
+ "prost 0.12.1",
+ "prost-build",
+ "protobuf-src",
+ "rlp",
+ "rlp-derive",
+ "sha2 0.10.8",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "ckb-ics-axon"
+version = "0.1.0"
 source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=8c4b958#8c4b958ac7d89d247390a791d6807567a59416ea"
 dependencies = [
  "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=f889d38)",
@@ -2938,7 +2958,7 @@ dependencies = [
  "async-stream",
  "bytes",
  "ckb-fixed-hash",
- "ckb-ics-axon",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=8c4b958)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3726,7 +3746,7 @@ dependencies = [
  "bs58 0.4.0",
  "bytes",
  "ckb-hash 0.111.0",
- "ckb-ics-axon",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=4ca20ad)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3934,7 +3954,7 @@ dependencies = [
  "bytes",
  "ckb-chain-spec",
  "ckb-hash 0.106.0",
- "ckb-ics-axon",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=4ca20ad)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -5680,7 +5700,7 @@ checksum = "8bdf592881d821b83d471f8af290226c8d51402259e9bb5be7f9f8bdebbb11ac"
 dependencies = [
  "bytes",
  "heck",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",

@@ -499,7 +499,7 @@ impl Ckb4IbcEventMonitor {
                                 packet_commitment_path(
                                     &packet.packet.source_port_id,
                                     &packet.packet.source_channel_id,
-                                    packet.packet.sequence as u64,
+                                    packet.packet.sequence,
                                 ),
                                 tx.hash.clone(),
                             ))
@@ -524,10 +524,13 @@ impl Ckb4IbcEventMonitor {
                         );
                         self.ibc_transaction_notice
                             .send((
+                                // XXX: not use `packet_acknowledgement_commitment_path` because this cache is just
+                                //      used for getting transaction hash and the previous hash was already consumed
+                                //      which can be covered
                                 packet_commitment_path(
                                     &packet.packet.source_port_id,
                                     &packet.packet.source_channel_id,
-                                    packet.packet.sequence as u64,
+                                    packet.packet.sequence,
                                 ),
                                 tx.hash.clone(),
                             ))
@@ -641,7 +644,7 @@ impl Ckb4IbcEventMonitor {
 
 fn convert_packet(packet: IbcPacket) -> Packet {
     assert!(!packet.packet.data.is_empty(), "empty packet data");
-    let sequence = Sequence::from(packet.packet.sequence as u64);
+    let sequence = Sequence::from(packet.packet.sequence);
     let source_port = PortId::from_str(&packet.packet.source_port_id).unwrap();
     let source_channel = ChannelId::from_str(&packet.packet.source_channel_id).unwrap();
     let destination_port = PortId::from_str(&packet.packet.destination_port_id).unwrap();

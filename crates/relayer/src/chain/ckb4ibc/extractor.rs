@@ -10,7 +10,7 @@ use ckb_ics_axon::object::{
     ConnectionEnd as CkbConnectionEnd, Ordering as CkbOrdering, Packet as CkbPacket,
     State as CkbState,
 };
-use ckb_ics_axon::{connection_id, get_channel_id_str, ConnectionArgs};
+use ckb_ics_axon::{connection_id, ConnectionArgs};
 use ckb_jsonrpc_types::TransactionView;
 use ckb_types::packed::WitnessArgs;
 use ckb_types::prelude::Entity;
@@ -31,6 +31,8 @@ use ibc_relayer_types::core::ics04_channel::timeout::TimeoutHeight;
 use ibc_relayer_types::core::ics23_commitment::commitment::CommitmentPrefix;
 use ibc_relayer_types::core::ics24_host::identifier::{ChannelId, ClientId, PortId};
 use ibc_relayer_types::timestamp::Timestamp;
+
+use super::utils::get_channel_id_str;
 
 pub fn extract_channel_end_from_tx(
     tx: &TransactionView,
@@ -171,7 +173,6 @@ fn convert_channel_end(ckb_channel_end: CkbIbcChannel) -> Result<IdentifiedChann
         CkbState::OpenTry => ChannelState::TryOpen,
         CkbState::Open => ChannelState::Open,
         CkbState::Closed => ChannelState::Closed,
-        CkbState::Frozen => panic!(),
     };
     let ordering = match ckb_channel_end.order {
         CkbOrdering::Unknown => Order::None,
@@ -229,7 +230,7 @@ fn convert_packet(packet: CkbPacket) -> Result<Packet, Error> {
         Error::other_error(error.to_string())
     }
     Ok(Packet {
-        sequence: (packet.sequence as u64).try_into().map_err(other_error)?,
+        sequence: packet.sequence.try_into().map_err(other_error)?,
         source_port: PortId::from_str(&packet.source_port_id).map_err(other_error)?,
         source_channel: ChannelId::from_str(&packet.source_channel_id).map_err(other_error)?,
         destination_port: PortId::from_str(&packet.destination_port_id).map_err(other_error)?,

@@ -10,6 +10,7 @@ use axon_tools::precompile::{Proof, VerifyProofPayload};
 use ckb_ics_axon::consts::CHANNEL_ID_PREFIX;
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::message::MsgType;
+use ckb_ics_axon::{ChannelArgs, PacketArgs};
 use ckb_jsonrpc_types::{TransactionAndWitnessProof, TransactionView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
@@ -88,14 +89,18 @@ pub fn get_script_hash(type_args: &H256) -> Byte32 {
     script.calc_script_hash()
 }
 
-pub fn get_channel_number(id: &ChannelId) -> Result<u16, Error> {
+pub fn get_channel_number(id: &ChannelId) -> Result<u64, Error> {
     let s = id.as_str();
     let result = s
         .strip_prefix(CHANNEL_ID_PREFIX)
         .ok_or(Error::ckb_chan_id_invalid(s.to_string()))?;
     result
-        .parse::<u16>()
+        .parse::<u64>()
         .map_err(|_| Error::ckb_chan_id_invalid(s.to_string()))
+}
+
+pub fn get_channel_id_str(channel_index: u64) -> String {
+    format!("{CHANNEL_ID_PREFIX}{channel_index}")
 }
 
 pub fn get_connection_index_by_id(id: &ConnectionId) -> Result<u16, Error> {
@@ -107,6 +112,55 @@ pub fn get_connection_index_by_id(id: &ConnectionId) -> Result<u16, Error> {
     result
         .parse::<u16>()
         .map_err(|_| Error::ckb_conn_id_invalid(s.to_string()))
+}
+
+pub fn get_packet_search_key(
+    config: &ChainConfig,
+    channel_id: &ChannelId,
+    port_id: &PortId,
+    sequence: Option<Sequence>,
+) -> Result<SearchKey, Error> {
+    let search_all = sequence.is_none();
+    let packet_code_hash = get_script_hash(&config.packet_type_args);
+    let sequence: u64 = sequence.unwrap_or_default().into();
+    let script_args = PacketArgs {
+        channel_id: get_channel_number(channel_id)?,
+        port_id: convert_port_id_to_array(port_id)?,
+        sequence,
+    }
+    .get_search_args(search_all);
+    let script = Script::new_builder()
+        .code_hash(packet_code_hash)
+        .hash_type(ScriptHashType::Type.into())
+        .args(script_args.pack())
+        .build();
+    let search_key = get_prefix_search_key(script);
+    Ok(search_key)
+}
+
+pub fn get_channel_search_key(
+    config: &ChainConfig,
+    client_type: ClientType,
+    channel_id: &ChannelId,
+    port_id: &PortId,
+    open: bool,
+) -> Result<SearchKey, Error> {
+    let channel_code_hash = get_script_hash(&config.channel_type_args);
+    let args = config.lc_connection_args(client_type)?;
+    let channel_args = ChannelArgs {
+        metadata_type_id: args.metadata_type_id,
+        ibc_handler_address: args.ibc_handler_address,
+        open,
+        channel_id: get_channel_number(channel_id)?,
+        port_id: convert_port_id_to_array(port_id)?,
+    };
+    let script = Script::new_builder()
+        .code_hash(channel_code_hash)
+        .args(channel_args.to_args().pack())
+        .hash_type(ScriptHashType::Type.into())
+        .build();
+    let search_key = get_prefix_search_key(script);
+    Ok(search_key)
 }
 
 pub fn get_connection_search_key(
@@ -218,12 +272,13 @@ pub fn get_client_outpoint(
 
 pub fn generate_ibc_packet_event(
     packet: IbcPacket,
+    tx_hash: H256,
     height: u64,
     event_id: &WithBlockDataType,
 ) -> Result<IbcEventWithHeight, Error> {
     let to_ibc_packet = |v: IbcPacket| -> Result<Packet, Error> {
         let packet = Packet {
-            sequence: Sequence::from(v.packet.sequence as u64),
+            sequence: Sequence::from(v.packet.sequence),
             source_channel: ChannelId::from_str(&v.packet.source_channel_id)
                 .map_err(convert_err)?,
             source_port: PortId::from_str(&v.packet.source_port_id).map_err(convert_err)?,
@@ -244,7 +299,6 @@ pub fn generate_ibc_packet_event(
         Ok(packet)
     };
 
-    let tx_hash = packet.tx_hash.unwrap_or_default().to_fixed_bytes();
     let event = match event_id {
         WithBlockDataType::SendPacket => SendPacket {
             packet: to_ibc_packet(packet)?,
@@ -264,7 +318,7 @@ pub fn generate_ibc_packet_event(
 
     Ok(IbcEventWithHeight {
         event,
-        tx_hash,
+        tx_hash: tx_hash.into(),
         height: Height::from_noncosmos_height(height),
     })
 }

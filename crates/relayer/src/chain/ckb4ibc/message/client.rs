@@ -70,6 +70,7 @@ pub fn convert_create_client<C: MsgToTxConverter>(
         envelope: Envelope {
             msg_type: MsgType::MsgClientCreate,
             content: vec![],
+            commitments: vec![],
         },
         input_capacity: 0,
         event: Some(IbcEvent::CreateClient(CreateClient(Attributes {
@@ -90,6 +91,7 @@ pub fn convert_update_client<C: MsgToTxConverter>(
         envelope: Envelope {
             msg_type: MsgType::MsgClientUpdate,
             content: vec![],
+            commitments: vec![],
         },
         input_capacity: 0,
         event: Some(IbcEvent::UpdateClient(UpdateClient {

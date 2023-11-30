@@ -25,7 +25,7 @@ use ckb_ics_axon::commitment::{channel_path, connection_path, packet_commitment_
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections, IbcPacket, PacketStatus};
 use ckb_ics_axon::message::{Envelope, MsgType};
 use ckb_ics_axon::object::Ordering;
-use ckb_ics_axon::{ChannelArgs, ConnectionArgs, PacketArgs};
+use ckb_ics_axon::{ChannelArgs, ConnectionArgs};
 use ckb_jsonrpc_types::{Status, TransactionView};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::traits::SecpCkbRawKeySigner;
@@ -36,6 +36,7 @@ use ckb_types::core::TransactionView as CoreTransactionView;
 use ckb_types::molecule::prelude::Entity;
 use ckb_types::packed::{CellInput, OutPoint, Script, WitnessArgs};
 use ckb_types::prelude::{Builder, Pack, Unpack};
+use ckb_types::H256;
 use futures::TryFutureExt;
 use ibc_proto::google::protobuf::Any;
 use ibc_proto::ibc::apps::fee::v1::{
@@ -77,8 +78,8 @@ use self::extractor::{extract_connections_from_tx, extract_ibc_packet_from_tx};
 use self::message::{convert_msg_to_ckb_tx, CkbTxInfo, Converter, MsgToTxConverter};
 use self::monitor::{Ckb4IbcEventMonitor, WriteAckMonitorCmd};
 use self::utils::{
-    convert_port_id_to_array, fetch_transaction_by_hash, generate_ibc_packet_event,
-    generate_tx_proof_from_block, get_channel_number, get_encoded_object, get_ibc_merkle_proof,
+    fetch_transaction_by_hash, generate_ibc_packet_event, generate_tx_proof_from_block,
+    get_channel_search_key, get_encoded_object, get_ibc_merkle_proof, get_packet_search_key,
     get_prefix_search_key, get_search_key_with_sudt, transaction_to_event,
 };
 
@@ -111,9 +112,17 @@ pub mod utils;
 
 pub use utils::keccak256;
 
-type ConnectionCache =
-    HashMap<ClientType, (IbcConnections, CellInput, u64, Vec<IdentifiedConnectionEnd>)>;
+pub struct ConnectionCache {
+    pub ckb_connection: IbcConnections,
+    pub cell_input: CellInput,
+    pub cell_capacity: u64,
+    pub ibc_connection: Vec<IdentifiedConnectionEnd>,
+    pub cell_args: ConnectionArgs,
+}
+
 type PacketInputData = HashMap<(ChannelId, PortId, Sequence), (CellInput, u64)>;
+type ChannelCacheKey = (ChannelId, PortId);
+type PacketCacheKey = (ChannelId, PortId, Sequence);
 
 pub struct Ckb4IbcChain {
     rt: Arc<TokioRuntime>,
@@ -132,13 +141,13 @@ pub struct Ckb4IbcChain {
     counterparty_client_type: WatchSender<Option<ClientType>>,
 
     client_outpoints: RefCell<HashMap<ClientType, OutPoint>>,
-    channel_input_data: RefCell<HashMap<(ChannelId, PortId), (CellInput, u64)>>,
+    channel_input_data: RefCell<HashMap<ChannelCacheKey, (CellInput, u64, ChannelArgs)>>,
     channel_cache: RefCell<HashMap<ChannelId, IbcChannel>>,
-    connection_cache: RefCell<ConnectionCache>,
+    connection_cache: RefCell<HashMap<ClientType, ConnectionCache>>,
     packet_input_data: RefCell<PacketInputData>,
-    packet_cache: RefCell<HashMap<(ChannelId, PortId, Sequence), IbcPacket>>,
+    packet_cache: RefCell<HashMap<PacketCacheKey, IbcPacket>>,
 
-    ibc_transactions_cache: Arc<Mutex<HashMap<String, ckb_types::H256>>>,
+    ibc_transactions_cache: Arc<Mutex<HashMap<String, H256>>>,
 }
 
 impl Ckb4IbcChain {
@@ -213,26 +222,10 @@ impl Ckb4IbcChain {
         channel_id: &ChannelId,
         port_id: &PortId,
         sequence: Option<Sequence>,
-    ) -> Result<Vec<(IbcPacket, CellInput, u64)>, Error> {
-        let (sequence, search_all, limit) = if let Some(value) = sequence {
-            // packets with particular sequence are only 4: Send, WriteAck, Recv and AckPacket
-            (u64::from(value) as u16, false, 4)
-        } else {
-            (0, true, 20)
-        };
-        let script_args = PacketArgs {
-            channel_id: get_channel_number(channel_id)?,
-            port_id: convert_port_id_to_array(port_id)?,
-            sequence,
-        }
-        .get_search_args(search_all);
-        let script = Script::new_builder()
-            .code_hash(self.get_converter()?.get_packet_code_hash())
-            .hash_type(ScriptHashType::Type.into())
-            .args(script_args.pack())
-            .build();
-
-        let search_key = get_prefix_search_key(script);
+    ) -> Result<Vec<(IbcPacket, CellInput, u64, H256)>, Error> {
+        // packets with particular sequence are only 4: Send, WriteAck, Recv and AckPacket
+        let limit = if sequence.is_some() { 4 } else { 20 };
+        let search_key = get_packet_search_key(&self.config, channel_id, port_id, sequence)?;
         let mut result = vec![];
         let mut cursor = None;
         loop {
@@ -242,10 +235,11 @@ impl Ckb4IbcChain {
                 cursor,
             ))?;
             for cell in cells.objects {
-                let tx_hash = &cell.out_point.tx_hash;
-                let tx = self
-                    .rt
-                    .block_on(fetch_transaction_by_hash(self.rpc_client.as_ref(), tx_hash))?;
+                let tx_hash = cell.out_point.tx_hash.clone();
+                let tx = self.rt.block_on(fetch_transaction_by_hash(
+                    self.rpc_client.as_ref(),
+                    &tx_hash,
+                ))?;
                 let (packet, _) = extract_ibc_packet_from_tx(&tx)?;
                 let cell_input = CellInput::new_builder()
                     .previous_output(cell.out_point.into())
@@ -253,7 +247,7 @@ impl Ckb4IbcChain {
 
                 let channel_id: ChannelId = packet.packet.source_channel_id.parse().unwrap();
                 let port_id: PortId = packet.packet.source_port_id.parse().unwrap();
-                let sequence: Sequence = (packet.packet.sequence as u64).try_into().unwrap();
+                let sequence: Sequence = packet.packet.sequence.try_into().unwrap();
 
                 self.packet_input_data.borrow_mut().insert(
                     (channel_id.clone(), port_id.clone(), sequence),
@@ -263,9 +257,10 @@ impl Ckb4IbcChain {
                     .borrow_mut()
                     .insert((channel_id, port_id, sequence), packet.clone());
 
-                result.push((packet, cell_input, u64::from(cell.block_number)));
+                result.push((packet, cell_input, u64::from(cell.block_number), tx_hash));
             }
-            if search_all {
+            // iterate if search all packets
+            if sequence.is_none() {
                 if cells.last_cursor.is_empty() {
                     break;
                 } else {
@@ -285,23 +280,13 @@ impl Ckb4IbcChain {
         port_id: &PortId,
         is_open: bool,
     ) -> Result<(ChannelEnd, IbcChannel), Error> {
-        let channel_code_hash = self.get_converter()?.get_channel_code_hash();
-        let args = self
-            .config
-            .lc_connection_args(self.counterparty_client_type())?;
-        let channel_args = ChannelArgs {
-            metadata_type_id: args.metadata_type_id,
-            ibc_handler_address: args.ibc_handler_address,
-            open: is_open,
-            channel_id: get_channel_number(channel_id)?,
-            port_id: convert_port_id_to_array(port_id)?,
-        };
-        let script = Script::new_builder()
-            .code_hash(channel_code_hash)
-            .args(channel_args.to_args().pack())
-            .hash_type(ScriptHashType::Type.into())
-            .build();
-        let search_key = get_prefix_search_key(script);
+        let search_key = get_channel_search_key(
+            &self.config,
+            self.counterparty_client_type(),
+            channel_id,
+            port_id,
+            is_open,
+        )?;
         let channel_future = self
             .rpc_client
             .fetch_live_cells(search_key, 1, None)
@@ -330,15 +315,17 @@ impl Ckb4IbcChain {
                     .previous_output(cell.out_point.clone().into())
                     .build();
                 let capacity: u64 = cell.output.capacity.into();
-                Ok((channel_end, input, capacity))
+                let channel_args =
+                    ChannelArgs::from_slice(cell.output.lock.args.as_bytes()).unwrap();
+                Ok((channel_end, input, capacity, channel_args))
             });
 
-        let ((channel, ibc_channel_end), cell_input, capacity) =
+        let ((channel, ibc_channel_end), cell_input, capacity, channel_args) =
             self.rt.block_on(channel_future)?;
 
         self.channel_input_data.borrow_mut().insert(
             (channel.channel_id.clone(), channel.port_id),
-            (cell_input, capacity),
+            (cell_input, capacity, channel_args),
         );
         self.channel_cache
             .borrow_mut()
@@ -370,14 +357,16 @@ impl Ckb4IbcChain {
                         Err(_) => continue,
                     };
                     if let Ok(client_type) = self.config.lc_client_type(&args.client_id()) {
-                        resps.push((tx, cell_input, capacity, client_type));
+                        resps.push((tx, cell_input, capacity, client_type, args));
                     }
                 }
                 Ok(resps)
             });
         let mut cache = self.connection_cache.borrow_mut();
         let prefix = self.query_commitment_prefix()?;
-        for (transaction, cell_input, capacity, client_type) in self.rt.block_on(future)? {
+        for (transaction, cell_input, capacity, client_type, connection_args) in
+            self.rt.block_on(future)?
+        {
             let tx = transaction
                 .expect("empty transaction response")
                 .transaction
@@ -391,7 +380,13 @@ impl Ckb4IbcChain {
             let (connections, ibc_connection) = extract_connections_from_tx(&tx, &prefix)?;
             cache.insert(
                 client_type,
-                (ibc_connection, cell_input, capacity, connections),
+                ConnectionCache {
+                    ckb_connection: ibc_connection,
+                    cell_input,
+                    cell_capacity: capacity,
+                    ibc_connection: connections,
+                    cell_args: connection_args,
+                },
             );
         }
         Ok(())
@@ -472,7 +467,7 @@ impl Ckb4IbcChain {
         let packets = self
             .fetch_packet_cells_and_extract(channel_id, port_id, Some(sequence))?
             .into_iter()
-            .filter_map(|(packet, cell_input, _)| {
+            .filter_map(|(packet, cell_input, _, _)| {
                 if packet.status != status {
                     return None;
                 }
@@ -976,7 +971,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .connection_cache
             .borrow()
             .iter()
-            .flat_map(|(_, (_, _, _, connection))| connection.clone())
+            .flat_map(|(_, v)| v.ibc_connection.clone())
             .collect();
         Ok(connections)
     }
@@ -987,9 +982,13 @@ impl ChainEndpoint for Ckb4IbcChain {
     ) -> Result<Vec<ConnectionId>, Error> {
         self.query_connection_and_cache()?;
         if let Ok(client_type) = self.config.lc_client_type(&request.client_id.to_string()) {
-            if let Some((_, _, _, connection)) = self.connection_cache.borrow().get(&client_type) {
+            if let Some(v) = self.connection_cache.borrow().get(&client_type) {
                 self.sync_counterparty_client_type(client_type);
-                let connection_ids = connection.iter().map(|v| v.connection_id.clone()).collect();
+                let connection_ids = v
+                    .ibc_connection
+                    .iter()
+                    .map(|v| v.connection_id.clone())
+                    .collect();
                 return Ok(connection_ids);
             }
         }
@@ -1151,12 +1150,12 @@ impl ChainEndpoint for Ckb4IbcChain {
         let sequences = self
             .fetch_packet_cells_and_extract(&request.channel_id, &request.port_id, None)?
             .into_iter()
-            .filter_map(|(v, _, _)| {
+            .filter_map(|(v, _, _, _)| {
                 if v.status != PacketStatus::Send {
                     return None;
                 }
                 if v.packet.sequence < next_send_seq {
-                    Some((v.packet.sequence as u64).into())
+                    Some(v.packet.sequence.into())
                 } else {
                     None
                 }
@@ -1172,9 +1171,11 @@ impl ChainEndpoint for Ckb4IbcChain {
     ) -> Result<(Vec<u8>, Option<MerkleProof>), Error> {
         let (_, channel) =
             self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
-        let seq: u64 = request.sequence.into();
         if channel.order == Ordering::Unordered
-            && channel.sequence.received_sequences.contains(&(seq as u16))
+            && channel
+                .sequence
+                .received_sequences
+                .contains(&request.sequence.into())
         {
             Ok((vec![1u8], None))
         } else {
@@ -1192,7 +1193,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             .packet_commitment_sequences
             .into_iter()
             .filter(|sequence| {
-                let seq: u16 = u64::from(*sequence) as u16;
+                let seq = u64::from(*sequence);
                 if channel.order == Ordering::Ordered && channel.sequence.next_sequence_recvs <= seq
                 {
                     return true;
@@ -1226,7 +1227,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             // check the sequence status in channel if the packet cell under required sequence not found
             let (_, channel) =
                 self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
-            if channel.sequence.next_sequence_sends as u64 > request.sequence.into() {
+            if channel.sequence.next_sequence_sends > request.sequence.into() {
                 // since the previous `SendPacket` cells are consumed and hard to fetch from CKB, we
                 // just use mock acknowledgement in return which in Hermes runtime is not sensitive
                 // with its real content but just used as Yes or No option
@@ -1295,7 +1296,7 @@ impl ChainEndpoint for Ckb4IbcChain {
     ) -> Result<(Sequence, Option<MerkleProof>), Error> {
         let (_, ibc_channel) =
             self.fetch_channel_cell_and_extract(&request.channel_id, &request.port_id, true)?;
-        let sequence = (ibc_channel.sequence.next_sequence_recvs as u64).into();
+        let sequence = (ibc_channel.sequence.next_sequence_recvs).into();
         Ok((sequence, None))
     }
 
@@ -1382,7 +1383,7 @@ impl ChainEndpoint for Ckb4IbcChain {
             packet_events_on_source = self
                 .fetch_packet_cells_and_extract(&source_channel_id, &source_port_id, None)?
                 .into_iter()
-                .filter_map(|(packet, _, height)| {
+                .filter_map(|(packet, _, height, tx_hash)| {
                     if packet.packet.destination_channel_id == destination_channel_id.to_string() {
                         return None;
                     }
@@ -1390,11 +1391,11 @@ impl ChainEndpoint for Ckb4IbcChain {
                         return None;
                     }
                     if !sequences.is_empty()
-                        && !sequences.contains(&Sequence::from(packet.packet.sequence as u64))
+                        && !sequences.contains(&Sequence::from(packet.packet.sequence))
                     {
                         return None;
                     }
-                    generate_ibc_packet_event(packet, height, &event_id).ok()
+                    generate_ibc_packet_event(packet, tx_hash, height, &event_id).ok()
                 })
                 .collect::<Vec<_>>();
         }
@@ -1408,7 +1409,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                     None,
                 )?
                 .into_iter()
-                .filter_map(|(packet, _, height)| {
+                .filter_map(|(packet, _, height, tx_hash)| {
                     if packet.packet.source_channel_id == source_channel_id.to_string() {
                         return None;
                     }
@@ -1416,11 +1417,11 @@ impl ChainEndpoint for Ckb4IbcChain {
                         return None;
                     }
                     if !sequences.is_empty()
-                        && !sequences.contains(&Sequence::from(packet.packet.sequence as u64))
+                        && !sequences.contains(&Sequence::from(packet.packet.sequence))
                     {
                         return None;
                     }
-                    generate_ibc_packet_event(packet, height, &event_id).ok()
+                    generate_ibc_packet_event(packet, tx_hash, height, &event_id).ok()
                 })
                 .collect::<Vec<_>>();
         }
@@ -1528,26 +1529,19 @@ impl ChainEndpoint for Ckb4IbcChain {
             .get(&commitment_path)
             .cloned();
 
+        // search frist connection cell on-chain if cache is missing
         if tx_hash.is_none() {
-            let connection_event = self
-                .query_txs(QueryTxRequest::Client(
-                    QueryClientEventRequest::from_height(height),
-                ))?
-                .into_iter()
-                .find(|v| match &v.event {
-                    IbcEvent::OpenTryConnection(v) => v.connection_id() == Some(connection_id),
-                    IbcEvent::OpenAckConnection(v) => v.connection_id() == Some(connection_id),
-                    IbcEvent::OpenConfirmConnection(v) => v.connection_id() == Some(connection_id),
-                    _ => false,
-                });
-
-            let Some(event) = connection_event else {
+            let connection_key =
+                get_connection_search_key(&self.config, Some(self.counterparty_client_type()))?;
+            let result =
+                self.rt
+                    .block_on(self.rpc_client.fetch_live_cells(connection_key, 1, None))?;
+            let Some(cell) = result.objects.first() else {
                 return Err(Error::other_error(format!(
                     "no connection event found for {connection_id} at block {height}"
                 )));
             };
-
-            tx_hash = Some(event.tx_hash.into());
+            tx_hash = Some(cell.clone().out_point.tx_hash);
         }
 
         let tx_hash = tx_hash.unwrap();
@@ -1561,6 +1555,11 @@ impl ChainEndpoint for Ckb4IbcChain {
                 hex::encode(tx_hash)
             )));
         };
+
+        self.ibc_transactions_cache
+            .lock()
+            .unwrap()
+            .remove(&commitment_path);
 
         Ok((Some(client_state), proof))
     }
@@ -1584,35 +1583,24 @@ impl ChainEndpoint for Ckb4IbcChain {
             .get(&commitment_path)
             .cloned();
 
+        // search frist channel cell on-chain if cache is missing
         if tx_hash.is_none() {
-            let channel_event = self
-                .query_txs(QueryTxRequest::Client(
-                    QueryClientEventRequest::from_height(height),
-                ))?
-                .into_iter()
-                .find(|v| match &v.event {
-                    IbcEvent::OpenTryChannel(v) => {
-                        v.channel_id() == Some(channel_id) && v.port_id() == port_id
-                    }
-                    IbcEvent::OpenAckChannel(v) => {
-                        v.channel_id() == Some(channel_id) && v.port_id() == port_id
-                    }
-                    IbcEvent::OpenConfirmChannel(v) => {
-                        v.channel_id() == Some(channel_id) && v.port_id() == port_id
-                    }
-                    IbcEvent::CloseConfirmChannel(v) => {
-                        v.channel_id() == Some(channel_id) && &v.port_id == port_id
-                    }
-                    _ => false,
-                });
-
-            let Some(event) = channel_event else {
+            let channel_key = get_channel_search_key(
+                &self.config,
+                self.counterparty_client_type(),
+                channel_id,
+                port_id,
+                true,
+            )?;
+            let result =
+                self.rt
+                    .block_on(self.rpc_client.fetch_live_cells(channel_key, 1, None))?;
+            let Some(cell) = result.objects.first() else {
                 return Err(Error::other_error(format!(
                     "no channel event found for {channel_id}/{port_id} at block {height}"
                 )));
             };
-
-            tx_hash = Some(event.tx_hash.into());
+            tx_hash = Some(cell.clone().out_point.tx_hash);
         }
 
         let tx_hash = tx_hash.unwrap();
@@ -1626,6 +1614,11 @@ impl ChainEndpoint for Ckb4IbcChain {
                 hex::encode(tx_hash)
             )));
         };
+
+        self.ibc_transactions_cache
+            .lock()
+            .unwrap()
+            .remove(&commitment_path);
 
         Ok(proof)
     }
@@ -1652,38 +1645,19 @@ impl ChainEndpoint for Ckb4IbcChain {
             .get(&commitment_path)
             .cloned();
 
+        // search frist packet cell on-chain if cache is missing
         if tx_hash.is_none() {
-            let packet_event = self
-                .query_txs(QueryTxRequest::Client(
-                    QueryClientEventRequest::from_height(height),
-                ))?
-                .into_iter()
-                .find(|v| match &v.event {
-                    IbcEvent::SendPacket(v) => {
-                        v.src_port_id() == &port_id
-                            && v.src_channel_id() == &channel_id
-                            && v.packet.sequence == sequence
-                    }
-                    IbcEvent::ReceivePacket(v) => {
-                        v.dst_port_id() == &port_id
-                            && v.dst_channel_id() == &channel_id
-                            && v.packet.sequence == sequence
-                    }
-                    IbcEvent::WriteAcknowledgement(v) => {
-                        v.src_port_id() == &port_id
-                            && v.src_channel_id() == &channel_id
-                            && v.packet.sequence == sequence
-                    }
-                    _ => false,
-                });
-
-            let Some(event) = packet_event else {
+            let packet_key =
+                get_packet_search_key(&self.config, &channel_id, &port_id, Some(sequence))?;
+            let result = self
+                .rt
+                .block_on(self.rpc_client.fetch_live_cells(packet_key, 1, None))?;
+            let Some(cell) = result.objects.first() else {
                 return Err(Error::other_error(format!(
                     "no packet event found for {channel_id}/{port_id}/{sequence} at block {height}"
                 )));
             };
-
-            tx_hash = Some(event.tx_hash.into());
+            tx_hash = Some(cell.clone().out_point.tx_hash);
         }
 
         let tx_hash = tx_hash.unwrap();
@@ -1697,6 +1671,11 @@ impl ChainEndpoint for Ckb4IbcChain {
                 hex::encode(tx_hash)
             )));
         };
+
+        self.ibc_transactions_cache
+            .lock()
+            .unwrap()
+            .remove(&commitment_path);
 
         Ok(proof)
     }
