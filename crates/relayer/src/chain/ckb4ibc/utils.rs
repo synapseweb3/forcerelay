@@ -6,7 +6,7 @@ use crate::chain::SEC_TO_NANO;
 use crate::config::ckb4ibc::ChainConfig;
 use crate::error::Error;
 use crate::event::IbcEventWithHeight;
-use axon_tools::precompile::{Proof, VerifyProofPayload};
+use axon_tools::precompile::{verify_proof, Proof, VerifyProofPayload};
 use ckb_ics_axon::consts::CHANNEL_ID_PREFIX;
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::message::MsgType;
@@ -583,20 +583,25 @@ pub async fn generate_tx_proof_from_block(
     let raw_transaction_root = merkle_root(&tx_hashes.iter().map(Pack::pack).collect_vec());
     let witnesses_root = merkle_root(&witness_hashes.iter().map(Pack::pack).collect_vec());
 
+    let proof_payload = VerifyProofPayload {
+        verify_type: 1, // to verify witness
+        transactions_root: block.header.inner.transactions_root.into(),
+        witnesses_root: witnesses_root.unpack().into(),
+        raw_transactions_root: raw_transaction_root.unpack().into(),
+        proof: Proof {
+            indices: proof.indices.into_iter().map(Into::into).collect(),
+            lemmas: proof.lemmas.into_iter().map(Into::into).collect(),
+            leaves: witness_hashes.into_iter().map(Into::into).collect(),
+        },
+    };
+
+    verify_proof(proof_payload.clone())
+        .map_err(|err| Error::other_error(format!("proof payload verify failed: {err}")))?;
+
     let object_proof = AxonObjectProof {
         ckb_transaction: transaction.as_slice().to_owned(),
         block_hash: block_hash.into(),
-        proof_payload: VerifyProofPayload {
-            verify_type: 1, // to verify witness
-            transactions_root: block.header.inner.transactions_root.into(),
-            witnesses_root: witnesses_root.unpack().into(),
-            raw_transactions_root: raw_transaction_root.unpack().into(),
-            proof: Proof {
-                indices: proof.indices.into_iter().map(Into::into).collect(),
-                lemmas: proof.lemmas.into_iter().map(Into::into).collect(),
-                leaves: witness_hashes.into_iter().map(Into::into).collect(),
-            },
-        },
+        proof_payload,
     };
 
     // assemble ibc-compatible proof

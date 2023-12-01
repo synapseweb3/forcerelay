@@ -255,7 +255,7 @@ pub fn prepare_artificials(
         .hash_type(ScriptHashType::Type.into())
         .args(CLIENT_TYPE_ARGS.as_bytes().pack())
         .build();
-    let channel_number = u16::from_str(
+    let channel_number = u64::from_str(
         channel_id
             .to_string()
             .split('-')
