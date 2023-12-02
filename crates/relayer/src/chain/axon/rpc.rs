@@ -1,7 +1,7 @@
 use crate::error::Error;
 
 use async_trait::async_trait;
-use ckb_ics_axon::axon_tools::types::{Block as AxonBlock, CkbRelatedInfo, Metadata, Proof};
+use axon_tools::types::{Block as AxonBlock, CkbRelatedInfo, Metadata, Proof};
 use ethers::types::{BlockId, BlockNumber, Bytes, H160, U256};
 use reqwest::Client;
 use serde::Deserialize;
