@@ -483,7 +483,7 @@ fn sighash_placeholder_witness() -> packed::WitnessArgs {
 
 pub struct Args<'a> {
     pub client_id: &'a [u8; 32],
-    pub channel_id: u64,
+    pub channel_id: u16,
     pub channel_contract_code_hash: &'a [u8; 32],
     pub packet_contract_code_hash: &'a [u8; 32],
 }
@@ -492,7 +492,7 @@ impl<'a> Args<'a> {
     pub fn encode(&self) -> Vec<u8> {
         [
             self.client_id,
-            &u64::to_be_bytes(self.channel_id)[..],
+            &u16::to_be_bytes(self.channel_id)[..],
             self.channel_contract_code_hash,
             self.packet_contract_code_hash,
         ]
