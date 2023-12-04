@@ -3,7 +3,7 @@ use std::str::FromStr;
 use axon_tools::types::{Block as AxonBlock, Proof as AxonProof, ValidatorExtend};
 
 use crate::{
-    chain::SEC_TO_NANO,
+    chain::{axon::eth_err::parse_abi_err_data, SEC_TO_NANO},
     client_state::{AnyClientState, IdentifiedAnyClientState},
     consensus_state::AnyConsensusState,
     error::Error,
@@ -27,6 +27,10 @@ pub fn to_timestamp(seconds: u64) -> Result<Timestamp, Error> {
 
 pub fn convert_err<T: ToString>(err: T) -> Error {
     Error::other_error(err.to_string())
+}
+
+pub fn convert_abi_err<T: ToString>(err: T) -> Error {
+    Error::other_error(parse_abi_err_data(&err.to_string()))
 }
 
 pub fn to_identified_any_client_state(

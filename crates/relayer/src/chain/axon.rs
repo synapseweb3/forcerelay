@@ -107,6 +107,7 @@ use super::{
 use tokio::runtime::Runtime as TokioRuntime;
 
 pub mod contract;
+mod eth_err;
 mod monitor;
 mod msg;
 mod rpc;
@@ -1469,7 +1470,7 @@ impl AxonChain {
             }
         };
         let tx_receipt = tx_receipt
-            .map_err(convert_err)?
+            .map_err(convert_abi_err)?
             .ok_or(Error::send_tx(String::from("fail to send tx")))?;
         let event: IbcEvent = {
             use contract::OwnableIBCHandlerEvents::*;
