@@ -3,14 +3,14 @@ use std::str::FromStr;
 use axon_tools::types::{Block as AxonBlock, Proof as AxonProof, ValidatorExtend};
 
 use crate::{
-    chain::{axon::eth_err::parse_abi_err_data, SEC_TO_NANO},
+    chain::{axon::eth_err::Panic, SEC_TO_NANO},
     client_state::{AnyClientState, IdentifiedAnyClientState},
     consensus_state::AnyConsensusState,
     error::Error,
     event::IbcEventWithHeight,
     ibc_contract::OwnableIBCHandlerEvents,
 };
-use ethers::types::H256;
+use ethers::{contract::ContractError, providers::Middleware, types::H256};
 use ibc_relayer_types::{
     clients::{
         ics07_axon::{client_state::AxonClientState, consensus_state::AxonConsensusState},
@@ -29,8 +29,17 @@ pub fn convert_err<T: ToString>(err: T) -> Error {
     Error::other_error(err.to_string())
 }
 
-pub fn convert_abi_err<T: ToString>(err: T) -> Error {
-    Error::other_error(parse_abi_err_data(&err.to_string()))
+pub fn decode_revert_error<M>(err: ContractError<M>) -> eyre::Report
+where
+    M: Middleware + 'static,
+{
+    if let Some(r) = err.decode_revert::<String>() {
+        eyre::eyre!("Contract call reverted: {r}")
+    } else if let Some(p) = err.as_revert().and_then(|d| Panic::decode_with_selector(d)) {
+        eyre::eyre!("Contract call reverted: {p}")
+    } else {
+        err.into()
+    }
 }
 
 pub fn to_identified_any_client_state(
