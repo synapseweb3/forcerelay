@@ -10,7 +10,7 @@ use crate::{
     event::IbcEventWithHeight,
     ibc_contract::OwnableIBCHandlerEvents,
 };
-use ethers::{contract::ContractError, providers::Middleware, types::H256};
+use ethers::{abi::AbiDecode, contract::ContractError, providers::Middleware, types::H256};
 use ibc_relayer_types::{
     clients::{
         ics07_axon::{client_state::AxonClientState, consensus_state::AxonConsensusState},
@@ -35,7 +35,7 @@ where
 {
     if let Some(r) = err.decode_revert::<String>() {
         eyre::eyre!("Contract call reverted: {r}")
-    } else if let Some(p) = err.as_revert().and_then(|d| Panic::decode_with_selector(d)) {
+    } else if let Some(p) = err.as_revert().and_then(|d| Panic::decode(d).ok()) {
         eyre::eyre!("Contract call reverted: {p}")
     } else {
         err.into()

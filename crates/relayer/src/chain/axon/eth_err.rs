@@ -1,16 +1,11 @@
-use ethers::abi::{Detokenize, ParamType, Uint};
+use ethers::abi::Uint;
+use ethers::contract::EthCall;
 
-/// Panic(uint)
+/// For decoding and displaying `Panic(uint256)` errors.
+///
+/// EthError derived decode_with_selector is buggy, so we derive `EthCall` instead. Decode with `AbiDecode::decode`.
+#[derive(EthCall)]
 pub struct Panic(Uint);
-
-impl Panic {
-    // Can't get the right selector with `derive(EthError)`, so I implement this manually.
-    pub fn decode_with_selector(bytes: &[u8]) -> Option<Self> {
-        let bytes = bytes.strip_prefix(b"\x4e\x48\x7b\x71")?;
-        let tokens = ethers::abi::decode(&[ParamType::Uint(32)], bytes).ok()?;
-        Some(Panic(Uint::from_tokens(tokens).ok()?))
-    }
-}
 
 impl std::fmt::Display for Panic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -74,7 +69,7 @@ impl std::fmt::Display for PanicError {
 
 #[cfg(test)]
 mod test {
-    use ethers::contract::EthError;
+    use ethers::{abi::AbiDecode, contract::EthError};
 
     use super::Panic;
 
@@ -84,7 +79,7 @@ mod test {
                 .unwrap(),
         )
         .unwrap();
-        if let Some(p) = Panic::decode_with_selector(&revert_data) {
+        if let Ok(p) = Panic::decode(&revert_data) {
             p.to_string()
         } else if let Some(s) = String::decode_with_selector(&revert_data) {
             s
