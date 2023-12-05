@@ -15,11 +15,10 @@ impl Panic {
 impl std::fmt::Display for Panic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let e = PanicError::from_code(self.0.low_u32());
-        write!(f, "{e}")
+        write!(f, "Panic code: {:#x}, {e}", self.0)
     }
 }
 
-#[derive(Copy, Clone)]
 enum PanicError {
     Generic,
     AssertFailed,
@@ -54,60 +53,22 @@ impl PanicError {
 
 impl std::fmt::Display for PanicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let error = *self;
-        match error {
-            PanicError::Generic => write!(
-                f,
-                "Panic code: 0x{:x}, Generic compiler inserted panic",
-                error as u16
-            ),
-            PanicError::AssertFailed => {
-                write!(f, "Panic code: 0x{:x}, Assertion failed", error as u16)
-            }
-            PanicError::ArithmeticOverflow => write!(
-                f,
-                "Panic code: 0x{:x}, Arithmetic operation resulted in overflow",
-                error as u16
-            ),
-            PanicError::DivisionByZero => {
-                write!(
-                    f,
-                    "Panic code: 0x{:x}, Division or modulo by zero",
-                    error as u16
-                )
-            }
-            PanicError::InvalidEnumConversion => {
-                write!(
-                    f,
-                    "Panic code: 0x{:x}, Invalid enum conversion",
-                    error as u16
-                )
-            }
-            PanicError::InvalidEncoding => {
-                write!(f, "Panic code: 0x{:x}, Invalid encoding", error as u16)
-            }
-            PanicError::EmptyArrayPop => write!(
-                f,
-                "Panic code: 0x{:x}, Attempted to pop an empty array",
-                error as u16
-            ),
-            PanicError::OutOfBoundsAccess => {
-                write!(f, "Panic code: 0x{:x}, Out-of-bounds access", error as u16)
-            }
-            PanicError::ExcessiveAllocation => write!(
-                f,
-                "Panic code: 0x{:x}, Excessive memory allocation",
-                error as u16
-            ),
+        let desc = match self {
+            PanicError::Generic => "Generic compiler inserted panic",
+            PanicError::AssertFailed => "Assertion failed",
+            PanicError::ArithmeticOverflow => "Arithmetic operation resulted in overflow",
+            PanicError::DivisionByZero => "Division or modulo by zero",
+            PanicError::InvalidEnumConversion => "Invalid enum conversion",
+            PanicError::InvalidEncoding => "Invalid encoding",
+            PanicError::EmptyArrayPop => "Attempted to pop an empty array",
+            PanicError::OutOfBoundsAccess => "Out-of-bounds access",
+            PanicError::ExcessiveAllocation => "Excessive memory allocation",
             PanicError::UninitializedInternalFunction => {
-                write!(
-                    f,
-                    "Panic code: 0x{:x}, Called an uninitialized internal function",
-                    error as u16
-                )
+                "Called an uninitialized internal function"
             }
-            PanicError::Unknown => write!(f, "Panic code: 0x{:x}, Unknown panic", error as u16),
-        }
+            PanicError::Unknown => "Unknown panic",
+        };
+        write!(f, "{desc}")
     }
 }
 
