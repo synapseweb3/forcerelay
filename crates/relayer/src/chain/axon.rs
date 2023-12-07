@@ -107,6 +107,7 @@ use super::{
 use tokio::runtime::Runtime as TokioRuntime;
 
 pub mod contract;
+mod eth_err;
 mod monitor;
 mod msg;
 mod rpc;
@@ -1370,9 +1371,15 @@ impl AxonChain {
 macro_rules! convert {
     ($self:ident, $msg:ident, $eventy:ty, $method:ident) => {{
         let msg: $eventy = $msg.try_into()?;
-        $self
-            .rt
-            .block_on(async { Ok($self.contract()?.$method(msg.clone()).send().await?.await?) })
+        $self.rt.block_on(async {
+            Ok($self
+                .contract()?
+                .$method(msg.clone())
+                .send()
+                .await
+                .map_err(decode_revert_error)?
+                .await?)
+        })
     }};
 }
 
