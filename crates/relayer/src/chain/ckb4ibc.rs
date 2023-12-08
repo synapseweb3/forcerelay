@@ -21,7 +21,9 @@ use crate::event::IbcEventWithHeight;
 use crate::keyring::{KeyRing, Secp256k1KeyPair};
 use crate::misbehaviour::MisbehaviourEvidence;
 
-use ckb_ics_axon::commitment::{channel_path, connection_path, packet_commitment_path};
+use ckb_ics_axon::commitment::{
+    channel_path, connection_path, packet_acknowledgement_commitment_path, packet_commitment_path,
+};
 use ckb_ics_axon::handler::{IbcChannel, IbcConnections, IbcPacket, PacketStatus};
 use ckb_ics_axon::message::{Envelope, MsgType};
 use ckb_ics_axon::object::Ordering;
@@ -1625,7 +1627,7 @@ impl ChainEndpoint for Ckb4IbcChain {
 
     fn build_packet_proofs(
         &self,
-        _packet_type: PacketMsgType,
+        packet_type: PacketMsgType,
         port_id: PortId,
         channel_id: ChannelId,
         sequence: Sequence,
@@ -1636,8 +1638,21 @@ impl ChainEndpoint for Ckb4IbcChain {
             return get_ibc_merkle_proof(height, vec![0u8]);
         }
 
-        let commitment_path =
-            packet_commitment_path(port_id.as_str(), channel_id.as_str(), sequence.into());
+        let commitment_path = match packet_type {
+            PacketMsgType::Recv => {
+                packet_commitment_path(port_id.as_str(), channel_id.as_str(), sequence.into())
+            }
+            PacketMsgType::Ack => packet_acknowledgement_commitment_path(
+                port_id.as_str(),
+                channel_id.as_str(),
+                sequence.into(),
+            ),
+            _ => {
+                return Err(Error::other_error(format!(
+                    "unsupported packet type: {packet_type}"
+                )))
+            }
+        };
         let mut tx_hash = self
             .ibc_transactions_cache
             .lock()

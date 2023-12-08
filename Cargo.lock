@@ -362,22 +362,7 @@ dependencies = [
 [[package]]
 name = "axon-tools"
 version = "0.1.1"
-source = "git+https://github.com/axonweb3/axon.git?rev=f889d38#f889d38949d6201c448ac72ebaec4d4fb0e5ba51"
-dependencies = [
- "bit-vec",
- "blst",
- "bytes",
- "ckb-blst",
- "ethereum-types",
- "rlp",
- "rlp-derive",
- "tiny-keccak",
-]
-
-[[package]]
-name = "axon-tools"
-version = "0.1.1"
-source = "git+https://github.com/axonweb3/axon.git?rev=fc7ce22c#fc7ce22c60eeea61399c133dbfd3b0e90e9a78b2"
+source = "git+https://github.com/axonweb3/axon.git?rev=dd35f500#dd35f500fce0ec3adf28b59fea8c431a4a4087c8"
 dependencies = [
  "bit-vec",
  "blst",
@@ -395,6 +380,21 @@ dependencies = [
  "rlp-derive",
  "serde",
  "serde_json",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "axon-tools"
+version = "0.1.1"
+source = "git+https://github.com/axonweb3/axon.git?rev=f889d38#f889d38949d6201c448ac72ebaec4d4fb0e5ba51"
+dependencies = [
+ "bit-vec",
+ "blst",
+ "bytes",
+ "ckb-blst",
+ "ethereum-types",
+ "rlp",
+ "rlp-derive",
  "tiny-keccak",
 ]
 
@@ -1098,9 +1098,9 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=bddb6b9b#bddb6b9bdede6bfadf7fcb5cf52ef35d2b6ac0b7"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=a3c3c3a2#a3c3c3a2385bb8df70e0acda35aa31f190d27896"
 dependencies = [
- "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=fc7ce22c)",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=dd35f500)",
  "axon-types",
  "bytes",
  "ethereum-types",
@@ -3735,13 +3735,13 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=fc7ce22c)",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=dd35f500)",
  "bech32 0.9.1",
  "bitcoin",
  "bs58 0.4.0",
  "bytes",
  "ckb-hash 0.111.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=bddb6b9b)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=a3c3c3a2)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3885,7 +3885,7 @@ dependencies = [
 name = "ibc-relayer-types"
 version = "0.23.0"
 dependencies = [
- "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=fc7ce22c)",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=dd35f500)",
  "bls",
  "bytes",
  "derive_more",
@@ -3949,7 +3949,7 @@ dependencies = [
  "bytes",
  "ckb-chain-spec",
  "ckb-hash 0.106.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=bddb6b9b)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=a3c3c3a2)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
