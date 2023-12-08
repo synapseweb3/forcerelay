@@ -36,13 +36,12 @@ cd $AXON_SRC_PATH
 git checkout forcerelay-test
 cargo install --path .
 
-# setup hermes envs
-## CKB
-export CHAIN_COMMAND_PATHS=ckb
-export ACCOUNT_PREFIXES=ckb
-## Axon
-export CHAIN_COMMAND_PATHS=axon
-export ACCOUNT_PREFIXES=axon
+# Ckb 0.111 should be installed: https://github.com/nervosnetwork/ckb/releases/tag/v0.111.0
+ckb --version
+
+# Chains to test (chain_a,chain_b). You can also use `axon,ckb`, `ckb,ckb` or `axon,axon`
+export CHAIN_COMMAND_PATHS=ckb,axon
+export ACCOUNT_PREFIXES=ckb,axon
 ```
 
 
