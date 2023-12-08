@@ -1,4 +1,3 @@
-use ethers::types::H160;
 use ibc_relayer_types::core::ics24_host::identifier::ChainId;
 use serde_derive::{Deserialize, Serialize};
 use tendermint_rpc::Url;
@@ -16,8 +15,6 @@ pub struct AxonChainConfig {
     pub restore_block_count: u64,
     pub key_name: String,
     pub store_prefix: String,
-    pub ckb_light_client_contract_address: H160,
-    pub image_cell_contract_address: H160,
 
     #[serde(default)]
     pub packet_filter: PacketFilter,

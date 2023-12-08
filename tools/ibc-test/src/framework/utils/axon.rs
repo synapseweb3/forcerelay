@@ -159,8 +159,6 @@ pub(crate) fn prepare_axon_chain(
     let deployment = DeployedContracts {
         contract_address,
         transfer_contract_address,
-        image_cell_contract_address: ethers::types::H160::default(),
-        ckb_light_client_contract_address: ethers::types::H160::default(),
     };
     let path = working_dir.join(AXON_CONTRACTS_CONFIG_PATH);
     std::fs::write(path, toml::to_string(&deployment)?).with_context(|| "write deployment info")?;
