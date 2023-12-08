@@ -11,7 +11,9 @@ use ckb_ics_axon::consts::CHANNEL_ID_PREFIX;
 use ckb_ics_axon::handler::IbcPacket;
 use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::{ChannelArgs, PacketArgs};
-use ckb_jsonrpc_types::{TransactionAndWitnessProof, TransactionView};
+use ckb_jsonrpc_types::{
+    MerkleProof as JsonMerkleProof, ResponseFormat, TransactionAndWitnessProof, TransactionView,
+};
 use ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ckb_sdk::rpc::ckb_indexer::ScriptSearchMode;
 use ckb_sdk::rpc::ckb_light_client::{ScriptType, SearchKey};
@@ -20,7 +22,7 @@ use ckb_sdk::NetworkType;
 use ckb_types::core::ScriptHashType;
 use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script, Transaction};
 use ckb_types::prelude::{Builder, Entity, Pack, Unpack};
-use ckb_types::utilities::merkle_root;
+use ckb_types::utilities::{merkle_root, MerkleProof};
 use ckb_types::{h256, H256};
 use ethers::abi::AbiEncode;
 use ethers::contract::{EthAbiCodec, EthAbiType};
@@ -526,6 +528,15 @@ pub fn get_ibc_merkle_proof(height: Height, encoded: Vec<u8>) -> Result<Proofs, 
     .map_err(|err| Error::other_error(err.to_string()))
 }
 
+pub fn parse_transaction(tx: ResponseFormat<TransactionView>) -> TransactionView {
+    match tx.inner {
+        ckb_jsonrpc_types::Either::Left(tx) => tx,
+        ckb_jsonrpc_types::Either::Right(bytes) => {
+            serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
+        }
+    }
+}
+
 #[derive(EthAbiCodec, EthAbiType)]
 struct AxonObjectProof {
     pub ckb_transaction: Vec<u8>,
@@ -537,11 +548,11 @@ pub async fn generate_tx_proof_from_block(
     rpc_client: &impl CkbReader,
     tx_hash: &H256,
 ) -> Result<Option<Proofs>, Error> {
-    let block_hash = rpc_client
+    let result = rpc_client
         .get_transaction(tx_hash)
         .await?
-        .map(|v| v.tx_status.block_hash);
-    let Some(Some(block_hash)) = block_hash else {
+        .map(|v| (v.tx_status.block_hash, v.transaction));
+    let Some((Some(block_hash), Some(transaction))) = result else {
         return Err(Error::other_error(format!(
             "cannot find block_hash from tx {}",
             hex::encode(tx_hash)
@@ -549,49 +560,69 @@ pub async fn generate_tx_proof_from_block(
     };
 
     // collect transaction hashes from block
-    let mut transaction: Option<Transaction> = None;
-    let block = rpc_client.get_block(&block_hash).await?;
-    let tx_hashes = block
-        .transactions
-        .iter()
-        .map(|tx| {
-            if &tx.hash == tx_hash {
-                transaction = Some(tx.inner.clone().into());
-            }
-            tx.hash.clone()
-        })
-        .collect_vec();
-    let witness_hashes = block
-        .transactions
-        .into_iter()
-        .map(|tx| Transaction::from(tx.inner).calc_witness_hash().unpack())
-        .collect_vec();
+    // let mut transaction: Option<Transaction> = None;
+    // let block = rpc_client.get_block(&block_hash).await?;
+    // let tx_hashes = block
+    //     .transactions
+    //     .iter()
+    //     .map(|tx| {
+    //         if &tx.hash == tx_hash {
+    //             transaction = Some(tx.inner.clone().into());
+    //         }
+    //         tx.hash.clone()
+    //     })
+    //     .collect_vec();
+    // let witness_hashes = block
+    //     .transactions
+    //     .into_iter()
+    //     .map(|tx| Transaction::from(tx.inner).calc_witness_hash().unpack())
+    //     .collect_vec();
 
-    let Some(transaction) = transaction else {
-        return Ok(None);
-    };
+    // let Some(transaction) = transaction else {
+    //     return Ok(None);
+    // };
+
+    let header = rpc_client
+        .get_header(&block_hash)
+        .await?
+        .expect("invalid block_hash");
 
     // generate transaction proof
     let TransactionAndWitnessProof {
         block_hash,
-        transactions_proof: _,
-        witnesses_proof: proof,
+        transactions_proof,
+        witnesses_proof,
     } = rpc_client
-        .get_transaction_and_witness_proof(tx_hashes.clone(), block.header.hash)
+        .get_transaction_and_witness_proof(vec![tx_hash.clone()], block_hash)
         .await?;
 
-    let raw_transaction_root = merkle_root(&tx_hashes.iter().map(Pack::pack).collect_vec());
-    let witnesses_root = merkle_root(&witness_hashes.iter().map(Pack::pack).collect_vec());
+    let transaction = Transaction::from(parse_transaction(transaction).inner);
+    let transaction_hash = transaction.calc_tx_hash();
+    let witness_hash = transaction.calc_witness_hash();
+
+    let raw_transactions_root = jsonrpc_merkle_root(&transactions_proof, vec![transaction_hash])?;
+    let witnesses_root = jsonrpc_merkle_root(&witnesses_proof, vec![witness_hash.clone()])?;
+
+    let transactions_root = merkle_root(&[raw_transactions_root.pack(), witnesses_root.pack()]);
+    if transactions_root.unpack() != header.inner.transactions_root {
+        return Err(Error::other_error(
+            "unexpected transactions_root".to_owned(),
+        ));
+    }
 
     let proof_payload = VerifyProofPayload {
         verify_type: 1, // to verify witness
-        transactions_root: block.header.inner.transactions_root.into(),
-        witnesses_root: witnesses_root.unpack().into(),
-        raw_transactions_root: raw_transaction_root.unpack().into(),
+        transactions_root: header.inner.transactions_root.into(),
+        witnesses_root,
+        raw_transactions_root,
         proof: Proof {
-            indices: proof.indices.into_iter().map(Into::into).collect(),
-            lemmas: proof.lemmas.into_iter().map(Into::into).collect(),
-            leaves: witness_hashes.into_iter().map(Into::into).collect(),
+            indices: witnesses_proof
+                .indices
+                .into_iter()
+                .map(Into::into)
+                .collect_vec(),
+            lemmas: witnesses_proof.lemmas.into_iter().map(Into::into).collect(),
+            leaves: vec![witness_hash.unpack().into()],
         },
     };
 
@@ -599,13 +630,27 @@ pub async fn generate_tx_proof_from_block(
         .map_err(|err| Error::other_error(format!("proof payload verify failed: {err}")))?;
 
     let object_proof = AxonObjectProof {
-        ckb_transaction: transaction.as_slice().to_owned(),
+        ckb_transaction: transaction.as_slice().into(),
         block_hash: block_hash.into(),
         proof_payload,
     };
 
     // assemble ibc-compatible proof
-    let block_number = Height::from_noncosmos_height(block.header.inner.number.into());
+    let block_number = Height::from_noncosmos_height(header.inner.number.into());
     let proofs = get_ibc_merkle_proof(block_number, object_proof.encode())?;
     Ok(Some(proofs))
+}
+
+fn jsonrpc_merkle_root(
+    merkle_proof: &JsonMerkleProof,
+    leaves: Vec<Byte32>,
+) -> Result<[u8; 32], Error> {
+    let proof = merkle_proof.clone();
+    MerkleProof::new(
+        proof.indices.into_iter().map(Into::into).collect(),
+        proof.lemmas.into_iter().map(|v| v.pack()).collect(),
+    )
+    .root(&leaves)
+    .map(|v| v.unpack().into())
+    .ok_or(Error::other_error("invalid merkle proof".to_owned()))
 }

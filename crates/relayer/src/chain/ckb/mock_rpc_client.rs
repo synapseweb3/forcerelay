@@ -105,6 +105,10 @@ impl CkbReader for RpcClient {
         Box::pin(async { Ok(resp) })
     }
 
+    fn get_header(&self, _hash: &H256) -> Rpc<Option<HeaderView>> {
+        todo!()
+    }
+
     fn get_transaction(&self, hash: &H256) -> Rpc<Option<TransactionWithStatusResponse>> {
         let transaction = ResponseFormat::<TransactionView>::json(Default::default());
         let resp = TransactionWithStatusResponse {

@@ -20,6 +20,8 @@ pub trait CkbReader {
 
     fn get_tip_header(&self) -> Response<HeaderView>;
 
+    fn get_header(&self, hash: &H256) -> Response<Option<HeaderView>>;
+
     fn get_transaction(&self, hash: &H256) -> Response<Option<TransactionWithStatusResponse>>;
 
     fn get_live_cell(&self, out_point: &OutPoint, with_data: bool) -> Response<CellWithStatus>;

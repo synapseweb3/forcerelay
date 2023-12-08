@@ -98,6 +98,17 @@ impl CkbReader for RpcClient {
         jsonrpc!("get_tip_header", Target::CKB, self, HeaderView).boxed()
     }
 
+    fn get_header(&self, hash: &H256) -> Rpc<Option<HeaderView>> {
+        jsonrpc!(
+            "get_tip_header",
+            Target::CKB,
+            self,
+            Option<HeaderView>,
+            hash
+        )
+        .boxed()
+    }
+
     fn get_transaction(&self, hash: &H256) -> Rpc<Option<TransactionWithStatusResponse>> {
         jsonrpc!(
             "get_transaction",

@@ -82,7 +82,7 @@ use self::monitor::{Ckb4IbcEventMonitor, WriteAckMonitorCmd};
 use self::utils::{
     fetch_transaction_by_hash, generate_ibc_packet_event, generate_tx_proof_from_block,
     get_channel_search_key, get_encoded_object, get_ibc_merkle_proof, get_packet_search_key,
-    get_prefix_search_key, get_search_key_with_sudt, transaction_to_event,
+    get_prefix_search_key, get_search_key_with_sudt, parse_transaction, transaction_to_event,
 };
 
 use super::ckb::rpc_client::RpcClient;
@@ -306,12 +306,7 @@ impl Ckb4IbcChain {
                     .ok_or(Error::query("ckb transaction unready".to_string()))?
                     .transaction
                     .unwrap();
-                let tx = match tx_resp.inner {
-                    ckb_jsonrpc_types::Either::Left(tx) => tx,
-                    ckb_jsonrpc_types::Either::Right(json_bytes) => {
-                        serde_json::from_slice(json_bytes.as_bytes()).unwrap()
-                    }
-                };
+                let tx = parse_transaction(tx_resp);
                 let channel_end = extract_channel_end_from_tx(&tx)?;
                 let input = CellInput::new_builder()
                     .previous_output(cell.out_point.clone().into())
@@ -373,12 +368,7 @@ impl Ckb4IbcChain {
                 .expect("empty transaction response")
                 .transaction
                 .expect("empty transaction view");
-            let tx = match tx.inner {
-                ckb_jsonrpc_types::Either::Left(tx) => tx,
-                ckb_jsonrpc_types::Either::Right(bytes) => {
-                    serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
-                }
-            };
+            let tx = parse_transaction(tx);
             let (connections, ibc_connection) = extract_connections_from_tx(&tx, &prefix)?;
             cache.insert(
                 client_type,
@@ -1067,12 +1057,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 None
             })
             .flat_map(|tx| {
-                let tx = match tx.transaction.unwrap().inner {
-                    ckb_jsonrpc_types::Either::Left(tx) => tx,
-                    ckb_jsonrpc_types::Either::Right(bytes) => {
-                        serde_json::from_slice::<TransactionView>(bytes.as_bytes()).unwrap()
-                    }
-                };
+                let tx = parse_transaction(tx.transaction.unwrap());
                 extract_channel_end_from_tx(&tx)
             })
             .map(|(channel, _)| channel)
@@ -1348,12 +1333,7 @@ impl ChainEndpoint for Ckb4IbcChain {
                 let Some(tx) = tx.transaction else {
                     return Ok(vec![]);
                 };
-                let tx = match tx.inner {
-                    ckb_jsonrpc_types::Either::Left(tx) => tx,
-                    ckb_jsonrpc_types::Either::Right(json_bytes) => {
-                        serde_json::from_slice(json_bytes.as_bytes()).unwrap()
-                    }
-                };
+                let tx = parse_transaction(tx);
                 let event = transaction_to_event(&tx, &prefix)?;
                 vec![IbcEventWithHeight {
                     event,
