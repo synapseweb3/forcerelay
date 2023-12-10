@@ -88,23 +88,9 @@ pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMe
         .build();
 
     // Same as axon example single node spec which is used in ibc-tests.
-    let bls_pub_key = hex::decode("a26e3fe1cf51bd4822072c61bdc315ac32e3d3c2e2484bb92942666399e863b4bf56cf2926383cc706ffc15dfebc85c6").unwrap();
-    let metadata = Metadata::new_builder()
-        .validators(
-            ValidatorList::new_builder()
-                .push(
-                    Validator::new_builder()
-                        // Only bls_pub_key matters for now.
-                        .bls_pub_key(Entity::from_slice(&bls_pub_key).unwrap())
-                        .build(),
-                )
-                .build(),
-        )
-        .build();
-
-    let metadata_cell_data = MetadataCellData::new_builder()
-        .metadata(MetadataList::new_builder().push(metadata).build())
-        .build();
+    let metadata_cell_data = generate_metadata_cell_data(
+        vec!["a26e3fe1cf51bd4822072c61bdc315ac32e3d3c2e2484bb92942666399e863b4bf56cf2926383cc706ffc15dfebc85c6"]
+    );
 
     let metadata_output = CellOutput::new_builder()
         .lock(lock_script.clone())
@@ -161,4 +147,38 @@ pub fn generate_deploy_packet_metadata(attribute: &ChannelAttribute) -> PacketMe
         metadata_index: 1,
         balance_index: 2,
     }
+}
+
+fn generate_metadata_cell_data(bls_pubkeys: Vec<&str>) -> MetadataCellData {
+    let mut validator_list = ValidatorList::new_builder();
+    for key in bls_pubkeys {
+        let bls_pub_key = hex::decode(key).unwrap();
+        validator_list = validator_list.push(
+            Validator::new_builder()
+                // Only bls_pub_key matters for now.
+                .bls_pub_key(Entity::from_slice(&bls_pub_key).unwrap())
+                .build(),
+        );
+    }
+
+    let metadata = Metadata::new_builder()
+        .validators(validator_list.build())
+        .build();
+
+    MetadataCellData::new_builder()
+        .metadata(MetadataList::new_builder().push(metadata).build())
+        .build()
+}
+
+#[test]
+fn test_generate_metadata_cell_data() {
+    let metadata = generate_metadata_cell_data(
+        vec![
+            "95a16ed1f4c43a7470917771bf820741dbd040c51967122de66dc5bc9f6eff5953a36be6c0fdf8c202a26d6f2b0f8885",
+            "a8d1c7c4152ce4ad8eff7ee90406b6cdf27eee97f0e520b8098a88ff3873c83aa8b74d9aab3a1c15361b5d3bc9224e9a",
+            "8d999a5c29604f32950bfedf289f6b8e7e2f1a19f86b208d370024e709f77d1208f5e000dc4232a63064530613aa4b26",
+            "afefcad3f6289c0bc0a9fd0015f533dcfcc1d7ba5161ff518702fee7aec33374a08d4fa45baeef85836c1e604e8f221d"
+            ]
+    );
+    std::fs::write("contracts/metadata", metadata.as_slice()).unwrap();
 }
