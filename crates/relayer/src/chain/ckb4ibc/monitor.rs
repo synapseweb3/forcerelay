@@ -527,8 +527,8 @@ impl Ckb4IbcEventMonitor {
                         self.ibc_transaction_notice
                             .send((
                                 packet_acknowledgement_commitment_path(
-                                    &packet.packet.source_port_id,
-                                    &packet.packet.source_channel_id,
+                                    &packet.packet.destination_port_id,
+                                    &packet.packet.destination_channel_id,
                                     packet.packet.sequence,
                                 ),
                                 tx.hash.clone(),
