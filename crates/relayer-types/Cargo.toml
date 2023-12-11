@@ -64,7 +64,7 @@ tree_hash_derive = { git = "https://github.com/synapseweb3/lighthouse", rev = "2
 thiserror = "1.0"
 ethereum-types = "0.14.1"
 hex = "0.4"
-axon-tools = { git = "https://github.com/axonweb3/axon.git", package = "axon-tools", rev = "06340ba4", version = "0.1.1", features = [
+axon-tools = { git = "https://github.com/axonweb3/axon.git", package = "axon-tools", rev = "dd35f500", version = "0.1.1", features = [
     "impl-serde",
     "proof",
     "std",

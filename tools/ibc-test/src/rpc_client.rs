@@ -2,7 +2,8 @@
 
 use ckb_jsonrpc_types::{
     BlockNumber, BlockView, CellWithStatus, ChainInfo, HeaderView, JsonBytes, OutPoint,
-    OutputsValidator, RawTxPool, Transaction, TransactionWithStatusResponse, TxPoolInfo, Uint32,
+    OutputsValidator, RawTxPool, Transaction, TransactionAndWitnessProof,
+    TransactionWithStatusResponse, TxPoolInfo, Uint32,
 };
 use ckb_sdk::rpc::ckb_indexer::{Cell, Order, Pagination, SearchKey};
 use ckb_types::H256;
@@ -97,6 +98,17 @@ impl CkbReader for RpcClient {
         jsonrpc!("get_tip_header", Target::CKB, self, HeaderView).boxed()
     }
 
+    fn get_header(&self, hash: &H256) -> Rpc<Option<HeaderView>> {
+        jsonrpc!(
+            "get_tip_header",
+            Target::CKB,
+            self,
+            Option<HeaderView>,
+            hash
+        )
+        .boxed()
+    }
+
     fn get_transaction(&self, hash: &H256) -> Rpc<Option<TransactionWithStatusResponse>> {
         jsonrpc!(
             "get_transaction",
@@ -138,6 +150,22 @@ impl CkbReader for RpcClient {
 
             Ok(res)
         }
+        .boxed()
+    }
+
+    fn get_transaction_and_witness_proof(
+        &self,
+        tx_hashes: Vec<H256>,
+        block_hash: H256,
+    ) -> Rpc<TransactionAndWitnessProof> {
+        jsonrpc!(
+            "get_transaction_and_witness_proof",
+            Target::CKB,
+            self,
+            TransactionAndWitnessProof,
+            tx_hashes,
+            block_hash
+        )
         .boxed()
     }
 

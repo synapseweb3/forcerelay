@@ -487,6 +487,18 @@ pub struct QueryClientEventRequest {
     pub consensus_height: Height,
 }
 
+impl QueryClientEventRequest {
+    pub fn from_height(height: Height) -> Self {
+        // all of these fields except `consensus_height` are ignored
+        QueryClientEventRequest {
+            query_height: QueryHeight::Latest,
+            event_id: WithBlockDataType::CreateClient,
+            client_id: ClientId::default(),
+            consensus_height: height,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct CrossChainQueryRequest {
     pub chain_id: ChainId,

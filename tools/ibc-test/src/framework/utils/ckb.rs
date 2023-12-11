@@ -330,7 +330,7 @@ pub fn fetch_ibc_connections(port: u32) -> IbcConnections {
     }
 }
 
-fn channel_id_to_u16(channel_id: &ChannelId) -> u16 {
+fn channel_id_to_u64(channel_id: &ChannelId) -> u64 {
     let channel_str = channel_id.to_string();
     let mut parts = channel_str.split('-');
     assert_eq!(parts.next().unwrap(), "channel", "expect prefix channel");
@@ -345,7 +345,7 @@ pub fn fetch_ibc_channel_cell(port: u32, port_id: [u8; 32], channel_id: &Channel
         metadata_type_id: get_test_client_id().into(),
         ibc_handler_address: h160_env("AXON_IBC_HANDLER_ADDRESS"),
         open: true,
-        channel_id: channel_id_to_u16(channel_id),
+        channel_id: channel_id_to_u64(channel_id),
         port_id,
     };
     let search_key = SearchKey {

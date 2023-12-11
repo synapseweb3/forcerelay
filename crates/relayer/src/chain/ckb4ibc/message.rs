@@ -5,9 +5,9 @@ mod packet;
 
 use crate::{config::ckb4ibc::ChainConfig, error::Error};
 use ckb_ics_axon::{
-    handler::{IbcChannel, IbcConnections, IbcPacket},
+    handler::{Client, IbcChannel, IbcConnections, IbcPacket},
     message::Envelope,
-    ConnectionArgs,
+    ChannelArgs, ConnectionArgs,
 };
 use ckb_types::{
     core::{Capacity, DepType, TransactionBuilder, TransactionView},
@@ -70,6 +70,20 @@ macro_rules! convert {
     }};
 }
 
+struct EmptyClient;
+
+impl Client for EmptyClient {
+    fn verify_membership(
+        &self,
+        _height: ckb_ics_axon::proto::client::Height,
+        _proof: &[u8],
+        _path: &[u8],
+        _value: &[u8],
+    ) -> Result<(), ckb_ics_axon::object::VerifyError> {
+        Ok(())
+    }
+}
+
 pub trait MsgToTxConverter {
     fn get_ibc_connections(&self, client_id: &str) -> Result<IbcConnections, Error>;
 
@@ -78,7 +92,10 @@ pub trait MsgToTxConverter {
         connection_id: &ConnectionId,
     ) -> Result<(ConnectionArgs, IbcConnections), Error>;
 
-    fn get_ibc_connections_input(&self, client_id: &str) -> Result<(CellInput, u64), Error>;
+    fn get_ibc_connections_input(
+        &self,
+        client_id: &str,
+    ) -> Result<(CellInput, u64, ConnectionArgs), Error>;
 
     fn get_ibc_channel(
         &self,
@@ -90,7 +107,7 @@ pub trait MsgToTxConverter {
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-    ) -> Result<(CellInput, u64), Error>;
+    ) -> Result<(CellInput, u64, ChannelArgs), Error>;
 
     fn get_client_outpoint(&self, client_id: &str) -> Option<OutPoint>;
 
@@ -138,23 +155,22 @@ pub struct Converter<'a> {
 impl<'a> MsgToTxConverter for Converter<'a> {
     fn get_ibc_connections(&self, client_id: &str) -> Result<IbcConnections, Error> {
         let client_type = self.get_config().lc_client_type(client_id)?;
-        if let Some((connection, _, _, _)) = self
+        if let Some(v) = self
             .ckb_instance
             .connection_cache
             .borrow()
             .get(&client_type)
         {
-            return Ok(connection.clone());
+            return Ok(v.ckb_connection.clone());
         }
         self.ckb_instance.query_connection_and_cache()?;
         let connection_cache = self.ckb_instance.connection_cache.borrow();
-        let (connection, _, _, _) =
-            connection_cache
-                .get(&client_type)
-                .ok_or(Error::query(format!(
-                    "client_type {client_type} isn't in cache"
-                )))?;
-        Ok(connection.clone())
+        let cache = connection_cache
+            .get(&client_type)
+            .ok_or(Error::query(format!(
+                "client_type {client_type} isn't in cache"
+            )))?;
+        Ok(cache.ckb_connection.clone())
     }
 
     fn get_ibc_connections_by_connection_id(
@@ -164,14 +180,20 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         let conneciton_cache = self.ckb_instance.connection_cache.borrow();
         conneciton_cache
             .iter()
-            .find_map(|(k, (v, _, _, _))| {
+            .find_map(|(k, v)| {
                 let args = self.ckb_instance.config.lc_connection_args(*k).unwrap();
                 let client_id = args.client_id();
-                let found = v.connections.iter().enumerate().any(|(idx, _)| {
-                    connection_id.as_str() == ckb_ics_axon::connection_id(client_id.as_str(), idx)
-                });
+                let found = v
+                    .ckb_connection
+                    .connections
+                    .iter()
+                    .enumerate()
+                    .any(|(idx, _)| {
+                        connection_id.as_str()
+                            == ckb_ics_axon::connection_id(client_id.as_str(), idx)
+                    });
                 if found {
-                    Some((args, v.clone()))
+                    Some((args, v.ckb_connection.clone()))
                 } else {
                     None
                 }
@@ -179,25 +201,27 @@ impl<'a> MsgToTxConverter for Converter<'a> {
             .ok_or_else(|| Error::query(format!("connection {connection_id} not found in cache")))
     }
 
-    fn get_ibc_connections_input(&self, client_id: &str) -> Result<(CellInput, u64), Error> {
+    fn get_ibc_connections_input(
+        &self,
+        client_id: &str,
+    ) -> Result<(CellInput, u64, ConnectionArgs), Error> {
         let client_type = self.get_config().lc_client_type(client_id)?;
-        if let Some((_, cell_input, capacity, _)) = self
+        if let Some(v) = self
             .ckb_instance
             .connection_cache
             .borrow()
             .get(&client_type)
         {
-            return Ok((cell_input.clone(), *capacity));
+            return Ok((v.cell_input.clone(), v.cell_capacity, v.cell_args));
         }
         self.ckb_instance.query_connection_and_cache()?;
         let connection_cache = self.ckb_instance.connection_cache.borrow();
-        let (_, cell_input, capacity, _) =
-            connection_cache
-                .get(&client_type)
-                .ok_or(Error::query(format!(
-                    "client_type {client_type} isn't in cache"
-                )))?;
-        Ok((cell_input.clone(), *capacity))
+        let v = connection_cache
+            .get(&client_type)
+            .ok_or(Error::query(format!(
+                "client_type {client_type} isn't in cache"
+            )))?;
+        Ok((v.cell_input.clone(), v.cell_capacity, v.cell_args))
     }
 
     fn get_ibc_channel(
@@ -226,14 +250,14 @@ impl<'a> MsgToTxConverter for Converter<'a> {
         &self,
         channel_id: &ChannelId,
         port_id: &PortId,
-    ) -> Result<(CellInput, u64), Error> {
-        if let Some((input, capacity)) = self
+    ) -> Result<(CellInput, u64, ChannelArgs), Error> {
+        if let Some((input, capacity, channel_args)) = self
             .ckb_instance
             .channel_input_data
             .borrow()
             .get(&(channel_id.clone(), port_id.clone()))
         {
-            return Ok((input.clone(), *capacity));
+            return Ok((input.clone(), *capacity, *channel_args));
         }
         self.ckb_instance
             .fetch_channel_cell_and_extract(channel_id, port_id, true)?;
@@ -241,7 +265,7 @@ impl<'a> MsgToTxConverter for Converter<'a> {
             .channel_input_data
             .borrow()
             .get(&(channel_id.clone(), port_id.clone()))
-            .map(|(input, capacity)| (input.clone(), *capacity))
+            .map(|(input, capacity, channel_args)| (input.clone(), *capacity, *channel_args))
             .ok_or(Error::query(format!("no channel({channel_id}/{port_id})")))
     }
 
@@ -360,6 +384,7 @@ pub struct CkbTxInfo {
     pub envelope: Envelope,
     pub input_capacity: u64,
     pub event: Option<IbcEvent>,
+    pub commitment_path: String,
 }
 
 // Return a transaction which needs to be added relayer's input in it and to be signed.
