@@ -3,7 +3,9 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use ckb_ics_axon::commitment::{channel_path, connection_path, packet_commitment_path};
+use ckb_ics_axon::commitment::{
+    channel_path, connection_path, packet_acknowledgement_commitment_path, packet_commitment_path,
+};
 use ckb_ics_axon::handler::{IbcPacket, PacketStatus};
 use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::object::State as CkbState;
@@ -524,10 +526,7 @@ impl Ckb4IbcEventMonitor {
                         );
                         self.ibc_transaction_notice
                             .send((
-                                // XXX: not use `packet_acknowledgement_commitment_path` because this cache is just
-                                //      used for getting transaction hash and the previous hash was already consumed
-                                //      which can be covered
-                                packet_commitment_path(
+                                packet_acknowledgement_commitment_path(
                                     &packet.packet.source_port_id,
                                     &packet.packet.source_channel_id,
                                     packet.packet.sequence,
