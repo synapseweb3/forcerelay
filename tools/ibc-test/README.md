@@ -33,7 +33,7 @@ cd $IBC_CONTRACTS_SRC_PATH && yarn install && yarn compile
 # Axon
 export AXON_SRC_PATH=<axon source path>
 cd $AXON_SRC_PATH
-git checkout forcerelay-test
+git checkout forcerelay-dev
 cargo install --path .
 
 # Ckb 0.111 should be installed: https://github.com/nervosnetwork/ckb/releases/tag/v0.111.0
