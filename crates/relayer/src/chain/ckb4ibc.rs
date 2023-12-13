@@ -227,7 +227,13 @@ impl Ckb4IbcChain {
     ) -> Result<Vec<(IbcPacket, CellInput, u64, H256)>, Error> {
         // packets with particular sequence are only 4: Send, WriteAck, Recv and AckPacket
         let limit = if sequence.is_some() { 4 } else { 20 };
-        let search_key = get_packet_search_key(&self.config, channel_id, port_id, sequence)?;
+        let search_key = get_packet_search_key(
+            &self.config,
+            self.counterparty_client_type(),
+            channel_id,
+            port_id,
+            sequence,
+        )?;
         let mut result = vec![];
         let mut cursor = None;
         loop {
@@ -1645,8 +1651,13 @@ impl ChainEndpoint for Ckb4IbcChain {
 
         // search frist packet cell on-chain if cache is missing
         if tx_hash.is_none() {
-            let packet_key =
-                get_packet_search_key(&self.config, &channel_id, &port_id, Some(sequence))?;
+            let packet_key = get_packet_search_key(
+                &self.config,
+                self.counterparty_client_type(),
+                &channel_id,
+                &port_id,
+                Some(sequence),
+            )?;
             let result = self
                 .rt
                 .block_on(self.rpc_client.fetch_live_cells(packet_key, 1, None))?;

@@ -72,11 +72,6 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
 
     let port_id = convert_port_id_to_array(&msg.packet.destination_port)?;
     let channel_number = get_channel_number(&channel_id)?;
-    let packet_args = PacketArgs {
-        channel_id: channel_number,
-        port_id,
-        sequence: packet.sequence,
-    };
 
     let connection_id = new_channel_end.connection_hops[0].parse().unwrap();
     let connection_args = converter
@@ -89,6 +84,13 @@ pub fn convert_recv_packet_to_tx<C: MsgToTxConverter>(
         open: true,
         channel_id: channel_number,
         port_id,
+    };
+
+    let packet_args = PacketArgs {
+        ibc_handler_address: connection_args.ibc_handler_address,
+        channel_id: channel_number,
+        port_id,
+        sequence: packet.sequence,
     };
 
     let packet = IbcPacket {
@@ -195,11 +197,7 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
     let channel_number = get_channel_number(&channel_id)?;
     let packet = convert_ibc_packet(&msg.packet);
     let port_id = convert_port_id_to_array(&msg.packet.source_port)?;
-    let packet_args = PacketArgs {
-        sequence: packet.sequence,
-        channel_id: channel_number,
-        port_id,
-    };
+    let sequence = packet.sequence;
 
     let new_packet_object = IbcPacket {
         packet,
@@ -227,6 +225,13 @@ pub fn convert_ack_packet_to_tx<C: MsgToTxConverter>(
         metadata_type_id: connection_args.metadata_type_id,
         ibc_handler_address: connection_args.ibc_handler_address,
         open: true,
+        channel_id: channel_number,
+        port_id,
+    };
+
+    let packet_args = PacketArgs {
+        ibc_handler_address: connection_args.ibc_handler_address,
+        sequence,
         channel_id: channel_number,
         port_id,
     };
