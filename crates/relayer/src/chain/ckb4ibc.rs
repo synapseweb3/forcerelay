@@ -732,7 +732,10 @@ impl ChainEndpoint for Ckb4IbcChain {
                                 result_events.push(ibc_event_with_height);
                             }
                             Err(err) => {
-                                warn!("wait transaction failed: {err}");
+                                let json_tx = serde_json::to_string_pretty(&tx).unwrap();
+                                let error =
+                                    format!("wait transaction failed: {err}\n\n======== transaction info ========\n\n{json_tx}\n");
+                                warn!("{error}");
                                 continue;
                             }
                         }

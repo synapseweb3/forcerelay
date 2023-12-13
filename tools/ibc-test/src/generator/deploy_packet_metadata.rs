@@ -1,4 +1,9 @@
-use axon_types::metadata::{Metadata, MetadataCellData, MetadataList, Validator, ValidatorList};
+use std::str::FromStr;
+
+use axon_types::{
+    basic::{Byte33, Byte48},
+    metadata::{Metadata, MetadataCellData, MetadataList, Validator, ValidatorList},
+};
 use ckb_hash::new_blake2b;
 use ckb_sdk::{
     constants::TYPE_ID_CODE_HASH,
@@ -12,6 +17,8 @@ use ckb_types::{
     prelude::*,
     H256,
 };
+use relayer::chain::axon::{rpc::AxonRpcClient, AxonRpc};
+use tendermint_rpc::Url;
 
 use super::deploy_channel::ChannelAttribute;
 use crate::generator::{
@@ -170,15 +177,46 @@ fn generate_metadata_cell_data(bls_pubkeys: Vec<&str>) -> MetadataCellData {
         .build()
 }
 
-#[test]
-fn test_generate_metadata_cell_data() {
-    let metadata = generate_metadata_cell_data(
-        vec![
-            "95a16ed1f4c43a7470917771bf820741dbd040c51967122de66dc5bc9f6eff5953a36be6c0fdf8c202a26d6f2b0f8885",
-            "a8d1c7c4152ce4ad8eff7ee90406b6cdf27eee97f0e520b8098a88ff3873c83aa8b74d9aab3a1c15361b5d3bc9224e9a",
-            "8d999a5c29604f32950bfedf289f6b8e7e2f1a19f86b208d370024e709f77d1208f5e000dc4232a63064530613aa4b26",
-            "afefcad3f6289c0bc0a9fd0015f533dcfcc1d7ba5161ff518702fee7aec33374a08d4fa45baeef85836c1e604e8f221d"
-            ]
-    );
-    std::fs::write("contracts/metadata", metadata.as_slice()).unwrap();
+#[tokio::test]
+async fn test_generate_metadata_cell_data() {
+    /*
+    curl --location --request POST 'https://rpc-alphanet-axon.ckbapp.dev/' \
+       --header 'Content-Type: application/json' \
+       --data-raw '{
+           "id": 42,
+           "jsonrpc": "2.0",
+           "method": "axon_getCurrentMetadata",
+           "params": []
+       }'
+    */
+    let raw_metadata =
+        AxonRpcClient::new(&Url::from_str("https://rpc-alphanet-axon.ckbapp.dev/").unwrap())
+            .get_current_metadata()
+            .await
+            .expect("axon_getCurrentMetadata");
+
+    let mut validator_list = ValidatorList::new_builder();
+    println!("metadata validators:");
+    for v in raw_metadata.verifier_list {
+        println!(
+            "bls_pubkey = {}, pubkey = {}",
+            v.bls_pub_key.as_string(),
+            v.pub_key.as_string()
+        );
+        let validator = Validator::new_builder()
+            .bls_pub_key(Byte48::from_slice(v.bls_pub_key.as_ref()).unwrap())
+            .pub_key(Byte33::from_slice(v.pub_key.as_ref()).unwrap())
+            .build();
+        validator_list = validator_list.push(validator);
+    }
+
+    let metadata = Metadata::new_builder()
+        .validators(validator_list.build())
+        .build();
+
+    let metadata_cell_data = MetadataCellData::new_builder()
+        .metadata(MetadataList::new_builder().push(metadata).build())
+        .build();
+
+    std::fs::write("contracts/metadata", metadata_cell_data.as_slice()).unwrap();
 }

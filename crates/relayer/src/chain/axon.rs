@@ -108,7 +108,7 @@ pub mod contract;
 mod eth_err;
 mod monitor;
 mod msg;
-mod rpc;
+pub mod rpc;
 pub mod utils;
 
 pub use rpc::AxonRpc;

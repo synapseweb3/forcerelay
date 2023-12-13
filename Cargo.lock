@@ -404,7 +404,25 @@ version = "0.1.0"
 source = "git+https://github.com/axonweb3/axon-contract?rev=8106ddc0266#8106ddc026652b0fce21923b710ac9a3f1c8e8a7"
 dependencies = [
  "molecule",
- "molecule2",
+ "molecule2 0.1.0 (git+https://github.com/axonweb3/axon-contract?rev=8106ddc0266)",
+]
+
+[[package]]
+name = "axon-types"
+version = "0.1.0"
+source = "git+https://github.com/axonweb3/axon-contract?rev=b82a843#b82a843b36a5565524a14a537a5dbe393e26ca65"
+dependencies = [
+ "molecule",
+ "molecule2 0.1.0 (git+https://github.com/axonweb3/axon-contract?rev=b82a843)",
+]
+
+[[package]]
+name = "axon-types"
+version = "0.1.0"
+source = "git+https://github.com/axonweb3/axon-contract?rev=b82a843b3#b82a843b36a5565524a14a537a5dbe393e26ca65"
+dependencies = [
+ "molecule",
+ "molecule2 0.1.0 (git+https://github.com/axonweb3/axon-contract?rev=b82a843b3)",
 ]
 
 [[package]]
@@ -1078,10 +1096,10 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=4ca20ad#4ca20ade6a479303a207084406248266bcbf80ec"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=043ad63#043ad63616804580fdfdf979c105f68d9d013e0a"
 dependencies = [
- "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=f889d38)",
- "axon-types",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=dd35f500)",
+ "axon-types 0.1.0 (git+https://github.com/axonweb3/axon-contract?rev=b82a843)",
  "bytes",
  "ethereum-types",
  "hex",
@@ -1098,10 +1116,10 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=a3c3c3a2#a3c3c3a2385bb8df70e0acda35aa31f190d27896"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=4ca20ad#4ca20ade6a479303a207084406248266bcbf80ec"
 dependencies = [
- "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=dd35f500)",
- "axon-types",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=f889d38)",
+ "axon-types 0.1.0 (git+https://github.com/axonweb3/axon-contract?rev=8106ddc0266)",
  "bytes",
  "ethereum-types",
  "hex",
@@ -3741,7 +3759,7 @@ dependencies = [
  "bs58 0.4.0",
  "bytes",
  "ckb-hash 0.111.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=a3c3c3a2)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=043ad63)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3945,11 +3963,11 @@ name = "ibc-test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "axon-types",
+ "axon-types 0.1.0 (git+https://github.com/axonweb3/axon-contract?rev=b82a843b3)",
  "bytes",
  "ckb-chain-spec",
  "ckb-hash 0.106.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=a3c3c3a2)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=043ad63)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -4739,6 +4757,16 @@ dependencies = [
 name = "molecule2"
 version = "0.1.0"
 source = "git+https://github.com/axonweb3/axon-contract?rev=8106ddc0266#8106ddc026652b0fce21923b710ac9a3f1c8e8a7"
+
+[[package]]
+name = "molecule2"
+version = "0.1.0"
+source = "git+https://github.com/axonweb3/axon-contract?rev=b82a843#b82a843b36a5565524a14a537a5dbe393e26ca65"
+
+[[package]]
+name = "molecule2"
+version = "0.1.0"
+source = "git+https://github.com/axonweb3/axon-contract?rev=b82a843b3#b82a843b36a5565524a14a537a5dbe393e26ca65"
 
 [[package]]
 name = "multimap"

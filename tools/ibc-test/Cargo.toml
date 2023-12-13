@@ -28,14 +28,14 @@ jsonrpc-core = "18.0"
 futures = "0.3.27"
 serde_json = { version = "1", default-features = false }
 serde = { version = "1.0", default-features = false }
-ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "a3c3c3a2" }
+ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "043ad63" }
 rlp = "0.5.2"
 secp256k1 = "0.24"
 ckb-hash = "0.106"
 tiny-keccak = { version = "2.0.2", features = [
     "keccak",
 ], default-features = false }
-axon-types = { git = "https://github.com/axonweb3/axon-contract", rev = "8106ddc0266" }
+axon-types = { git = "https://github.com/axonweb3/axon-contract", rev = "b82a843b3" }
 
 ibc-test-framework = { path = "../test-framework" }
 toml = "=0.5.11"
