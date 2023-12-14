@@ -22,12 +22,12 @@ jobs:
         SDK_CONFIG: ${{ github.workspace }}/e2e/schedule/sdk.config.toml
         # for ibc-solidity-contract
         AXON_HTTP_RPC_URL: https://rpc-alphanet-axon.ckbapp.dev
-        IBC_SOLIDITY_CONTRACT_COMMIT: ${{ vars.IBC_SOLIDITY_CONTRACT_COMMIT || 'e0d1f4bf20c40aad721bff5838d8a3fa80c94585' }} 
+        IBC_SOLIDITY_CONTRACT_COMMIT: ${{ vars.IBC_SOLIDITY_CONTRACT_COMMIT || 'main' }}
         CONTRACT_WORKSPACE: ${{ github.workspace }}/ibc-solidity-contract
-        TRANSFER_CONTRACT_ADDRESS: ${{ vars.TRANSFER_CONTRACT_ADDRESS || '0x9E545E3C0baAB3E08CdfD552C960A1050f373042' }}
-        CHANNEL: channel-8
-        DENOM: f2a14f50a56b9aab8e960cb1b2c7f1152d7523e6cacb45b1ab2a94acb83e0233
-        AMOUNT: 990
+        TRANSFER_CONTRACT_ADDRESS: ${{ vars.TRANSFER_CONTRACT_ADDRESS || '0x5FeaeBfB4439F3516c74939A9D04e95AFE82C4ae' }}
+        CHANNEL: ${{ vars.AXON_CHANNEL || 'channel-0' }}
+        DENOM: ${{ vars.AXON_DENOM || 'f2a14f50a56b9aab8e960cb1b2c7f1152d7523e6cacb45b1ab2a94acb83e0233' }}
+        AMOUNT: 100
     # 1. firstly, run ibc-solidity-contract script to send SendPacket to Axon and then, trigger RecvPacket process via forcerleay-ckb-sdk
     # 2. secondly, directly run forcerelay-ckb-sdk to send SendPacket to CKB, and then, it'll automatically listen AckPacket
     steps:
