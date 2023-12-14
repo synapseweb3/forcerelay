@@ -45,7 +45,7 @@ toml_edit = "0.19.14"
 lazy_static = "1.4.0"
 ethers = { version = "2.0.2", features = ["rustls", "ws"] }
 
-forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "9971868" }
+forcerelay-ckb-sdk = { git = "https://github.com/synapseweb3/forcerelay-ckb-sdk", rev = "59d5e92ee3efe2e260bbbbcba2b926e79b063dd2" }
 
 [dependencies]
 bytes = "1.5.0"
