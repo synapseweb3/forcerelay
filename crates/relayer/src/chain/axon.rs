@@ -1232,7 +1232,7 @@ impl AxonChain {
             self.config.id.clone(),
             self.config.websocket_addr.clone(),
             self.config.contract_address,
-            // header_receiver,
+            self.config.restore_block_count,
             self.rt.clone(),
         )
         .map_err(Error::event_monitor)?;

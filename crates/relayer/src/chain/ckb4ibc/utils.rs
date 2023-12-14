@@ -615,23 +615,9 @@ pub async fn generate_tx_proof_from_block(
         proof_payload,
     };
 
-    // debug: print original size of proof
-    let proof_size = object_proof.ckb_transaction.len()
-        + object_proof.block_hash.len()
-        + object_proof.proof_payload.raw_transactions_root.len()
-        + object_proof.proof_payload.transactions_root.len()
-        + object_proof.proof_payload.witnesses_root.len()
-        + object_proof.proof_payload.proof.indices.len() * 4
-        + object_proof.proof_payload.proof.leaves.len() * 32
-        + object_proof.proof_payload.proof.lemmas.len() * 32
-        + 1;
-    println!("pre-encode proof_size = {proof_size} bytes");
-    let encode_proof = object_proof.encode();
-    println!("post-encode proof_size = {} bytes", encode_proof.len());
-
     // assemble ibc-compatible proof
     let block_number = Height::from_noncosmos_height(header.inner.number.into());
-    let proofs = get_ibc_merkle_proof(block_number, encode_proof)?;
+    let proofs = get_ibc_merkle_proof(block_number, object_proof.encode())?;
     Ok(Some(proofs))
 }
 
