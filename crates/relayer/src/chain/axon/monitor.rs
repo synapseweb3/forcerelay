@@ -46,6 +46,7 @@ impl AxonEventMonitor {
         chain_id: ChainId,
         websocket_addr: WebSocketClientUrl,
         contract_address: Address,
+        reprocess_block_count: u64,
         rt: Arc<TokioRuntime>,
     ) -> Result<(Self, TxMonitorCmd)> {
         let (tx_cmd, rx_cmd) = channel::unbounded();
@@ -57,7 +58,9 @@ impl AxonEventMonitor {
         let start_block_number = rt
             .block_on(client.get_block_number())
             .map_err(|e| Error::others(e.to_string()))?
-            .as_u64();
+            .as_u64()
+            .checked_sub(reprocess_block_count)
+            .expect("check-sub axon block number");
 
         let event_bus = EventBus::new();
         let monitor = Self {
@@ -87,6 +90,41 @@ impl AxonEventMonitor {
         Ok(client)
     }
 
+    pub fn reprocess_previous_events(&mut self) -> Result<()> {
+        let contract = Arc::new(Contract::new(
+            self.contract_address,
+            Arc::clone(&self.client),
+        ));
+        let latest_block_number = self
+            .rt
+            .block_on(self.client.get_block_number())
+            .map_err(|e| Error::others(e.to_string()))?
+            .as_u64();
+        let mut reprocessed = 0;
+        self.rt
+            .block_on(
+                contract
+                    .events()
+                    .from_block(self.start_block_number)
+                    .to_block(latest_block_number)
+                    .query_with_meta(),
+            )
+            .map_err(|e| Error::others(e.to_string()))?
+            .into_iter()
+            .for_each(|(event, meta)| {
+                if matches!(
+                    event,
+                    OwnableIBCHandlerEvents::SendPacketFilter(_)
+                        | OwnableIBCHandlerEvents::WriteAcknowledgementFilter(_)
+                ) {
+                    self.process_event(event, meta);
+                    reprocessed += 1;
+                }
+            });
+        debug!("Axon reprocessed {} events", reprocessed);
+        Ok(())
+    }
+
     #[allow(clippy::while_let_loop)]
     #[instrument(
         name = "axon_event_monitor",
@@ -96,7 +134,11 @@ impl AxonEventMonitor {
     )]
     pub fn run(mut self) {
         if let Next::Continue = self.update_subscribe(false) {
-            info!("start Axon event monitor for {}", self.chain_id,);
+            info!("start Axon event monitor for {}", self.chain_id);
+            // reprocess messages from Axon to CKB that have failed in accident
+            if let Err(e) = self.reprocess_previous_events() {
+                error!("Axon reprocess failed: {e}");
+            }
             let mut contract = Contract::new(self.contract_address, Arc::clone(&self.client));
             info!(
                 "start to fetch IBC events from block {}",

@@ -9,7 +9,7 @@ use ckb_ics_axon::commitment::{
 use ckb_ics_axon::handler::{IbcPacket, PacketStatus};
 use ckb_ics_axon::message::MsgType;
 use ckb_ics_axon::object::State as CkbState;
-use ckb_ics_axon::{connection_id, ChannelArgs};
+use ckb_ics_axon::{connection_id, ChannelArgs, PacketArgs};
 use ckb_jsonrpc_types::{JsonBytes, Status, TransactionView};
 use ckb_sdk::rpc::ckb_indexer::SearchKey;
 use ckb_types::core::ScriptHashType;
@@ -448,17 +448,30 @@ impl Ckb4IbcEventMonitor {
     }
 
     async fn fetch_packet_events(&mut self) -> Result<EventBatch> {
+        let args = self
+            .config
+            .lc_connection_args(self.counterparty_client_type)
+            .map_err(|e| Error::collect_events_failed(e.to_string()))?;
+        let packet_args = PacketArgs {
+            ibc_handler_address: args.ibc_handler_address,
+            ..Default::default()
+        };
         let script = Script::new_builder()
             .code_hash(get_script_hash(&self.config.packet_type_args))
             .hash_type(ScriptHashType::Type.into())
+            .args(packet_args.get_prefix_for_all().pack())
             .build();
         let key = get_prefix_search_key(script);
         let ibc_packets = self
             .search_and_extract(
                 key,
                 &|tx| {
-                    let obj_with_content = extract_ibc_packet_from_tx(&tx)
-                        .map_err(|_| Error::collect_events_failed("packet".to_string()))?;
+                    let obj_with_content = extract_ibc_packet_from_tx(&tx).map_err(|_| {
+                        Error::collect_events_failed(format!(
+                            "packet tx: {}",
+                            hex::encode(&tx.hash)
+                        ))
+                    })?;
                     Ok((obj_with_content, tx))
                 },
                 10,

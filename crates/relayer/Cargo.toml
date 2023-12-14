@@ -105,7 +105,7 @@ jsonrpc-core = "18.0"
 strum = { version = "0.24.1", features = ["derive"] }
 lazy_static = "1.4.0"
 
-ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "a3c3c3a2" }
+ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "adb8bcfb033d111174f06b88609aded5b9f2a181" }
 cstr_core = "0.2.6"
 rlp = "0.5.2"
 

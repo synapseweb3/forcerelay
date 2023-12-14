@@ -118,6 +118,7 @@ pub fn get_connection_index_by_id(id: &ConnectionId) -> Result<u16, Error> {
 
 pub fn get_packet_search_key(
     config: &ChainConfig,
+    client_type: ClientType,
     channel_id: &ChannelId,
     port_id: &PortId,
     sequence: Option<Sequence>,
@@ -125,7 +126,9 @@ pub fn get_packet_search_key(
     let search_all = sequence.is_none();
     let packet_code_hash = get_script_hash(&config.packet_type_args);
     let sequence: u64 = sequence.unwrap_or_default().into();
+    let args = config.lc_connection_args(client_type)?;
     let script_args = PacketArgs {
+        ibc_handler_address: args.ibc_handler_address,
         channel_id: get_channel_number(channel_id)?,
         port_id: convert_port_id_to_array(port_id)?,
         sequence,
@@ -558,29 +561,6 @@ pub async fn generate_tx_proof_from_block(
             hex::encode(tx_hash)
         )));
     };
-
-    // collect transaction hashes from block
-    // let mut transaction: Option<Transaction> = None;
-    // let block = rpc_client.get_block(&block_hash).await?;
-    // let tx_hashes = block
-    //     .transactions
-    //     .iter()
-    //     .map(|tx| {
-    //         if &tx.hash == tx_hash {
-    //             transaction = Some(tx.inner.clone().into());
-    //         }
-    //         tx.hash.clone()
-    //     })
-    //     .collect_vec();
-    // let witness_hashes = block
-    //     .transactions
-    //     .into_iter()
-    //     .map(|tx| Transaction::from(tx.inner).calc_witness_hash().unpack())
-    //     .collect_vec();
-
-    // let Some(transaction) = transaction else {
-    //     return Ok(None);
-    // };
 
     let header = rpc_client
         .get_header(&block_hash)
