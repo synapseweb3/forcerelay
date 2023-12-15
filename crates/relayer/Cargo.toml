@@ -34,7 +34,7 @@ tree_hash = { git = "https://github.com/synapseweb3/lighthouse", rev = "2c246d6"
 
 eth_light_client_in_ckb-verification = { version = "0.2.3", git = "https://github.com/synapseweb3/eth-light-client-in-ckb", tag = "v0.2.3" }
 eth_light_client_in_ckb-prover = { version = "0.2.3", git = "https://github.com/synapseweb3/eth-light-client-in-ckb", tag = "v0.2.3" }
-axon-tools = { git = "https://github.com/axonweb3/axon.git", package = "axon-tools", rev = "dd35f500", version = "0.1.1", features = [
+axon-tools = { git = "https://github.com/axonweb3/axon.git", package = "axon-tools", rev = "01704ec0", version = "0.1.1", features = [
     "impl-serde",
     "proof",
     "std",
@@ -105,7 +105,7 @@ jsonrpc-core = "18.0"
 strum = { version = "0.24.1", features = ["derive"] }
 lazy_static = "1.4.0"
 
-ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "adb8bcfb033d111174f06b88609aded5b9f2a181" }
+ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "d1c45bbc" }
 cstr_core = "0.2.6"
 rlp = "0.5.2"
 
