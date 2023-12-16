@@ -24,8 +24,6 @@ use ckb_types::packed::{Byte32, Bytes, BytesOpt, OutPoint, Script, Transaction};
 use ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ckb_types::utilities::{merkle_root, MerkleProof};
 use ckb_types::{h256, H256};
-use ethers::abi::AbiEncode;
-use ethers::contract::{EthAbiCodec, EthAbiType};
 use ibc_relayer_types::core::ics02_client::client_type::ClientType;
 use ibc_relayer_types::core::ics03_connection::events::Attributes as ConnectionAttributes;
 use ibc_relayer_types::core::ics04_channel::events::{
@@ -41,6 +39,7 @@ use ibc_relayer_types::proofs::{ConsensusProof, Proofs};
 use ibc_relayer_types::timestamp::Timestamp;
 use ibc_relayer_types::Height;
 use itertools::Itertools;
+use rlp::Encodable;
 use tiny_keccak::{Hasher, Keccak};
 
 use super::extractor::{
@@ -66,7 +65,7 @@ pub struct EncodedObject {
     pub data: Bytes,
 }
 
-pub fn get_encoded_object<T: rlp::Encodable>(obj: &T) -> EncodedObject {
+pub fn get_encoded_object<T: Encodable>(obj: &T) -> EncodedObject {
     let content = rlp::encode(obj);
     let slice = content.as_ref();
     let hash = keccak256(slice);
@@ -540,11 +539,19 @@ pub fn parse_transaction(tx: ResponseFormat<TransactionView>) -> TransactionView
     }
 }
 
-#[derive(EthAbiCodec, EthAbiType)]
 struct AxonObjectProof {
     pub ckb_transaction: Vec<u8>,
     pub block_hash: [u8; 32],
     pub proof_payload: VerifyProofPayload,
+}
+
+impl Encodable for AxonObjectProof {
+    fn rlp_append(&self, s: &mut rlp::RlpStream) {
+        s.begin_list(3)
+            .append(&self.ckb_transaction)
+            .append(&self.block_hash.as_slice())
+            .append(&self.proof_payload);
+    }
 }
 
 pub async fn generate_tx_proof_from_block(
@@ -617,7 +624,7 @@ pub async fn generate_tx_proof_from_block(
 
     // assemble ibc-compatible proof
     let block_number = Height::from_noncosmos_height(header.inner.number.into());
-    let proofs = get_ibc_merkle_proof(block_number, object_proof.encode())?;
+    let proofs = get_ibc_merkle_proof(block_number, object_proof.rlp_bytes().to_vec())?;
     Ok(Some(proofs))
 }
 

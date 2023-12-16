@@ -28,7 +28,7 @@ jsonrpc-core = "18.0"
 futures = "0.3.27"
 serde_json = { version = "1", default-features = false }
 serde = { version = "1.0", default-features = false }
-ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "adb8bcfb033d111174f06b88609aded5b9f2a181" }
+ckb-ics-axon = { git = "https://github.com/synapseweb3/ckb-ics.git", rev = "942389081039cca0361b7fb9bfb25e646a9cdfb3" }
 rlp = "0.5.2"
 secp256k1 = "0.24"
 ckb-hash = "0.106"
