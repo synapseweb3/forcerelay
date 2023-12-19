@@ -4,12 +4,14 @@ use ckb_types::prelude::Entity;
 use futures::Future;
 use ibc_test_framework::prelude::*;
 use relayer::chain::ChainType;
+use secp256k1::rand::rngs;
 use secp256k1::Secp256k1;
 use secp256k1::{
     rand::{self, Rng},
     SecretKey,
 };
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::str::FromStr;
 use tokio::runtime::Runtime;
 
@@ -61,4 +63,23 @@ pub fn transfer_port_id(chain_type: ChainType) -> PortId {
             unreachable!()
         }
     }
+}
+
+pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) {
+    let listen_port = rngs::OsRng.gen_range(9000..10000);
+    let store_path = std::env::current_dir()
+        .unwrap()
+        .join(format!("emitter/store-{listen_port}"));
+    Command::new("emitter")
+        .arg("-c")
+        .arg(format!("http://localhost:{ckb_port}"))
+        .arg("--i")
+        .arg(format!("http://localhost:{axon_port}"))
+        .arg("-l")
+        .arg(format!("127.0.0.1:{listen_port}"))
+        .arg("-s")
+        .arg(store_path)
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("cell emitter");
 }

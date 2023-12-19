@@ -1087,9 +1087,9 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=adb8bcfb033d111174f06b88609aded5b9f2a181#adb8bcfb033d111174f06b88609aded5b9f2a181"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=942389081039cca0361b7fb9bfb25e646a9cdfb3#942389081039cca0361b7fb9bfb25e646a9cdfb3"
 dependencies = [
- "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=dd35f500)",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=01704ec0)",
  "axon-types 0.1.0 (git+https://github.com/axonweb3/axon-contract?rev=b82a843)",
  "bytes",
  "ethereum-types",
@@ -1107,9 +1107,9 @@ dependencies = [
 [[package]]
 name = "ckb-ics-axon"
 version = "0.1.0"
-source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=d1c45bbc#d1c45bbcb9bc1ef1f463ce86a14a46174ff85d8f"
+source = "git+https://github.com/synapseweb3/ckb-ics.git?rev=adb8bcfb033d111174f06b88609aded5b9f2a181#adb8bcfb033d111174f06b88609aded5b9f2a181"
 dependencies = [
- "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=01704ec0)",
+ "axon-tools 0.1.1 (git+https://github.com/axonweb3/axon.git?rev=dd35f500)",
  "axon-types 0.1.0 (git+https://github.com/axonweb3/axon-contract?rev=b82a843)",
  "bytes",
  "ethereum-types",
@@ -3750,7 +3750,7 @@ dependencies = [
  "bs58 0.4.0",
  "bytes",
  "ckb-hash 0.111.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=d1c45bbc)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=942389081039cca0361b7fb9bfb25e646a9cdfb3)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
@@ -3958,7 +3958,7 @@ dependencies = [
  "bytes",
  "ckb-chain-spec",
  "ckb-hash 0.106.0",
- "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=d1c45bbc)",
+ "ckb-ics-axon 0.1.0 (git+https://github.com/synapseweb3/ckb-ics.git?rev=942389081039cca0361b7fb9bfb25e646a9cdfb3)",
  "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
