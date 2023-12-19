@@ -1,5 +1,5 @@
 use ibc_test_framework::{
-    chain::builder::ChainBuilder,
+    chain::{builder::ChainBuilder, chain_type::ChainType},
     framework::{
         base::BasicTest,
         binary::node::{NodeConfigOverride, NodeGenesisOverride},
@@ -7,7 +7,9 @@ use ibc_test_framework::{
     prelude::*,
 };
 
-use crate::framework::bootstrap::node::bootstrap_single_node;
+use crate::framework::{
+    bootstrap::node::bootstrap_single_node, utils::common::prepare_cell_emitter,
+};
 
 /**
    A wrapper type that lifts a test case that implements [`BinaryNodeTest`]
@@ -45,6 +47,23 @@ where
 
         let _node_process_a = node_a.process.clone();
         let _node_process_b = node_b.process.clone();
+
+        let chain_types = (
+            &node_a.chain_driver.chain_type,
+            &node_b.chain_driver.chain_type,
+        );
+        if matches!(chain_types, (&ChainType::Axon, &ChainType::Ckb)) {
+            let axon_port = node_a.chain_driver.rpc_port;
+            let ckb_port = node_b.chain_driver.rpc_port;
+            println!("start cell-emiter for Axon:{axon_port} and CKB:{ckb_port}");
+            prepare_cell_emitter(axon_port, ckb_port)?;
+        }
+        if matches!(chain_types, (&ChainType::Ckb, &ChainType::Axon)) {
+            let axon_port = node_b.chain_driver.rpc_port;
+            let ckb_port = node_a.chain_driver.rpc_port;
+            println!("start cell-emiter for Axon:{axon_port} and CKB:{ckb_port}");
+            prepare_cell_emitter(axon_port, ckb_port)?;
+        }
 
         eprintln!("Node is initialized, Starting running inner test..........");
 
