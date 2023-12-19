@@ -66,15 +66,15 @@ pub fn transfer_port_id(chain_type: ChainType) -> PortId {
 }
 
 pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<(), Error> {
-    Command::new("emitter")
-        .arg("-c")
-        .arg(format!("http://localhost:{ckb_port}"))
-        .arg("--i")
-        .arg(format!("http://localhost:{axon_port}"))
-        .arg("-s")
-        .arg("/tmp/emitter")
-        .stdout(Stdio::null())
-        .spawn()
-        .expect("cell emitter");
+    // Command::new("emitter")
+    //     .arg("-c")
+    //     .arg(format!("http://localhost:{ckb_port}"))
+    //     .arg("--i")
+    //     .arg(format!("http://localhost:{axon_port}"))
+    //     .arg("-s")
+    //     .arg("/tmp/emitter")
+    //     .stdout(Stdio::null())
+    //     .spawn()
+    //     .expect("cell emitter");
     Ok(())
 }

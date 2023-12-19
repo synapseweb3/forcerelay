@@ -1,4 +1,5 @@
 name: IBC test
+
 on:
   pull_request:
     paths:
@@ -9,14 +10,6 @@ on:
       - crates/**
       - tools/**
   push:
-    branches: [main, '*test*']
-    paths:
-      - .github/workflows/ibc-test.yaml
-      - Cargo.toml
-      - Cargo.lock
-      - ci/**
-      - crates/**
-      - tools/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
