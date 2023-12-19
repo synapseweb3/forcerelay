@@ -29,8 +29,9 @@ jobs:
     env:
       SRC_DIR: ${{ github.workspace }}/ibc-test-src
       # https://github.com/axonweb3/axon/commits/forcerelay-dev
-      AXON_COMMIT: 922fc3858b4c470a39b3ae98a479980e774896b5
-      IBC_CONTRACT_COMMIT: c5417573ec15c8aaab048caa1ec5f3bd50c2170e
+      AXON_COMMIT: 343f329b78b8187e28fdac9e9af6c28222656b92
+      IBC_CONTRACT_COMMIT: 1d406add1232f3184080a4baac4ca91e13d35d4e
+      CELL_EMITTER_COMMIT: 0a897111b389472a078512815d293703910c25d5
     strategy:
       fail-fast: false
       matrix:
@@ -73,6 +74,9 @@ jobs:
       - name: Prepare Axon source
         run: git clone --recursive https://github.com/axonweb3/axon.git $SRC_DIR/axon && cd $SRC_DIR/axon && git checkout $AXON_COMMIT
 
+      - name: Prepare Cell Emitter
+        run: git clone --recursive https://github.com/axonweb3/emitter.git $SRC_DIR/emitter && cd $SRC_DIR/emitter && git checkout $CELL_EMITTER_COMMIT
+
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
@@ -109,6 +113,15 @@ jobs:
         with:
           command: build
           args: -p ibc-test --tests --jobs=4
+
+      - name: Build Cell Emitter
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --manifest-path ${{env.SRC_DIR}}/emitter/Cargo.toml
+        
+      - name: Add cell-emitter bin to path
+        run: echo "${{env.SRC_DIR}}/emitter/target/release/" >> $GITHUB_PATH
 
       - name: Run IBC tests
         uses: actions-rs/cargo@v1

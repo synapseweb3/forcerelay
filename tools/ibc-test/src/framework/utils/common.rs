@@ -2,6 +2,7 @@ use ckb_sdk::AddressPayload;
 use ckb_types::packed::Script;
 use ckb_types::prelude::Entity;
 use futures::Future;
+use ibc_test_framework::error::Error;
 use ibc_test_framework::prelude::*;
 use relayer::chain::ChainType;
 use secp256k1::Secp256k1;
@@ -10,6 +11,7 @@ use secp256k1::{
     SecretKey,
 };
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::str::FromStr;
 use tokio::runtime::Runtime;
 
@@ -61,4 +63,18 @@ pub fn transfer_port_id(chain_type: ChainType) -> PortId {
             unreachable!()
         }
     }
+}
+
+pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<(), Error> {
+    Command::new("emitter")
+        .arg("-c")
+        .arg(format!("http://localhost:{ckb_port}"))
+        .arg("--i")
+        .arg(format!("http://localhost:{axon_port}"))
+        .arg("-s")
+        .arg("/tmp/emitter")
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("cell emitter");
+    Ok(())
 }
