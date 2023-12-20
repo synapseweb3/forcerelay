@@ -12,8 +12,7 @@ At present, Forcerelay exclusively supports Axon, CKB, and Cosmos-SDK chains, pr
 ## Progress Tracking
 Forcerelay is under active development, and we welcome any issues and pull requests. Here's an overview of our current progress:
 - [x] Implement connection and channel layer of IBC protocol between Axon and CKB
-- [ ] Upgrade the underline Hermes from v1.4.0 to the latest v1.6.0
-- [ ] Implement packet layer of IBC protocol between Axon and CKB
+- [x] Implement packet layer of IBC protocol between Axon and CKB
 - [ ] Implement entire IBC protocol between Axon and Cosmos-SDK chains
 - [ ] Implement entire IBC protocol between CKB and Cosmos-SDK chains
 
