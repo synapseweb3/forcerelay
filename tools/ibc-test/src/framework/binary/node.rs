@@ -48,6 +48,9 @@ where
         let _node_process_a = node_a.process.clone();
         let _node_process_b = node_b.process.clone();
 
+        // wait for the preperation of Axon and CKB
+        std::thread::sleep(Duration::from_secs(30));
+
         // start cell-emitter if only one part of connected chains is Axon
         let chain_types = (
             &node_a.chain_driver.chain_type,
@@ -57,12 +60,12 @@ where
             let axon_port = node_a.chain_driver.rpc_port;
             let ckb_port = node_b.chain_driver.rpc_port;
             println!("start cell-emiter for Axon:{axon_port} and CKB:{ckb_port}");
-            prepare_cell_emitter(axon_port, ckb_port);
+            prepare_cell_emitter(axon_port, ckb_port)?;
         } else if matches!(chain_types, (&ChainType::Ckb, &ChainType::Axon)) {
             let axon_port = node_b.chain_driver.rpc_port;
             let ckb_port = node_a.chain_driver.rpc_port;
             println!("start cell-emiter for Axon:{axon_port} and CKB:{ckb_port}");
-            prepare_cell_emitter(axon_port, ckb_port);
+            prepare_cell_emitter(axon_port, ckb_port)?;
         }
 
         eprintln!("Node is initialized, Starting running inner test..........");

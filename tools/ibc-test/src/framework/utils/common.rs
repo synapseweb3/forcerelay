@@ -65,21 +65,24 @@ pub fn transfer_port_id(chain_type: ChainType) -> PortId {
     }
 }
 
-pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) {
+pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<(), Error> {
     let listen_port = rngs::OsRng.gen_range(9000..10000);
     let store_path = std::env::current_dir()
         .unwrap()
-        .join(format!("emitter/store-{listen_port}"));
+        .join(format!("emitter-store-{listen_port}"));
+    std::fs::create_dir(&store_path)
+        .map_err(|err| eyre!("failed to create emitter store path: {err}"))?;
     Command::new("emitter")
         .arg("-c")
-        .arg(format!("http://localhost:{ckb_port}"))
+        .arg(format!("http://127.0.0.1:{ckb_port}"))
         .arg("--i")
-        .arg(format!("http://localhost:{axon_port}"))
+        .arg(format!("http://127.0.0.1:{axon_port}"))
         .arg("-l")
         .arg(format!("127.0.0.1:{listen_port}"))
         .arg("-s")
         .arg(store_path)
         .stdout(Stdio::null())
         .spawn()
-        .expect("cell emitter");
+        .map_err(|err| eyre!("failed to start emitter: {err}"))?;
+    Ok(())
 }
