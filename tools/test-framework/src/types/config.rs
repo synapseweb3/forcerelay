@@ -3,7 +3,7 @@
 */
 
 use core::fmt::Debug;
-use std::path::PathBuf;
+use std::{cell::RefCell, path::PathBuf, process::Child, rc::Rc};
 
 /**
    The test config to be passed to each test case. Currently this is loaded
@@ -58,4 +58,20 @@ pub struct TestConfig {
     pub hang_on_fail: bool,
 
     pub bootstrap_with_random_ids: bool,
+
+    pub extra_process: Rc<RefCell<Option<Child>>>,
+}
+
+impl Drop for TestConfig {
+    fn drop(&mut self) {
+        println!("release cell-emitter child process");
+        let mut process = self.extra_process.borrow_mut();
+        if process.is_some() {
+            process
+                .as_mut()
+                .unwrap()
+                .kill()
+                .expect("kill extra process");
+        }
+    }
 }

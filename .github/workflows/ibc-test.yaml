@@ -25,12 +25,12 @@ concurrency:
 jobs:
   ibc-test:
     runs-on: ubuntu-20.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       SRC_DIR: ${{ github.workspace }}/ibc-test-src
       # https://github.com/axonweb3/axon/commits/forcerelay-dev
-      AXON_COMMIT: 922fc3858b4c470a39b3ae98a479980e774896b5
-      IBC_CONTRACT_COMMIT: c5417573ec15c8aaab048caa1ec5f3bd50c2170e
+      AXON_COMMIT: forcerelay-dev
+      IBC_CONTRACT_COMMIT: f2bd40fe3d314bb8fa55c828e9832f40a350fa48
       CELL_EMITTER_COMMIT: 0a897111b389472a078512815d293703910c25d5
     strategy:
       fail-fast: false

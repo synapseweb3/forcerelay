@@ -1,6 +1,7 @@
 use ckb_sdk::AddressPayload;
 use ckb_types::packed::Script;
 use ckb_types::prelude::Entity;
+use ethers::core::k256::pkcs8::der::Writer;
 use futures::Future;
 use ibc_test_framework::prelude::*;
 use relayer::chain::ChainType;
@@ -11,7 +12,7 @@ use secp256k1::{
     SecretKey,
 };
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command};
 use std::str::FromStr;
 use tokio::runtime::Runtime;
 
@@ -65,14 +66,21 @@ pub fn transfer_port_id(chain_type: ChainType) -> PortId {
     }
 }
 
-pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<(), Error> {
+pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<Child, Error> {
     let listen_port = rngs::OsRng.gen_range(9000..10000);
+    let private_path = std::env::current_dir()
+        .unwrap()
+        .join(format!("emitter-privkey-{listen_port}"));
+    std::fs::File::create(&private_path)
+        .map_err(|err| eyre!("failed to create emitter private file: {err}"))?
+        .write("37aa0f893d05914a4def0460c0a984d3611546cfb26924d7a7ca6e0db9950a2d".as_bytes())
+        .unwrap();
     let store_path = std::env::current_dir()
         .unwrap()
         .join(format!("emitter-store-{listen_port}"));
-    std::fs::create_dir(&store_path)
+    std::fs::create_dir_all(&store_path)
         .map_err(|err| eyre!("failed to create emitter store path: {err}"))?;
-    Command::new("emitter")
+    let emitter_thread = Command::new("emitter")
         .arg("-c")
         .arg(format!("http://127.0.0.1:{ckb_port}"))
         .arg("--i")
@@ -81,8 +89,9 @@ pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<(), Error> 
         .arg(format!("127.0.0.1:{listen_port}"))
         .arg("-s")
         .arg(store_path)
-        .stdout(Stdio::null())
+        .arg("-p")
+        .arg(private_path)
         .spawn()
         .map_err(|err| eyre!("failed to start emitter: {err}"))?;
-    Ok(())
+    Ok(emitter_thread)
 }

@@ -5,8 +5,10 @@
 
 use eyre::Report as Error;
 use ibc_relayer_cli::components::enable_ansi;
+use std::cell::RefCell;
 use std::env;
 use std::fs;
+use std::rc::Rc;
 use std::sync::Once;
 use tracing_subscriber::{
     self as ts,
@@ -65,6 +67,7 @@ pub fn init_test() -> Result<TestConfig, Error> {
         account_prefixes,
         hang_on_fail,
         bootstrap_with_random_ids: false,
+        extra_process: Rc::new(RefCell::new(None)),
     })
 }
 
