@@ -73,7 +73,10 @@ pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<Child, Erro
         .join(format!("emitter-privkey-{listen_port}"));
     std::fs::File::create(&private_path)
         .map_err(|err| eyre!("failed to create emitter private file: {err}"))?
-        .write("37aa0f893d05914a4def0460c0a984d3611546cfb26924d7a7ca6e0db9950a2d".as_bytes())
+        .write(
+            &hex::decode("37aa0f893d05914a4def0460c0a984d3611546cfb26924d7a7ca6e0db9950a2d")
+                .unwrap(),
+        )
         .unwrap();
     let store_path = std::env::current_dir()
         .unwrap()
