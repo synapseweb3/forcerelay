@@ -66,7 +66,10 @@ pub fn transfer_port_id(chain_type: ChainType) -> PortId {
     }
 }
 
-pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<Child, Error> {
+pub fn prepare_cell_emitter(
+    axon_port: u16,
+    ckb_port: u16,
+) -> Result<(Child, std::sync::mpsc::Sender<()>), Error> {
     let listen_port = rngs::OsRng.gen_range(9000..10000);
     let private_path = std::env::current_dir()
         .unwrap()
@@ -96,5 +99,27 @@ pub fn prepare_cell_emitter(axon_port: u16, ckb_port: u16) -> Result<Child, Erro
         .arg(private_path)
         .spawn()
         .map_err(|err| eyre!("failed to start emitter: {err}"))?;
-    Ok(emitter_thread)
+    // check header sync progress
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(10));
+        let output = Command::new("curl")
+            .arg("-H")
+            .arg("content-type: application/json")
+            .arg("-d")
+            .arg("{\"id\": 2, \"jsonrpc\": \"2.0\", \"method\": \"info\", \"params\": [] }")
+            .arg(format!("http://127.0.0.1:{listen_port}"))
+            .output()
+            .unwrap();
+        let log = if output.status.success() {
+            output.stdout
+        } else {
+            output.stderr
+        };
+        println!("\n[CellEmitter] {}", String::from_utf8(log).unwrap());
+        if rx.try_recv().is_ok() {
+            return;
+        }
+    });
+    Ok((emitter_thread, tx))
 }
