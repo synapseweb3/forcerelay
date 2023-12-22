@@ -1383,6 +1383,22 @@ macro_rules! convert {
 
 impl AxonChain {
     fn send_message(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
+        loop {
+            match self.send_message_inner(message.clone()) {
+                Ok(e) => return Ok(e),
+                Err(e) => {
+                    if e.to_string().contains("reverted: getHeader") {
+                        std::thread::sleep(Duration::from_secs(5));
+                        tracing::info!("getHeader failed, waiting for header sync");
+                        continue;
+                    }
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    fn send_message_inner(&mut self, message: Any) -> Result<IbcEventWithHeight, Error> {
         use contract::*;
         let msg = message.clone();
         let tx_receipt: eyre::Result<_> = match msg.type_url.as_str() {

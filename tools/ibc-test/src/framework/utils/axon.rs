@@ -258,7 +258,7 @@ pub(crate) fn add_axon_devnet_relayer_wallet(
         prefix.to_string()
     };
     let private_key = {
-        let data = hex::decode("37aa0f893d05914a4def0460c0a984d3611546cfb26924d7a7ca6e0db9950a2d")
+        let data = hex::decode("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
             .unwrap();
         SecretKey::from_slice(&data).unwrap()
     };

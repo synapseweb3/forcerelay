@@ -20,4 +20,4 @@ pub const CLIENT_TYPE_ARGS: H256 =
 
 // Don't know how to pass this from axon to ckb. It doesn't change often, so
 // let's hardcode it for now.
-pub const AXON_IBC_HANDLER_ADDRESS: H160 = h160!("0xdc64a140aa3e981100a9beca4e685f962f0cf6c9");
+pub const AXON_IBC_HANDLER_ADDRESS: H160 = h160!("0x0165878a594ca255338adfa4d48449f69242eb8f");
