@@ -238,6 +238,7 @@ impl FullNode {
             packet_filter: Default::default(),
             websocket_addr,
             rpc_addr,
+            cell_emitter_addr: Url::from_str("http://127.0.0.1").unwrap(), // set it as normal in test
             contract_address,
             transfer_contract_address,
             restore_block_count,

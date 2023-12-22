@@ -1388,8 +1388,32 @@ impl AxonChain {
                 Ok(e) => return Ok(e),
                 Err(e) => {
                     if e.to_string().contains("reverted: getHeader") {
-                        std::thread::sleep(Duration::from_secs(5));
-                        tracing::info!("getHeader failed, waiting for header sync");
+                        #[cfg(not(test))]
+                        {
+                            let output = std::process::Command::new("curl")
+                                .arg("-H")
+                                .arg("content-type: application/json")
+                                .arg("-d")
+                                .arg("{\"id\": 2, \"jsonrpc\": \"2.0\", \"method\": \"info\", \"params\": [] }")
+                                .arg(self.config.cell_emitter_addr.to_string())
+                                .output()
+                                .unwrap();
+                            let log = if output.status.success() {
+                                output.stdout
+                            } else {
+                                output.stderr
+                            };
+                            tracing::warn!(
+                                "getHeader failed, waiting for header sync: {}",
+                                String::from_utf8(log).unwrap()
+                            );
+                            std::thread::sleep(Duration::from_secs(60));
+                        }
+                        #[cfg(test)]
+                        {
+                            tracing::warn!("getHeader failed, waiting for header sync");
+                            std::thread::sleep(Duration::from_secs(5));
+                        }
                         continue;
                     }
                     return Err(e);

@@ -1,6 +1,6 @@
 channel_contract_type_id_args = "0x4d63d2d59c9f8e2b117cde09bb3d705b82e0e21216a3cc54967e715bf19a25b8"
 packet_contract_type_id_args = "0x7e2f534bf12a8f596411ca8c02f698b8cdc3581e851325b4fbb7580b1f20e289"
-axon_ibc_handler_address = "0xd6e1afe5cA8D00A2EFC01B89997abE2De47fdfAf"
+axon_ibc_handler_address = "0xde2Bd2ffEA002b8E84ADeA96e5976aF664115E2c"
 channel_id = 0
 confirmations = 3
 

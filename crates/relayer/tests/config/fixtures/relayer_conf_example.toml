@@ -89,6 +89,7 @@ client_type_args = { cells_count = 4, type_id = "0x673e557da4c8381638fc808956aa2
 id = 'axon-0'
 websocket_addr = "ws://127.0.0.1:8010"
 rpc_addr = "http://127.0.0.1:8000/"
+cell_emitter_addr = "http://127.0.0.1:8001/"
 contract_address = "0x15Ff10fCc8A1a50bFbE07847A22664801eA79E0f"
 transfer_contract_address = "0x0000000000000000000000000000000000000000"
 restore_block_count = 10000
