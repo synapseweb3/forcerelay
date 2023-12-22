@@ -26,7 +26,20 @@ after the deployment, contracts `OwnableIBCHandler` and `ICS20TransferERC20` are
 
 ## Deploy `forcerelay-ckb-contracts`
 
-we have compiled all of the latest 4 ckb contracts, named `Connection`, `Channel`, `Packet` and `sudt-transfer`, in the repo of Forcerelay, please make sure there's enough CKB capacity in your ckb address **<your_ckb_address>** and follow the below steps (ckb-cli needed):
+we have compiled all of the latest 4 ckb contracts, named `Connection`, `Channel`, `Packet` and `sudt-transfer`, in the repo of Forcerelay, please make sure there's enough CKB capacity in your ckb address **<your_ckb_address>**, and then, modify `*.deplyment.toml` files in directory `forcerelay/tools/ibc-test/contracts/deployment` to enable your lock args, take channel contract for example:
+```toml
+[[cells]]
+name = "ics-channel"
+enable_type_id = true
+location = { file = "../ics-channel" }
+
+[lock]
+code_hash = "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8"
+args = "0x470dcdc5e44064909650113a274b3b36aecb6dc7" # change to your lock args here
+hash_type = "type"
+```
+
+at last, follow the below steps to deploy contracts (ckb-cli needed):
 ```bash
 $ git clone https://github.com/synapseweb3/forcerelay
 $ cd forcerelay/tools/ibc-test/contracts/deployment
@@ -87,7 +100,7 @@ port = 3001
 id = 'ckb4ibc-0'
 ckb_rpc = 'https://testnet.ckbapp.dev/'
 ckb_indexer_rpc = 'https://testnet.ckbapp.dev/'
-key_name = 'relayer_ckb_wallet'
+key_name = 'relayer_ckb_wallet' # name the of created wallet directory for CKB, can be changed
 store_prefix = 'forcerelay'
 client_code_hash = <CLIENT_COCE_HASH>
 connection_type_args = <CONNECTION_TYPE_ARGS>
@@ -109,7 +122,7 @@ websocket_addr = "wss://rpc-alphanet-axon.ckbapp.dev/ws"
 rpc_addr = "https://rpc-alphanet-axon.ckbapp.dev"
 contract_address = <IBC_HANDLER_ADDRESS>
 restore_block_count = 10000
-key_name = "relayer_axon_wallet"
+key_name = "relayer_axon_wallet" # name the of created wallet directory for Axon, can be changed
 store_prefix = "forcerelay"
 ```
 
@@ -128,7 +141,7 @@ $ forcerelay create connection --a-chain axon-0 --b-chain ckb4ibc-0
 the connetion id of Axon, which follows the pattern `"connection-{number}"`, can be found after the command, if this is an initial run, for example, it would be `connection-0`.
 
 ## Generate Port Id
-port id in Axon for transfer use is always named `transfer`, but in CKB is different, it's the lock hash of deployed `sudt-transfer` cell, which `args` can be temporarily set as ZERO:
+port id in Axon for transfer use is always named `transfer`, but in CKB is different, it's lock hash of the deployed `sudt-transfer` cell, which `args` can be temporarily set as ZERO:
 ```toml
 # lock script of sudt-transfer
 code_hash = <SUDT_TRANSFER_TYPE_ID>
@@ -136,7 +149,17 @@ hash_type = type
 args = 0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 ```
 
-calculate blake2b hash of above lock script, and let's record it as **<ST_CELL_LOCK_HASH>**.
+calculate blake2b hash of above lock script, and let's record it as **<ST_CELL_LOCK_HASH>**:
+```javascript
+import {utils} from '@ckb-lumos/lumos'
+const stCellType = {
+	code_hash: "<SUDT_TRANSFER_TYPE_ID>",
+	hash_type: "type",
+	args: Array(96).fill(0),
+};
+const codeHash = utils.computeScriptHash(stCellType);
+console.log(codeHash)
+```
 
 ## Create IBC Channel
 to create IBC channel on the created IBC connection `connection-0`:
