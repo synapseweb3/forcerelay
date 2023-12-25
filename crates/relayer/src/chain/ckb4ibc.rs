@@ -492,6 +492,8 @@ impl Ckb4IbcChain {
             return Ok((commitment_path, event, None));
         }
         let unsigned_tx = unsigned_tx.unwrap();
+        // Assuming all remaining inputs are sighash capacity inputs.
+        let first_sig_input_idx = unsigned_tx.inputs().len();
         let msg_type = envelope.msg_type;
         match self.complete_tx_with_secp256k1_change_and_envelope(
             unsigned_tx,
@@ -515,9 +517,7 @@ impl Ckb4IbcChain {
                         &ScriptGroup {
                             script: Script::from(&self.tx_assembler_address()?),
                             group_type: ScriptGroupType::Lock,
-                            // TODO: here should be more indices in case of more than one Secp256k1 cells
-                            //       have been filled in the transaction
-                            input_indices: vec![last_input_idx],
+                            input_indices: (first_sig_input_idx..=last_input_idx).collect(),
                             output_indices: vec![],
                         },
                     )
